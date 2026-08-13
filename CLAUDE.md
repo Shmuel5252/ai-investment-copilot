@@ -106,6 +106,13 @@ SESSION_SECRET=          # חתימת cookie session
 - אין refactor גדול בלי צורך ממשי.
 - אין hidden magic כש-implementation מפורש יהיה ברור יותר.
 - מפתחות/סודות תמיד ב-`.env`, לעולם לא ב-commit.
+- **חישובי Position/Portfolio/P&L תמיד דרך `computePositions()`
+  (`src/lib/portfolio/positions.ts`) — לעולם לא ממומשים מחדש במקום אחר.**
+  צריך context נוסף לצרכן ספציפי (למשל P&L לכל SELL בנפרד, כמו
+  ב-Onboarding Interview)? מרחיבים את מה ש-`computePositions()` מחזיר
+  (למשל `sellTrace`), לא כותבים לולאת avg-cost מקבילה. תוקן בפועל אחרי
+  שגרסה מוקדמת של `select-transactions.ts` מימשה חישוב מקביל וסטתה
+  ממנו — נתפס ע"י קריאת AI חיה, ר' git history.
 
 ---
 

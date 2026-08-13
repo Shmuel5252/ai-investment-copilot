@@ -28,6 +28,7 @@ export async function computePositionsForInvestor(
   ]);
 
   const txnInputs: TransactionInput[] = txnRows.map((t) => ({
+    id: t.id,
     ticker: t.ticker,
     transactionType: t.transactionType,
     quantity: t.quantity === null ? null : Number(t.quantity),

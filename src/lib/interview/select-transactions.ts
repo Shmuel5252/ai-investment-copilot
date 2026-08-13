@@ -3,37 +3,21 @@
 // about is a code decision; only the phrasing of the question is AI's
 // job (src/lib/ai/interview.ts).
 //
-// Re-derives running average-cost state per ticker (same method as
-// computePositions()) rather than reusing it directly: this function
-// needs per-SELL intermediate context (P/L%, holding period) that
-// computePositions()'s final-state-only output doesn't expose, and
-// entangling the two would make both harder to reason about for a
-// modest amount of shared logic. It DOES need the same
-// PortfolioOpeningState seeding computePositions uses, though — without
-// it, P/L on a ticker that had a pre-import-window position looks
-// computed but is actually wrong (caught via a live test: a real Claude
-// call correctly noticed a "biggest_loss" label on a trade whose P/L,
-// computed only from the imported window, showed a gain).
+// P&L and holding-period numbers come from computePositions()'s
+// sellTrace — this module does NOT re-derive average-cost math itself.
+// An earlier version did, and diverged from computePositions() in a way
+// a live Claude call caught (a sell's P/L was computed without
+// PortfolioOpeningState, mislabeling a gain as "biggest_loss"). Per
+// CLAUDE.md, computePositions() is the one place that math lives.
 
-import type { TransactionType, CostBasisConfidence } from "@/lib/portfolio/positions";
+import {
+  computePositions,
+  type TransactionInput,
+  type OpeningStateInput,
+} from "@/lib/portfolio/positions";
 
-export interface TransactionForSelection {
-  id: string;
-  ticker: string | null;
-  transactionType: TransactionType;
-  quantity: number | null;
-  price: number | null;
-  amount: number;
-  transactionDate: Date;
-}
-
-export interface OpeningStateForSelection {
-  ticker: string;
-  quantity: number;
-  costBasisPerShare: number | null;
-  costBasisConfidence: CostBasisConfidence;
-  asOfDate: Date;
-}
+export type TransactionForSelection = TransactionInput & { id: string };
+export type OpeningStateForSelection = OpeningStateInput;
 
 export type SelectionCategory =
   | "biggest_gain"
@@ -50,9 +34,6 @@ export interface SelectedTransaction {
   holdingPeriodDays?: number;
 }
 
-const MS_PER_DAY = 86_400_000;
-const QUANTITY_EPSILON = 1e-9;
-
 export function selectInterestingTransactions(
   transactions: TransactionForSelection[],
   openingStates: OpeningStateForSelection[] = [],
@@ -64,63 +45,22 @@ export function selectInterestingTransactions(
     )
     .sort((a, b) => a.transactionDate.getTime() - b.transactionDate.getTime());
 
-  interface TickerState {
-    quantity: number;
-    totalCost: number;
-    firstOpenedAt: Date;
-  }
-  const byTicker = new Map<string, TickerState>();
-  for (const os of openingStates) {
-    byTicker.set(os.ticker, {
-      quantity: os.quantity,
-      totalCost: (os.costBasisPerShare ?? 0) * os.quantity,
-      firstOpenedAt: os.asOfDate,
-    });
-  }
+  const buys = positionTrades.filter((t) => t.transactionType === "buy");
 
-  const sellsWithContext: Array<{
-    txn: TransactionForSelection;
-    pnlPercent: number;
-    holdingDays: number;
-  }> = [];
-  const buys: TransactionForSelection[] = [];
+  const { sellTrace } = computePositions(transactions, openingStates);
+  const txnById = new Map(transactions.map((t) => [t.id, t]));
 
-  for (const txn of positionTrades) {
-    const existing = byTicker.get(txn.ticker);
-
-    if (txn.transactionType === "buy") {
-      buys.push(txn);
-      const qty = txn.quantity ?? 0;
-      const price = txn.price ?? 0;
-      if (existing) {
-        existing.quantity += qty;
-        existing.totalCost += qty * price;
-      } else {
-        byTicker.set(txn.ticker, { quantity: qty, totalCost: qty * price, firstOpenedAt: txn.transactionDate });
-      }
-      continue;
-    }
-
-    // sell
-    const qty = txn.quantity ?? 0;
-    if (existing && existing.quantity >= qty - QUANTITY_EPSILON) {
-      const avgCost = existing.totalCost / existing.quantity;
-      const sellPrice = txn.price ?? (qty > 0 ? Math.abs(txn.amount) / qty : 0);
-      const pnlPercent = avgCost > 0 ? ((sellPrice - avgCost) / avgCost) * 100 : 0;
-      const holdingDays = Math.round(
-        (txn.transactionDate.getTime() - existing.firstOpenedAt.getTime()) / MS_PER_DAY
-      );
-      sellsWithContext.push({ txn, pnlPercent, holdingDays });
-
-      existing.quantity -= qty;
-      existing.totalCost -= avgCost * qty;
-    }
-    // A sell exceeding known holdings (no opening state covering it, or
-    // none at all) has no trustworthy cost basis — Trade Import already
-    // surfaces that gap as a warning; interview selection just skips
-    // using it for P/L-based questions rather than computing a
-    // misleading number from partial data.
-  }
+  // Only trust P&L/holding-period context for sells computePositions()
+  // itself considered backed by sufficient known holdings — the same
+  // condition it uses to decide whether to raise a warning.
+  const sellsWithContext = sellTrace
+    .filter((s) => s.sufficientHoldings && s.transactionId)
+    .map((s) => ({
+      txn: txnById.get(s.transactionId!)!,
+      pnlPercent: s.realizedPnlPercent,
+      holdingDays: s.holdingPeriodDays,
+    }))
+    .filter((s) => s.txn !== undefined);
 
   const usedIds = new Set<string>();
   const candidates: SelectedTransaction[] = [];

@@ -5,8 +5,15 @@ import {
   type OpeningStateInput,
 } from "@/lib/portfolio/positions";
 
-function buy(ticker: string, quantity: number, price: number, date: string): TransactionInput {
+function buy(
+  ticker: string,
+  quantity: number,
+  price: number,
+  date: string,
+  id?: string
+): TransactionInput {
   return {
+    id,
     ticker,
     transactionType: "buy",
     quantity,
@@ -16,8 +23,15 @@ function buy(ticker: string, quantity: number, price: number, date: string): Tra
   };
 }
 
-function sell(ticker: string, quantity: number, price: number, date: string): TransactionInput {
+function sell(
+  ticker: string,
+  quantity: number,
+  price: number,
+  date: string,
+  id?: string
+): TransactionInput {
   return {
+    id,
     ticker,
     transactionType: "sell",
     quantity,
@@ -168,5 +182,64 @@ describe("computePositions", () => {
     expect(result.positions).toEqual([
       { ticker: "AAPL", quantity: 6, costBasisPerShare: 100, costBasisConfidence: "known" },
     ]);
+  });
+
+  describe("sellTrace", () => {
+    it("records realized P&L, holding period, and the linked transaction id for each sell", () => {
+      const result = computePositions(
+        [
+          buy("AAPL", 10, 100, "2025-01-01", "buy-1"),
+          sell("AAPL", 4, 150, "2025-04-01", "sell-1"), // +50%, 90 days
+        ],
+        []
+      );
+      expect(result.sellTrace).toEqual([
+        {
+          transactionId: "sell-1",
+          ticker: "AAPL",
+          transactionDate: new Date("2025-04-01"),
+          realizedPnlPercent: 50,
+          holdingPeriodDays: 90,
+          sufficientHoldings: true,
+        },
+      ]);
+    });
+
+    it("seeds holding period from PortfolioOpeningState's asOfDate, not the first transaction", () => {
+      const result = computePositions(
+        [buy("MSFT", 5, 380, "2025-02-10", "buy-1"), sell("MSFT", 20, 400, "2025-05-01", "sell-1")],
+        [
+          {
+            ticker: "MSFT",
+            quantity: 20,
+            costBasisPerShare: 300,
+            costBasisConfidence: "approximate",
+            asOfDate: new Date("2024-12-01"),
+          },
+        ]
+      );
+      // avg cost = (20*300 + 5*380)/25 = 316; sell at 400 -> +26.6%
+      expect(result.sellTrace).toHaveLength(1);
+      expect(result.sellTrace[0]?.realizedPnlPercent).toBeCloseTo(((400 - 316) / 316) * 100, 5);
+      expect(result.sellTrace[0]?.sufficientHoldings).toBe(true);
+      // 2024-12-01 -> 2025-05-01 = 151 days
+      expect(result.sellTrace[0]?.holdingPeriodDays).toBe(151);
+    });
+
+    it("flags sufficientHoldings=false for a sell exceeding known holdings, matching the warning", () => {
+      const result = computePositions(
+        [buy("TSLA", 3, 300, "2025-01-01", "buy-1"), sell("TSLA", 10, 350, "2025-02-01", "sell-1")],
+        []
+      );
+      expect(result.sellTrace).toHaveLength(1);
+      expect(result.sellTrace[0]?.sufficientHoldings).toBe(false);
+      expect(result.warnings).toHaveLength(1);
+    });
+
+    it("omits a trace entry entirely for a sell with no prior holding at all", () => {
+      const result = computePositions([sell("GHOST", 5, 100, "2025-01-01", "sell-1")], []);
+      expect(result.sellTrace).toEqual([]);
+      expect(result.warnings).toHaveLength(1);
+    });
   });
 });

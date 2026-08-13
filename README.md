@@ -56,21 +56,20 @@ A personal AI copilot that learns how you invest — not what to buy. See
 | `npm run db:studio` | Open Drizzle Studio against your DB |
 | `npm run db:seed` | Create/update the single investor account |
 
-## Known environment issue: OneDrive + node_modules
+## Resolved environment issue: OneDrive + node_modules
 
-This repo currently lives at `OneDrive\Desktop\ai-investment-copilot`. OneDrive
-tries to sync/index every file under `node_modules` (tens of thousands of
-small files) and `.next` (constantly-changing build output), which causes
+The project used to live at `OneDrive\Desktop\ai-investment-copilot`. OneDrive
+tried to sync/index every file under `node_modules` (tens of thousands of
+small files) and `.next` (constantly-changing build output), which caused
 real, occasionally severe CPU contention — observed firsthand as a single
 `bcrypt.hash()` test taking 14+ minutes under load, with no code-level cause.
 `.gitignore` keeps these out of git, but OneDrive syncs the working tree
 regardless of `.gitignore`.
 
-**Recommended fix:** move the project outside any OneDrive-synced folder
-(e.g. `C:\dev\ai-investment-copilot`) and rely on git/GitHub for backup
-instead of OneDrive. This is a well-known bad combination for any Node
-project, not specific to this one. Until moved, `vitest.config.ts` uses a
-generous `testTimeout` as a stopgap — if tests ever hang or slow down for no
+**Fixed:** the project now lives at `C:\dev\ai-investment-copilot`, outside
+any OneDrive-synced folder — rely on git/GitHub for backup instead of
+OneDrive. `vitest.config.ts` still keeps a generous `testTimeout` as a
+low-cost safety margin; if tests ever hang or slow down for no
 apparent reason, this is almost certainly why.
 
 ## Data model & architecture
