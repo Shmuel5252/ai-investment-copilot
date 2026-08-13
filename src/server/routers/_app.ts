@@ -2,6 +2,7 @@ import { router, publicProcedure } from "../trpc";
 import { authRouter } from "./auth";
 import { importRouter } from "./import";
 import { interviewRouter } from "./interview";
+import { dnaRouter } from "./dna";
 
 export const appRouter = router({
   // Proves the DB round-trip works without requiring auth — useful for
@@ -11,6 +12,7 @@ export const appRouter = router({
   auth: authRouter,
   import: importRouter,
   interview: interviewRouter,
+  dna: dnaRouter,
 });
 
 export type AppRouter = typeof appRouter;

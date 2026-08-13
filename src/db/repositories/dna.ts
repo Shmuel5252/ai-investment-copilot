@@ -1,7 +1,8 @@
 import { eq, desc } from "drizzle-orm";
 import type { db as Db } from "@/db/client";
-import { dnaHypotheses, dnaHypothesisVersions } from "@/db/schema";
+import { dnaHypotheses, dnaHypothesisVersions, evidence } from "@/db/schema";
 import type { InferInsertModel } from "drizzle-orm";
+import type { ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
 
 export type NewDnaHypothesis = InferInsertModel<typeof dnaHypotheses>;
 export type NewDnaHypothesisVersion = InferInsertModel<typeof dnaHypothesisVersions>;
@@ -33,6 +34,44 @@ export async function listActiveDnaHypothesesForInvestor(db: typeof Db, investor
     with: {
       versions: { orderBy: (v, { desc }) => desc(v.versionNumber), limit: 1 },
     },
+  });
+}
+
+// Writes a brand-new hypothesis (identity + first version) together
+// with its already-validated Evidence rows, atomically. Called only
+// with output from validateProposedHypotheses() — evidenceStrength and
+// the supporting/contradicting counts are read from that validation
+// result, never recomputed or trusted from raw AI output here.
+export async function insertDnaHypothesisWithEvidence(
+  db: typeof Db,
+  investorId: string,
+  hypothesis: ValidatedHypothesis
+) {
+  return db.transaction(async (tx) => {
+    const [identity] = await tx.insert(dnaHypotheses).values({ investorId }).returning();
+    const [version] = await tx
+      .insert(dnaHypothesisVersions)
+      .values({
+        dnaHypothesisId: identity!.id,
+        versionNumber: 1,
+        statementText: hypothesis.statement,
+        evidenceStrength: hypothesis.evidenceStrength,
+        supportingEvidenceCount: hypothesis.supportingCount,
+        contradictingEvidenceCount: hypothesis.contradictingCount,
+        createdBy: "ai_generated",
+      })
+      .returning();
+
+    await tx.insert(evidence).values(
+      hypothesis.evidence.map((e) => ({
+        dnaHypothesisId: identity!.id,
+        stance: e.stance,
+        interviewAnswerId: e.interviewAnswerId,
+        description: e.description,
+      }))
+    );
+
+    return { hypothesis: identity!, version: version! };
   });
 }
 

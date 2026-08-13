@@ -38,6 +38,9 @@ export default function HomePage() {
         >
           Onboarding interview
         </Link>
+        <Link href="/dna" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
+          Investor DNA
+        </Link>
       </div>
       <button
         onClick={() => logout.mutate()}

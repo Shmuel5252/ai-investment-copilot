@@ -31,3 +31,29 @@ export async function getAnswersForSession(db: typeof Db, interviewSessionId: st
     orderBy: (a, { asc }) => asc(a.createdAt),
   });
 }
+
+// All of an investor's answers across every session, excluding any
+// answer that a later one supersedes (docs/data-model.md §0 "Append-only
+// + supersedes pointer") — the DNA engine should only ever see the
+// current answer to a question, not a corrected-away version of it.
+export async function getAllAnswersForInvestor(db: typeof Db, investorId: string) {
+  const rows = await db
+    .select({
+      id: interviewAnswers.id,
+      interviewSessionId: interviewAnswers.interviewSessionId,
+      transactionId: interviewAnswers.transactionId,
+      questionText: interviewAnswers.questionText,
+      answerText: interviewAnswers.answerText,
+      supersedesAnswerId: interviewAnswers.supersedesAnswerId,
+      createdAt: interviewAnswers.createdAt,
+    })
+    .from(interviewAnswers)
+    .innerJoin(interviewSessions, eq(interviewAnswers.interviewSessionId, interviewSessions.id))
+    .where(eq(interviewSessions.investorId, investorId))
+    .orderBy(interviewAnswers.createdAt);
+
+  const supersededIds = new Set(
+    rows.map((r) => r.supersedesAnswerId).filter((id): id is string => id !== null)
+  );
+  return rows.filter((r) => !supersededIds.has(r.id));
+}
