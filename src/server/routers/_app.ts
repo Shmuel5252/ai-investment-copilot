@@ -1,5 +1,6 @@
 import { router, publicProcedure } from "../trpc";
 import { authRouter } from "./auth";
+import { importRouter } from "./import";
 
 export const appRouter = router({
   // Proves the DB round-trip works without requiring auth — useful for
@@ -7,6 +8,7 @@ export const appRouter = router({
   // Investment Memory task lands (dna, strategy, cases, decisions, ...).
   health: publicProcedure.query(() => ({ ok: true, timestamp: new Date().toISOString() })),
   auth: authRouter,
+  import: importRouter,
 });
 
 export type AppRouter = typeof appRouter;
