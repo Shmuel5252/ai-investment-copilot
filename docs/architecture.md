@@ -35,16 +35,25 @@ Architecture). `CLAUDE.md` מצביע לכאן לפרטים; המקור הרעי
 
 ### 2.2 Onboarding Interview
 - **משתמש:** ראיון על מדגם עסקאות ("למה קנית/מכרת"), חופשי, ניתן לדלג.
-- **מערכת:** בחירת המדגם — קוד (רווח/הפסד קיצוני, holding ארוך/קצר).
-  ניסוח שאלות + פירוש תשובות ל-Evidence — AI.
+- **מערכת:** בחירת המדגם — קוד (רווח/הפסד קיצוני, holding ארוך/קצר,
+  quickest flip, largest buy). ניסוח שאלות — AI, מעל עובדות שכבר חושבו
+  בקוד (P/L%, ימי החזקה) ולא מומצאות על ידו.
 - **נשמר:** `InterviewAnswer` (append-only, תיקון = שורה חדשה עם
-  `supersedes_answer_id`).
-- **Done:** ראיון הושלם, Evidence נוצר ומקושר לתשובה הגולמית.
+  `supersedes_answer_id`). **תיקון דיוק (התגלה במימוש, ר' Docs Sync
+  Rule):** יצירת Evidence **לא** קורית כאן — `Evidence` דורש הצבעה על
+  DNAHypothesis/StrategyPrinciple/LearningInsight קיים (CHECK constraint,
+  ר' `data-model.md` §2), ואלה עוד לא קיימים בזמן הראיון. פירוש התשובות
+  ל-Evidence מובנה קורה ב-§2.3 (DNA Hypothesis Engine), שקורא את
+  ה-InterviewAnswer הגולמי ויוצר גם את ההשערה וגם את ה-Evidence יחד.
+- **Done:** ראיון הושלם על מדגם אמיתי, `InterviewAnswer` נשמר ומקושר
+  לעסקה שנדונה.
 
 ### 2.3 Investor DNA ראשוני
 - **משתמש:** רואה השערות, View Evidence, מסכים/חולק/מוסיף הקשר.
-- **מערכת:** AI מציע השערות; **קוד** מחשב Evidence Strength (טבלת סף —
-  ר' `data-model.md`). לעולם לא מספר שה-LLM ממציא.
+- **מערכת:** AI קורא `InterviewAnswer`+דפוסי עסקאות ומציע השערות **יחד
+  עם** ה-Evidence שתומך בהן (מקושר ל-`InterviewAnswer`/`Transaction`
+  הספציפיים); **קוד** מחשב Evidence Strength (טבלת סף — ר'
+  `data-model.md`). לעולם לא מספר שה-LLM ממציא.
 - **Done:** 2–3 השערות אמיתיות, Evidence traceable, כולל מקרה אמיתי של
   Insufficient Evidence.
 
