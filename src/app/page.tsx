@@ -41,6 +41,9 @@ export default function HomePage() {
         <Link href="/dna" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
           Investor DNA
         </Link>
+        <Link href="/strategy" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
+          Baseline Strategy
+        </Link>
       </div>
       <button
         onClick={() => logout.mutate()}

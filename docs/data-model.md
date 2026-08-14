@@ -83,7 +83,17 @@ user_correction), change_reason`.
 **StrategyPrincipleVersion** (append-only) — `id, strategy_principle_id,
 version_number, principle_type(declared|observed|validated), statement_text,
 rationale_text, created_at, created_by(user_declared|ai_observed|
-system_default), change_reason`.
+system_default), change_reason, evidence_strength?, supporting_evidence_count?,
+contradicting_evidence_count?`. שלושת השדות האחרונים **nullable** —
+נמלאים רק כש-`principle_type=observed` (אותה טבלת סף כמו DNA, ר' §2;
+קוד תמיד מחשב, לעולם לא ה-LLM). `declared` הוא ציטוט מפורש של המשתמש
+ו-`validated` הוא ברירת מחדל קבועה של המערכת — אף אחד מהם אינו דפוס
+סטטיסטי הנבחן, כך שהשדות נשארים null עבורם. **תיקון עקביות (התגלה
+בזמן מימוש Baseline Strategy, ר' Docs Sync Rule):** הגדרת השדות המקורית
+כאן לא כללה evidence_strength, למרות ש-§0 כבר מסווג Strategy Principle
+יחד עם DNA Hypothesis ו-Learning Insight כשלוש הישויות שצוברות ראיות
+לפי אותה טבלת סף, ושתי האחרות כן כוללות את השדה — נסתר עד שקוד ה-Baseline
+Strategy בפועל נתקל בזה.
 
 **StrategyVersion** (append-only) — `id, investor_id, version_number,
 created_at, change_summary`. אין עמודת `approved_by` נפרדת — הטבלה

@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, timestamp, integer, primaryKey } from "drizzle-orm/pg-core";
 import { investors } from "./identity";
-import { principleTypeEnum, principleCreatedByEnum } from "./enums";
+import { principleTypeEnum, principleCreatedByEnum, evidenceStrengthEnum } from "./enums";
 
 export const strategyPrinciples = pgTable("strategy_principles", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -23,6 +23,23 @@ export const strategyPrincipleVersions = pgTable("strategy_principle_versions", 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: principleCreatedByEnum("created_by").notNull(),
   changeReason: text("change_reason"),
+  // Nullable — only "observed" principles go through the same Evidence
+  // Strength engine as DNA (docs/architecture.md §2.4 "Observed מאותו
+  // מנוע Evidence כמו DNA"; docs/data-model.md §0 groups Strategy
+  // Principle with DNA Hypothesis and Learning Insight as the three
+  // evidence-accumulating identity+version entities that share this
+  // scale). "declared" principles are the investor's own verbatim
+  // statement and "validated" ones are fixed system defaults — neither
+  // is a statistical pattern under evaluation, so these stay null for
+  // them. Added during the Baseline Strategy task: docs/data-model.md §3
+  // originally omitted these fields for StrategyPrincipleVersion even
+  // though src/lib/dna/evidence-strength.ts already documented the scale
+  // as shared by all three tables — an inconsistency within the already-
+  // approved spec, corrected here per the Docs Sync Rule rather than
+  // left as a TODO.
+  evidenceStrength: evidenceStrengthEnum("evidence_strength"),
+  supportingEvidenceCount: integer("supporting_evidence_count"),
+  contradictingEvidenceCount: integer("contradicting_evidence_count"),
 });
 
 // Whole-bundle version (docs/data-model.md §0): "Strategy" as a concept =

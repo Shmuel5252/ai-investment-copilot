@@ -8,6 +8,13 @@
       "when": 1786623913308,
       "tag": "0000_oval_zaran",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786711900143,
+      "tag": "0001_far_mathemanic",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,211 @@
+import { anthropic, CLAUDE_MODEL } from "./client";
+
+export interface InterviewAnswerForAnalysis {
+  id: string;
+  questionText: string;
+  answerText: string;
+}
+
+// ---------------------------------------------------------------------
+// Declared principles — rules/preferences the investor stated explicitly
+// in their own words (docs/architecture.md §2.4: "Declared מהצהרות ראיון
+// (AI מחלץ, משתמש מאשר)"). This is transcription/normalization of what
+// was actually said, not inference of a pattern — that's Observed's job
+// below. Every candidate must cite the answer(s) it came from; the caller
+// still validates those citations against real rows and requires
+// explicit user confirmation before anything is persisted (unlike
+// Observed/DNA, which are written immediately and can be rejected
+// afterward).
+// ---------------------------------------------------------------------
+
+export interface ProposedDeclaredPrinciple {
+  statementText: string;
+  rationaleText: string;
+  citedAnswerIds: string[];
+}
+
+const DECLARE_SYSTEM_PROMPT = `You read a personal investor's onboarding interview answers and pull out any explicit rule, preference, or guideline they stated about how they invest — something they said they do, avoid, or require of themselves. This is NOT about inferring a pattern from their behavior; it's about transcribing a rule they actually put into words (e.g. "I never put more than a small slice into one stock", "I always wait for a pullback before buying", "I don't touch anything I don't understand").
+
+Ground rules:
+- Only extract a principle if the investor's own words state it as a rule or preference they hold — not a one-off comment about a single trade, and not something you're inferring from their behavior without them saying it.
+- Cite the exact "Answer ID" of every answer that states this rule. Never invent an ID.
+- Normalize the wording into a clear standalone statement (first person, e.g. "I keep position sizes below roughly 10% of the portfolio"), but never add numbers, thresholds, or specifics the investor didn't actually give.
+- rationaleText should reflect the investor's own stated reasoning for the rule, if they gave one — if they didn't explain why, say plainly that no reasoning was given rather than inventing one.
+- If nothing in the answers states an explicit rule, return an empty list — that's a completely normal, expected result, not a failure.
+- Propose at most 5 principles.`;
+
+const DECLARE_TOOL = {
+  name: "propose_declared_principles",
+  description: "Extract explicit, investor-stated investing rules/preferences from interview answers.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      principles: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            statementText: {
+              type: "string" as const,
+              description: "The rule, normalized to a standalone first-person statement.",
+            },
+            rationaleText: {
+              type: "string" as const,
+              description: "The investor's own stated reasoning, or a note that none was given.",
+            },
+            citedAnswerIds: {
+              type: "array" as const,
+              items: { type: "string" as const },
+              description: "Answer ID(s) where the investor actually stated this rule.",
+            },
+          },
+          required: ["statementText", "rationaleText", "citedAnswerIds"],
+        },
+      },
+    },
+    required: ["principles"],
+  },
+};
+
+function formatAnswers(answers: InterviewAnswerForAnalysis[]): string {
+  return answers
+    .map((a) => `Answer ID: ${a.id}\nQuestion: ${a.questionText}\nAnswer: ${a.answerText}`)
+    .join("\n\n");
+}
+
+export async function extractDeclaredPrinciples(
+  answers: InterviewAnswerForAnalysis[]
+): Promise<ProposedDeclaredPrinciple[]> {
+  if (answers.length === 0) return [];
+
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 1500,
+    system: DECLARE_SYSTEM_PROMPT,
+    tools: [DECLARE_TOOL],
+    tool_choice: { type: "tool", name: "propose_declared_principles" },
+    messages: [
+      {
+        role: "user",
+        content: `Here are this investor's onboarding interview answers:\n\n${formatAnswers(answers)}`,
+      },
+    ],
+  });
+
+  const toolUse = response.content.find((block) => block.type === "tool_use");
+  if (!toolUse || toolUse.type !== "tool_use") {
+    throw new Error("AI did not return declared principles via the expected tool call.");
+  }
+
+  const input = toolUse.input as { principles?: unknown };
+  if (!Array.isArray(input.principles)) {
+    throw new Error("AI returned a malformed declared-principles list.");
+  }
+
+  // Structural validation only — real citation-id checking happens in
+  // src/lib/strategy/validate-principles.ts against actual DB rows.
+  return input.principles as ProposedDeclaredPrinciple[];
+}
+
+// ---------------------------------------------------------------------
+// Observed principles — "same Evidence engine as DNA"
+// (docs/architecture.md §2.4), just scoped to risk/strategy-relevant
+// behavior (position sizing, diversification, exit discipline, averaging
+// down, holding-period consistency) rather than DNA's general behavioral
+// patterns. Shape mirrors src/lib/ai/dna.ts's ProposedHypothesis exactly;
+// kept as a separate type here so this module doesn't depend on the DNA
+// module for something that's conceptually a different question.
+// ---------------------------------------------------------------------
+
+export interface ProposedPrincipleEvidence {
+  interviewAnswerId: string;
+  stance: "supporting" | "contradicting";
+  description: string;
+}
+
+export interface ProposedObservedPrinciple {
+  statement: string;
+  evidence: ProposedPrincipleEvidence[];
+}
+
+const OBSERVE_SYSTEM_PROMPT = `You analyze a personal investor's onboarding interview answers to propose hypotheses about recurring risk-management and strategy-relevant behavior — position sizing habits, diversification, exit/stop discipline, whether they average down, holding-period consistency. This is specifically about risk and strategy behavior, not general psychology (that's covered elsewhere) — don't propose a hypothesis about something outside that scope.
+
+Ground rules:
+- Only propose a hypothesis if you can point to specific interview answers as evidence. A hypothesis with no evidence is useless — don't propose it.
+- Cite evidence using the exact "Answer ID" given for each answer. Never invent an ID, and never cite an answer as evidence for something it doesn't actually support.
+- Distinguish supporting from contradicting evidence honestly — if an answer partially undercuts a pattern you're proposing, cite it as contradicting, don't omit it.
+- It is completely fine, and expected with a small number of answers, to propose few hypotheses (even none) or hypotheses with only 1-2 pieces of evidence — thin evidence is for the system to flag as low-confidence, not for you to pad or oversell.
+- Write each hypothesis statement the way you'd describe a real tendency to the investor directly ("You tend to...", "You seem to..."), grounded only in what's actually in the answers — never invent numbers, percentages, or facts not present in the text you were given.
+- Propose at most 5 hypotheses.`;
+
+const OBSERVE_TOOL = {
+  name: "propose_observed_principles",
+  description:
+    "Propose risk/strategy-behavior hypotheses about the investor, each backed by cited evidence.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      principles: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            statement: {
+              type: "string" as const,
+              description: "The hypothesis, phrased as a direct observation to the investor.",
+            },
+            evidence: {
+              type: "array" as const,
+              items: {
+                type: "object" as const,
+                properties: {
+                  interviewAnswerId: { type: "string" as const },
+                  stance: { type: "string" as const, enum: ["supporting", "contradicting"] },
+                  description: {
+                    type: "string" as const,
+                    description: "One sentence on how this specific answer supports or contradicts the hypothesis.",
+                  },
+                },
+                required: ["interviewAnswerId", "stance", "description"],
+              },
+            },
+          },
+          required: ["statement", "evidence"],
+        },
+      },
+    },
+    required: ["principles"],
+  },
+};
+
+export async function proposeObservedPrinciples(
+  answers: InterviewAnswerForAnalysis[]
+): Promise<ProposedObservedPrinciple[]> {
+  if (answers.length === 0) return [];
+
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 2000,
+    system: OBSERVE_SYSTEM_PROMPT,
+    tools: [OBSERVE_TOOL],
+    tool_choice: { type: "tool", name: "propose_observed_principles" },
+    messages: [
+      {
+        role: "user",
+        content: `Here are this investor's onboarding interview answers:\n\n${formatAnswers(answers)}`,
+      },
+    ],
+  });
+
+  const toolUse = response.content.find((block) => block.type === "tool_use");
+  if (!toolUse || toolUse.type !== "tool_use") {
+    throw new Error("AI did not return observed principles via the expected tool call.");
+  }
+
+  const input = toolUse.input as { principles?: unknown };
+  if (!Array.isArray(input.principles)) {
+    throw new Error("AI returned a malformed observed-principles list.");
+  }
+
+  return input.principles as ProposedObservedPrinciple[];
+}
