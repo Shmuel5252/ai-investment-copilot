@@ -72,6 +72,21 @@ OneDrive. `vitest.config.ts` still keeps a generous `testTimeout` as a
 low-cost safety margin; if tests ever hang or slow down for no
 apparent reason, this is almost certainly why.
 
+## Known gotcha: FMP free-tier plan restricts `quote`/`ratios-ttm` to a symbol whitelist
+
+Checked live against the real key in this project's `.env` while building
+Idea → Investment Case: FMP's `/stable/quote` and `/stable/ratios-ttm`
+endpoints return HTTP 402 ("Premium Query Parameter... not available under
+your current subscription") for any ticker outside a small whitelist of
+well-known large caps (AAPL/MSFT/NVDA/TSLA/PLTR/KO all worked; IBM/GME/SNOW
+and an invalid ticker all 402'd) — not a normal empty-result response.
+`/stable/profile` had no such restriction for any real ticker tried.
+`src/lib/market/fmp.ts` treats `profile` as the required source and
+`ratios-ttm` as best-effort (silently omitted, `valuationRatiosAvailable:
+false`, never a fabricated fallback, when the plan blocks it for that
+ticker) — see that file's top comment for the full reasoning. If FMP's
+plan/whitelist changes, that's the one file to revisit.
+
 ## Data model & architecture
 
 `docs/architecture.md` and `docs/data-model.md` are the living reference —

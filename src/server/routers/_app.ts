@@ -4,6 +4,8 @@ import { importRouter } from "./import";
 import { interviewRouter } from "./interview";
 import { dnaRouter } from "./dna";
 import { strategyRouter } from "./strategy";
+import { ideasRouter } from "./ideas";
+import { casesRouter } from "./cases";
 
 export const appRouter = router({
   // Proves the DB round-trip works without requiring auth — useful for
@@ -15,6 +17,8 @@ export const appRouter = router({
   interview: interviewRouter,
   dna: dnaRouter,
   strategy: strategyRouter,
+  ideas: ideasRouter,
+  cases: casesRouter,
 });
 
 export type AppRouter = typeof appRouter;
