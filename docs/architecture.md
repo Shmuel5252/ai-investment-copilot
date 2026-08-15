@@ -92,6 +92,18 @@ Architecture). `CLAUDE.md` מצביע לכאן לפרטים; המקור הרעי
   decision_quality_overall — rollup דטרמיניסטי (ר' `data-model.md`).
   Counterfactual — **רק לפי דרישה מפורשת** במסך זה, לא Push, לא משנה
   Decision Quality לבדו.
+  **תיקון דיוק (הוחלט בזמן המימוש):** מי בפועל קובע אם Prediction
+  התממש — Slice 1 אין לו מקור נתונים עצמאי לבדוק טענות עסקיות שרירותיות
+  (רק market data מ-FMP). לכן resolution של כל Prediction הוא דיווח
+  מפורש של המשתמש עצמו (confirmed/refuted/inconclusive + הערה) לפני
+  הרצת ה-Review; ה-AI **לא** קובע בעצמו אם טענה התממשה — הוא רק מסנתז
+  את `thesis_accuracy` הכולל **מתוך** ה-resolutions שכבר נקבעו. אם אין
+  Predictions או אף אחד לא נפתר — `thesis_accuracy=insufficient_evidence`,
+  תוצאה תקינה. Outcome עצמו מחושב תמיד (קוד, לא Push כשלעצמו); ה-UI הוא
+  שמסתיר אותו מאחורי לחיצה מפורשת ("הצג מה קרה מאז") ספציפית עבור
+  PASS — כי שם המספר הזה *הוא* בדיוק ה-Counterfactual; לשאר סוגי
+  ההחלטה (BUY/ADD/HOLD/REDUCE/SELL) זו תוצאה עובדתית ישירה של פעולה
+  שבוצעה בפועל, לא קאונטרפקטואל, ומוצגת ללא הסתרה.
 - **Done:** מחזור Review מלא, Quality/Accuracy/Outcome מופרדים,
   traceable.
 

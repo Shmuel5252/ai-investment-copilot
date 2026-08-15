@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { trpc } from "@/trpc/react";
 
@@ -8,9 +9,59 @@ interface FrozenPortfolioState {
   positions: { ticker: string; quantity: number; costBasisPerShare: number | null }[];
 }
 
+interface DecisionOutcome {
+  priceAtDecision: number;
+  currentPrice: number | null;
+  priceChangePercent: number | null;
+  sizeDollars: number | null;
+  positionValueNowUsd: number | null;
+  pnlUsd: number | null;
+  pnlPercent: number | null;
+  stillHeld: boolean;
+  asOfDate: string;
+}
+
+const QUALITY_COLOR: Record<string, string> = {
+  insufficient_evidence: "bg-neutral-200 text-neutral-600",
+  weak: "bg-amber-100 text-amber-800",
+  reasonable: "bg-blue-100 text-blue-800",
+  strong: "bg-green-100 text-green-800",
+};
+
+const DIMENSION_LABEL: Record<string, string> = {
+  thesis_quality: "Thesis Quality",
+  evidence_quality: "Evidence Quality",
+  risk_awareness: "Risk Awareness",
+  valuation_awareness: "Valuation Awareness",
+  portfolio_fit: "Portfolio Fit",
+  strategy_consistency: "Strategy Consistency",
+  exit_conditions: "Exit Conditions",
+};
+
+type PredictionStatus = "confirmed" | "refuted" | "inconclusive";
+
 export default function DecisionDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const utils = trpc.useUtils();
   const query = trpc.decisions.get.useQuery({ decisionId: id });
+  const pendingPredictions = trpc.reviews.pendingPredictions.useQuery({ decisionId: id });
+  const reviews = trpc.reviews.listForDecision.useQuery({ decisionId: id });
+
+  const generateReview = trpc.reviews.generate.useMutation({
+    onSuccess: () => {
+      utils.reviews.listForDecision.invalidate({ decisionId: id });
+      utils.reviews.pendingPredictions.invalidate({ decisionId: id });
+      setResolutions({});
+    },
+  });
+  const submitCorrection = trpc.reviews.correct.useMutation({
+    onSuccess: () => setCorrectingId(null),
+  });
+
+  const [resolutions, setResolutions] = useState<Record<string, { status: PredictionStatus; note: string }>>({});
+  const [showCounterfactual, setShowCounterfactual] = useState(false);
+  const [correctingId, setCorrectingId] = useState<string | null>(null);
+  const [correctionText, setCorrectionText] = useState("");
 
   if (query.isLoading) return <main className="p-12 text-sm">Loading...</main>;
   if (!query.data || !query.data.snapshot) {
@@ -105,7 +156,175 @@ export default function DecisionDetailPage() {
           </ul>
         </section>
       )}
+
+      {/* Decision Review */}
+      <section className="flex flex-col gap-4 border-t border-neutral-200 pt-6">
+        <h2 className="text-sm font-semibold">Decision Review</h2>
+
+        {(pendingPredictions.data?.length ?? 0) > 0 && (
+          <div className="flex flex-col gap-3 rounded border border-amber-200 bg-amber-50 p-4">
+            <p className="text-xs text-amber-800">
+              Resolve what actually happened with these predictions before running a review — this is
+              your own judgment, not something the system infers.
+            </p>
+            {pendingPredictions.data!.map((p) => (
+              <div key={p.id} className="flex flex-col gap-1">
+                <p className="text-sm">{p.claimText}</p>
+                <div className="flex gap-2">
+                  {(["confirmed", "refuted", "inconclusive"] as const).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() =>
+                        setResolutions((r) => ({
+                          ...r,
+                          [p.id]: { status, note: r[p.id]?.note ?? "" },
+                        }))
+                      }
+                      className={`rounded border px-2 py-1 text-xs ${
+                        resolutions[p.id]?.status === status
+                          ? "border-neutral-900 bg-neutral-900 text-white"
+                          : "border-neutral-300"
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  value={resolutions[p.id]?.note ?? ""}
+                  onChange={(e) =>
+                    setResolutions((r) => ({
+                      ...r,
+                      [p.id]: { status: r[p.id]?.status ?? "inconclusive", note: e.target.value },
+                    }))
+                  }
+                  placeholder="Brief note on what actually happened"
+                  className="rounded border border-neutral-300 p-1 text-xs"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={() =>
+            generateReview.mutate({
+              decisionId: id,
+              predictionResolutions: Object.entries(resolutions)
+                .filter(([, v]) => v.status && v.note.trim() !== "")
+                .map(([predictionId, v]) => ({ predictionId, status: v.status, note: v.note.trim() })),
+            })
+          }
+          disabled={
+            generateReview.isPending ||
+            (pendingPredictions.data ?? []).some((p) => !resolutions[p.id]?.status || resolutions[p.id]?.note.trim() === "")
+          }
+          className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+        >
+          {generateReview.isPending ? "Reviewing..." : "Run Review"}
+        </button>
+        {generateReview.isError && <p className="text-sm text-red-600">{generateReview.error.message}</p>}
+
+        {reviews.data?.map((review) => (
+          <div key={review.id} className="flex flex-col gap-3 rounded border border-neutral-200 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-neutral-500">{new Date(review.reviewDate).toLocaleString()}</p>
+              <div className="flex gap-2">
+                <span className={`rounded px-2 py-0.5 text-xs ${QUALITY_COLOR[review.decisionQualityOverall]}`}>
+                  Quality: {review.decisionQualityOverall}
+                </span>
+                <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-700">
+                  Thesis: {review.thesisAccuracy}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-sm">{review.narrativeSummaryText}</p>
+
+            {decision.decisionType === "PASS" ? (
+              <button onClick={() => setShowCounterfactual((s) => !s)} className="w-fit text-xs underline">
+                {showCounterfactual ? "Hide" : "Show"} what happened to the price since
+              </button>
+            ) : (
+              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Outcome</p>
+            )}
+            {(decision.decisionType !== "PASS" || showCounterfactual) && (
+              <OutcomeView outcome={review.outcomeJson as DecisionOutcome} />
+            )}
+
+            <details className="text-sm">
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                7-dimension drill-down
+              </summary>
+              <ul className="mt-2 flex flex-col gap-2">
+                {review.dimensions.map((dim) => (
+                  <li key={dim.id} className="rounded border border-neutral-100 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{DIMENSION_LABEL[dim.dimension] ?? dim.dimension}</span>
+                      <span className={`rounded px-2 py-0.5 text-xs ${QUALITY_COLOR[dim.verdict]}`}>
+                        {dim.verdict}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-neutral-600">{dim.rationaleText}</p>
+                    {correctingId === dim.id ? (
+                      <div className="mt-2 flex flex-col gap-1">
+                        <textarea
+                          value={correctionText}
+                          onChange={(e) => setCorrectionText(e.target.value)}
+                          placeholder="Why do you disagree with this verdict?"
+                          className="rounded border border-neutral-300 p-1 text-xs"
+                        />
+                        <button
+                          onClick={() =>
+                            submitCorrection.mutate({ reviewDimensionId: dim.id, userArgumentText: correctionText })
+                          }
+                          disabled={correctionText.trim() === "" || submitCorrection.isPending}
+                          className="w-fit rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50"
+                        >
+                          Submit disagreement
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setCorrectingId(dim.id);
+                          setCorrectionText("");
+                        }}
+                        className="mt-1 text-xs text-red-600 underline"
+                      >
+                        Disagree
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </div>
+        ))}
+        {reviews.data?.length === 0 && (
+          <p className="text-sm text-neutral-500">No review yet — run one above.</p>
+        )}
+      </section>
     </main>
+  );
+}
+
+function OutcomeView({ outcome }: { outcome: DecisionOutcome }) {
+  return (
+    <div className="rounded border border-neutral-100 bg-neutral-50 p-3 text-xs text-neutral-700">
+      <p>
+        Price then ${outcome.priceAtDecision.toFixed(2)} → now{" "}
+        {outcome.currentPrice !== null ? `$${outcome.currentPrice.toFixed(2)}` : "unavailable"}
+        {outcome.priceChangePercent !== null &&
+          ` (${outcome.priceChangePercent >= 0 ? "+" : ""}${outcome.priceChangePercent.toFixed(1)}%)`}
+      </p>
+      {outcome.sizeDollars !== null && outcome.pnlUsd !== null && (
+        <p>
+          P&L: ${outcome.pnlUsd.toFixed(2)} ({outcome.pnlPercent?.toFixed(1)}%)
+        </p>
+      )}
+      <p>{outcome.stillHeld ? "Still held today." : "Not currently held."}</p>
+    </div>
   );
 }
 
