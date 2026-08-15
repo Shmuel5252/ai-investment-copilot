@@ -50,6 +50,9 @@ export default function HomePage() {
         <Link href="/cases" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
           Investment Cases
         </Link>
+        <Link href="/decisions" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
+          Decisions
+        </Link>
       </div>
       <button
         onClick={() => logout.mutate()}

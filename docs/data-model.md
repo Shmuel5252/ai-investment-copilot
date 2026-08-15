@@ -291,3 +291,10 @@ Append-only.
 3. Devil's Advocate — שדה על Investment Case, לא agent/ישות נפרדת.
 4. Average Cost ולא FIFO — לא רלוונטי לדיווח מס, רק לאיכות החלטה.
 5. Evidence/Correction — typed-nullable-FK+CHECK, לא polymorphic string.
+6. Decision Snapshot אחד מסיים את שלב ה-`researching` של Case — ברגע
+   שנרשמת החלטה (כל `decision_type`, כולל PASS), ה-`InvestmentCase`
+   עובר ל-`status=decided` ואינו נפתח מחדש. שקילה חוזרת של אותו טיקר
+   בהמשך פותחת Idea/Case חדשים, לא מוסיפה החלטה שנייה לאותו Case —
+   לא צוין מפורש בתכנון המקורי, הוחלט בזמן מימוש Decision Snapshot
+   task כדי ש-`status` יישאר חד-משמעי בלי לתמוך במעקב multi-decision
+   לא-מתוכנן.

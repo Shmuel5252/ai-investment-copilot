@@ -30,6 +30,27 @@ export async function insertDecision(db: typeof Db, values: NewDecision) {
   return row!;
 }
 
+export async function getDecision(db: typeof Db, id: string) {
+  return db.query.decisions.findFirst({ where: (d, { eq }) => eq(d.id, id) });
+}
+
+export async function listDecisionsForInvestor(db: typeof Db, investorId: string) {
+  return db.query.decisions.findMany({
+    where: (d, { eq }) => eq(d.investorId, investorId),
+    orderBy: (d, { desc }) => desc(d.decisionDate),
+  });
+}
+
+// A Case moves to status=decided after its one Decision is recorded
+// (Slice 1 simplification — see src/server/routers/decisions.ts) so
+// there's at most one decision per case; this is how the case page finds
+// it again after a reload.
+export async function getDecisionByCaseId(db: typeof Db, investmentCaseId: string) {
+  return db.query.decisions.findFirst({
+    where: (d, { eq }) => eq(d.investmentCaseId, investmentCaseId),
+  });
+}
+
 // The single write path for freezing a Decision Snapshot — this is the
 // one insert in the whole schema that most needs to be atomic and
 // complete, since nothing about it can ever be corrected after the fact
@@ -96,6 +117,13 @@ export async function getDecisionReviewsForDecision(db: typeof Db, decisionId: s
 export async function insertPrediction(db: typeof Db, values: NewPrediction) {
   const [row] = await db.insert(predictions).values(values).returning();
   return row!;
+}
+
+export async function getPredictionsForThesis(db: typeof Db, thesisId: string) {
+  return db.query.predictions.findMany({
+    where: (p, { eq }) => eq(p.thesisId, thesisId),
+    orderBy: (p, { asc }) => asc(p.createdAt),
+  });
 }
 
 // The one narrow, explicitly-named exception to "predictions are

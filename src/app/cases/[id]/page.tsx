@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { trpc } from "@/trpc/react";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
@@ -12,13 +13,17 @@ interface PersonalFitEvidenceRefs {
   hasTraceableEvidence: boolean;
 }
 
+const DECISION_TYPES = ["BUY", "ADD", "HOLD", "REDUCE", "SELL", "PASS"] as const;
+
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const utils = trpc.useUtils();
 
   const caseQuery = trpc.cases.get.useQuery({ caseId: id });
   const dnaList = trpc.dna.list.useQuery();
   const strategyList = trpc.strategy.list.useQuery();
+  const existingDecision = trpc.decisions.getForCase.useQuery({ caseId: id });
 
   const fetchMarketData = trpc.cases.fetchMarketIntelligence.useMutation({
     onSuccess: () => utils.cases.get.invalidate({ caseId: id }),
@@ -30,8 +35,15 @@ export default function CaseDetailPage() {
     onSuccess: () => utils.cases.get.invalidate({ caseId: id }),
   });
   const computeFit = trpc.cases.computePortfolioFit.useMutation();
+  const recordDecision = trpc.decisions.create.useMutation({
+    onSuccess: (result) => router.push(`/decisions/${result.decision.id}`),
+  });
 
   const [sizeDollars, setSizeDollars] = useState("");
+  const [decisionType, setDecisionType] = useState<(typeof DECISION_TYPES)[number]>("BUY");
+  const [reasoningText, setReasoningText] = useState("");
+  const [risksConsideredText, setRisksConsideredText] = useState("");
+  const [exitConditionsText, setExitConditionsText] = useState("");
 
   if (caseQuery.isLoading) return <main className="p-12 text-sm">Loading...</main>;
   if (!caseQuery.data) return <main className="p-12 text-sm text-red-600">Case not found.</main>;
@@ -184,6 +196,83 @@ export default function CaseDetailPage() {
             <TextBlock label="Market blindspot" text={investmentCase.marketBlindspotText} />
             <TextBlock label="Devil's advocate" text={investmentCase.devilsAdvocateText} />
           </div>
+        )}
+      </section>
+
+      {/* Record Decision */}
+      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6">
+        <h2 className="text-sm font-semibold">Record Decision</h2>
+
+        {existingDecision.data ? (
+          <p className="text-sm">
+            Decision already recorded for this case —{" "}
+            <Link href={`/decisions/${existingDecision.data.id}`} className="underline">
+              view the Decision Snapshot
+            </Link>
+            .
+          </p>
+        ) : (
+          <>
+            <p className="text-xs text-neutral-500">
+              Freezes price, portfolio state, market context, and the Strategy/DNA versions in effect
+              right now, together with your reasoning — permanently. Nothing here can be edited
+              afterward, only added to later as Later Context.
+            </p>
+            <select
+              value={decisionType}
+              onChange={(e) => setDecisionType(e.target.value as (typeof DECISION_TYPES)[number])}
+              className="w-fit rounded border border-neutral-300 p-2 text-sm"
+            >
+              {DECISION_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <input
+              value={sizeDollars}
+              onChange={(e) => setSizeDollars(e.target.value)}
+              placeholder="Size in $ (optional)"
+              className="rounded border border-neutral-300 p-2 text-sm"
+            />
+            <textarea
+              value={reasoningText}
+              onChange={(e) => setReasoningText(e.target.value)}
+              placeholder="Your reasoning and thesis — why this decision, what do you believe will happen?"
+              className="min-h-24 rounded border border-neutral-300 p-2 text-sm"
+            />
+            <textarea
+              value={risksConsideredText}
+              onChange={(e) => setRisksConsideredText(e.target.value)}
+              placeholder="Risks you considered (optional)"
+              className="min-h-16 rounded border border-neutral-300 p-2 text-sm"
+            />
+            <textarea
+              value={exitConditionsText}
+              onChange={(e) => setExitConditionsText(e.target.value)}
+              placeholder="Exit conditions — what would change your mind? (optional)"
+              className="min-h-16 rounded border border-neutral-300 p-2 text-sm"
+            />
+            <button
+              onClick={() =>
+                recordDecision.mutate({
+                  caseId: id,
+                  decisionType,
+                  sizeDollars: parsedSize,
+                  reasoningText,
+                  risksConsideredText: risksConsideredText.trim() || undefined,
+                  exitConditionsText: exitConditionsText.trim() || undefined,
+                })
+              }
+              disabled={reasoningText.trim() === "" || recordDecision.isPending}
+              className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              {recordDecision.isPending ? "Recording..." : `Record ${decisionType} — permanent`}
+            </button>
+            {recordDecision.isError && (
+              <p className="text-sm text-red-600">{recordDecision.error.message}</p>
+            )}
+          </>
         )}
       </section>
     </main>
