@@ -25,11 +25,25 @@ export const evidence = pgTable(
 
     stance: evidenceStanceEnum("stance").notNull(),
 
-    // Source — at most one of these three, or a manual note if the
+    // Source — at most one of these four, or a manual note if the
     // evidence has no linkable row.
     transactionId: uuid("transaction_id").references(() => transactions.id),
     interviewAnswerId: uuid("interview_answer_id").references(() => interviewAnswers.id),
     decisionReviewId: uuid("decision_review_id").references(() => decisionReviews.id),
+    // Distinct from the subject-side `learningInsightId` above (a row can
+    // never have both set — that would trip evidence_exactly_one_subject
+    // anyway, since only one of the three subject columns may be
+    // non-null). This is "a LearningInsight the investor agreed with is
+    // the *source* of new evidence for something else" — the mechanism
+    // docs/data-model.md §8 already describes ("סגירת הלולאה ל-DNA": a
+    // new DNAHypothesisVersion cites the LearningInsight as Evidence).
+    // Added during the Learning Insight task: the original schema had no
+    // column that could actually represent that already-documented
+    // mechanism (`learning_insight_id` only ever appears in the
+    // mutually-exclusive *subject* group, never in the source group) —
+    // an approved-design gap discovered during implementation, corrected
+    // per the Docs Sync Rule rather than left as a TODO.
+    sourceLearningInsightId: uuid("source_learning_insight_id").references(() => learningInsights.id),
     manualNoteText: text("manual_note_text"),
 
     description: text("description").notNull(),
@@ -42,7 +56,7 @@ export const evidence = pgTable(
     ),
     check(
       "evidence_at_most_one_source",
-      sql`num_nonnulls(${table.transactionId}, ${table.interviewAnswerId}, ${table.decisionReviewId}, ${table.manualNoteText}) <= 1`
+      sql`num_nonnulls(${table.transactionId}, ${table.interviewAnswerId}, ${table.decisionReviewId}, ${table.sourceLearningInsightId}, ${table.manualNoteText}) <= 1`
     ),
   ]
 );

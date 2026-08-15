@@ -110,7 +110,8 @@ export const strategyVersionPrinciplesRelations = relations(
 export const learningInsightsRelations = relations(learningInsights, ({ one, many }) => ({
   investor: one(investors, { fields: [learningInsights.investorId], references: [investors.id] }),
   versions: many(learningInsightVersions),
-  evidence: many(evidence),
+  evidence: many(evidence, { relationName: "evidenceSubjectLearningInsight" }),
+  evidenceAsSource: many(evidence, { relationName: "evidenceSourceLearningInsight" }),
 }));
 
 export const learningInsightVersionsRelations = relations(
@@ -239,9 +240,14 @@ export const evidenceRelations = relations(evidence, ({ one }) => ({
     fields: [evidence.strategyPrincipleId],
     references: [strategyPrinciples.id],
   }),
+  // Two distinct FKs now point evidence -> learning_insights (subject vs
+  // source, see schema/evidence.ts) — relationName required on both ends
+  // of each pair so drizzle doesn't have to guess which `many()` on
+  // learningInsightsRelations pairs with which `one()` here.
   learningInsight: one(learningInsights, {
     fields: [evidence.learningInsightId],
     references: [learningInsights.id],
+    relationName: "evidenceSubjectLearningInsight",
   }),
   transaction: one(transactions, {
     fields: [evidence.transactionId],
@@ -254,6 +260,11 @@ export const evidenceRelations = relations(evidence, ({ one }) => ({
   decisionReview: one(decisionReviews, {
     fields: [evidence.decisionReviewId],
     references: [decisionReviews.id],
+  }),
+  sourceLearningInsight: one(learningInsights, {
+    fields: [evidence.sourceLearningInsightId],
+    references: [learningInsights.id],
+    relationName: "evidenceSourceLearningInsight",
   }),
 }));
 

@@ -3,6 +3,7 @@ import type { db as Db } from "@/db/client";
 import { dnaHypotheses, dnaHypothesisVersions, evidence } from "@/db/schema";
 import type { InferInsertModel } from "drizzle-orm";
 import type { ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
+import { calculateEvidenceStrength } from "@/lib/dna/evidence-strength";
 
 export type NewDnaHypothesis = InferInsertModel<typeof dnaHypotheses>;
 export type NewDnaHypothesisVersion = InferInsertModel<typeof dnaHypothesisVersions>;
@@ -70,6 +71,50 @@ export async function insertDnaHypothesisWithEvidence(
         description: e.description,
       }))
     );
+
+    return { hypothesis: identity!, version: version! };
+  });
+}
+
+// "סגירת הלולאה ל-DNA" (docs/data-model.md §8): the investor agreeing
+// with a Learning Insight creates a brand-new DNA hypothesis (not an
+// edit of an existing one — there's no single obviously-right hypothesis
+// to attach this to) whose only evidence, at least at first, is that
+// agreement itself — sourced from the LearningInsight via
+// `Evidence.sourceLearningInsightId` (the column added in this same
+// task specifically to make this representable, see schema/evidence.ts).
+// evidenceStrength is computed the normal way (1 supporting, 0
+// contradicting -> insufficient_evidence) — one agreement is real
+// evidence, but honestly not enough on its own; more accumulates the
+// normal way as the investor answers more interviews or agrees with more
+// insights citing the same pattern.
+export async function insertDnaHypothesisFromLearningInsight(
+  db: typeof Db,
+  investorId: string,
+  learningInsightId: string,
+  statementText: string
+) {
+  return db.transaction(async (tx) => {
+    const [identity] = await tx.insert(dnaHypotheses).values({ investorId }).returning();
+    const [version] = await tx
+      .insert(dnaHypothesisVersions)
+      .values({
+        dnaHypothesisId: identity!.id,
+        versionNumber: 1,
+        statementText,
+        evidenceStrength: calculateEvidenceStrength(1, 0),
+        supportingEvidenceCount: 1,
+        contradictingEvidenceCount: 0,
+        createdBy: "user_correction",
+        changeReason: "Investor agreed with a Learning Insight.",
+      })
+      .returning();
+    await tx.insert(evidence).values({
+      dnaHypothesisId: identity!.id,
+      stance: "supporting",
+      sourceLearningInsightId: learningInsightId,
+      description: "You agreed with this Learning Insight.",
+    });
 
     return { hypothesis: identity!, version: version! };
   });

@@ -57,13 +57,23 @@ user_correction), change_reason`.
   Table). נצרך ע"י: DNA view, Personal Fit, Decision Snapshot.
 
 **Evidence** — `id`, בדיוק אחד מ-
-`{dna_hypothesis_id, strategy_principle_id, learning_insight_id}` (CHECK),
-`stance(supporting|contradicting)`, בדיוק אחד או אפס מ-
-`{transaction_id, interview_answer_id, decision_review_id}` + `manual_note_text?`
-(מקור), `description, created_at`.
+`{dna_hypothesis_id, strategy_principle_id, learning_insight_id}` (CHECK,
+subject), `stance(supporting|contradicting)`, בדיוק אחד או אפס מ-
+`{transaction_id, interview_answer_id, decision_review_id,
+source_learning_insight_id}` + `manual_note_text?` (CHECK, מקור),
+`description, created_at`.
 **Immutable לחלוטין — לעולם לא נערך/נמחק.**
 - נוצר ע"י: קוד (מדפוסי עסקאות) + AI (מפרשנות ראיון, תמיד עם source_id
   אמיתי). נצרך ע"י: חישוב Evidence Strength, כל "View Evidence".
+- **`source_learning_insight_id` (תיקון, התגלה בזמן מימוש Learning
+  Insight task):** נדרש בפועל כדי לממש את "סגירת הלולאה ל-DNA" ב-§8 —
+  `learning_insight_id` הקיים הוא **subject בלבד** (לא יכול להיות
+  source על אותה שורה בגלל CHECK ה-subject היחיד), כך שהמנגנון שכבר
+  תואר במפורש ב-§8 ("DNAHypothesisVersion חדש שמצטט את ה-LearningInsight
+  כ-Evidence") לא היה בר-ייצוג בסכמה כפי שהיא נבנתה. עמודה חדשה, נפרדת
+  מ-`learning_insight_id` הקיים, נוספה לקבוצת ה-source; ה-CHECK עודכן
+  בהתאם. גילוי אמיתי של אי-עקביות בין הפרוזה המתוכננת לסכמה בפועל, לא
+  שינוי כיוון.
 
 ### Evidence Strength — טבלת סף (S=Supporting, C=Contradicting, total=S+C)
 

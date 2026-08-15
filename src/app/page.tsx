@@ -53,6 +53,9 @@ export default function HomePage() {
         <Link href="/decisions" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
           Decisions
         </Link>
+        <Link href="/learning" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
+          Learning Insights
+        </Link>
       </div>
       <button
         onClick={() => logout.mutate()}

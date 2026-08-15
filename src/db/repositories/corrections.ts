@@ -14,6 +14,12 @@ export async function insertCorrection(db: typeof Db, values: NewCorrection) {
   return row!;
 }
 
+// Returns the updated row — caught live (Learning Insight task): the
+// first caller (learning.agree/disagree) kept returning the Correction
+// object captured *before* this ran, so callers saw status still
+// "pending" and resultingVersionId still null even after a successful
+// resolution. `.returning()` here is the fix; callers should use this
+// return value instead of holding onto their pre-resolution copy.
 export async function markCorrectionResolved(
   db: typeof Db,
   correctionId: string,
@@ -22,7 +28,7 @@ export async function markCorrectionResolved(
     | { status: "led_to_new_version"; resultingVersionId: string }
     | { status: "noted" }
 ) {
-  await db
+  const [row] = await db
     .update(corrections)
     .set({
       status: resolution.status,
@@ -30,5 +36,7 @@ export async function markCorrectionResolved(
       resultingVersionId:
         "resultingVersionId" in resolution ? resolution.resultingVersionId : undefined,
     })
-    .where(eq(corrections.id, correctionId));
+    .where(eq(corrections.id, correctionId))
+    .returning();
+  return row!;
 }

@@ -1,0 +1,4 @@
+ALTER TABLE "evidence" DROP CONSTRAINT "evidence_at_most_one_source";--> statement-breakpoint
+ALTER TABLE "evidence" ADD COLUMN "source_learning_insight_id" uuid;--> statement-breakpoint
+ALTER TABLE "evidence" ADD CONSTRAINT "evidence_source_learning_insight_id_learning_insights_id_fk" FOREIGN KEY ("source_learning_insight_id") REFERENCES "public"."learning_insights"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "evidence" ADD CONSTRAINT "evidence_at_most_one_source" CHECK (num_nonnulls("evidence"."transaction_id", "evidence"."interview_answer_id", "evidence"."decision_review_id", "evidence"."source_learning_insight_id", "evidence"."manual_note_text") <= 1);

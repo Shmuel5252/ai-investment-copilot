@@ -15,6 +15,13 @@
       "when": 1786711900143,
       "tag": "0001_far_mathemanic",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786822796450,
+      "tag": "0002_lean_matthew_murdock",
+      "breakpoints": true
     }
   ]
 }

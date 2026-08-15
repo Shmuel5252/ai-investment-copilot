@@ -41,6 +41,23 @@ export async function listDecisionsForInvestor(db: typeof Db, investorId: string
   });
 }
 
+// All of an investor's decisions that have at least one DecisionReview,
+// each with its most recent review only — feeds Learning Insight's
+// grouping (src/lib/learning/group-decisions.ts). Using the latest
+// review per decision (not every historical review) avoids the same
+// decision contributing multiple, possibly-stale evidence entries to a
+// family.
+export async function listReviewedDecisionsForInvestor(db: typeof Db, investorId: string) {
+  const rows = await db.query.decisions.findMany({
+    where: (d, { eq }) => eq(d.investorId, investorId),
+    with: {
+      snapshot: true,
+      reviews: { orderBy: (r, { desc }) => desc(r.reviewDate), limit: 1 },
+    },
+  });
+  return rows.filter((d) => d.reviews.length > 0 && d.snapshot);
+}
+
 // A Case moves to status=decided after its one Decision is recorded
 // (Slice 1 simplification — see src/server/routers/decisions.ts) so
 // there's at most one decision per case; this is how the case page finds
