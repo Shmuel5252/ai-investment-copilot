@@ -23,6 +23,9 @@ npm-debug.log*
 # local db data
 pgdata/
 
+# personal scratch space (e.g. real trade history CSVs) — never committed
+scratch/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
