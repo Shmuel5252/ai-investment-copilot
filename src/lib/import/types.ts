@@ -1,6 +1,17 @@
 // Canonical fields our importer understands — the target of the column
 // mapping step. `ticker` is optional (deposit/withdrawal have none);
 // everything else is present-or-derivable per row (see validate.ts).
+// `commission` is optional and never stored as its own column — it's
+// folded into `amount` at normalize time (see validate.ts) so `amount`
+// stays the single true net cash effect per docs/data-model.md's
+// contract for that field, and a note is appended so the raw fact isn't
+// silently lost. Added after a real user import: 85 of 153 real rows had
+// a non-zero commission that was previously read from the CSV into
+// nothing — CANONICAL_FIELDS had no "commission" entry at all, so
+// validate.ts's `get("commission")` was never even called; the value was
+// discarded before it reached the DB. Caught by a real balance mismatch,
+// not a synthetic test — see tests/unit/import-validate.test.ts's
+// commission tests for the permanent regression coverage.
 export const CANONICAL_FIELDS = [
   "date",
   "ticker",
@@ -8,6 +19,7 @@ export const CANONICAL_FIELDS = [
   "quantity",
   "price",
   "amount",
+  "commission",
   "notes",
 ] as const;
 

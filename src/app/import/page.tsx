@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/trpc/react";
-import type { CanonicalField } from "@/lib/import/types";
+import { CANONICAL_FIELDS, type CanonicalField } from "@/lib/import/types";
 
 const FIELD_LABELS: Record<CanonicalField, string> = {
   date: "Date",
@@ -11,18 +11,9 @@ const FIELD_LABELS: Record<CanonicalField, string> = {
   quantity: "Quantity",
   price: "Price",
   amount: "Amount",
+  commission: "Commission (optional — folded into Amount)",
   notes: "Notes",
 };
-
-const CANONICAL_FIELDS: CanonicalField[] = [
-  "date",
-  "ticker",
-  "type",
-  "quantity",
-  "price",
-  "amount",
-  "notes",
-];
 
 type Step = "upload" | "mapping" | "review" | "done";
 

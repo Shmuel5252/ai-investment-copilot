@@ -86,7 +86,7 @@ function normalizeRow(
   const quantity = parseNumber(get("quantity"));
   const price = parseNumber(get("price"));
   const amountRaw = parseNumber(get("amount"));
-  const notes = get("notes")?.trim() || null;
+  const commissionRaw = parseNumber(get("commission"));
 
   if (transactionType === "buy" || transactionType === "sell") {
     if (ticker === null) errors.push(`${transactionType} requires a ticker`);
@@ -110,6 +110,21 @@ function normalizeRow(
     // Only reachable for dividend/deposit/withdrawal/fee with no amount
     // column mapped at all.
     return { ok: false, errors: ["amount is missing or unparseable"] };
+  }
+
+  // Commission is always a cost, regardless of the source CSV's own sign
+  // convention (some report it negative already, some as a plain
+  // magnitude) or the transaction's cash direction — a sell's commission
+  // still reduces what you net, not just a buy's. Folded into `amount`
+  // here so the single amount field stays the true net cash effect
+  // (docs/data-model.md's contract for this column) rather than just the
+  // trade's gross principal; the raw figure is preserved in `notes`
+  // rather than silently vanishing.
+  let notes = get("notes")?.trim() || null;
+  if (commissionRaw !== null && commissionRaw !== 0) {
+    amount -= Math.abs(commissionRaw);
+    const commissionNote = `Commission: $${Math.abs(commissionRaw).toFixed(2)}`;
+    notes = notes ? `${notes} | ${commissionNote}` : commissionNote;
   }
 
   return {

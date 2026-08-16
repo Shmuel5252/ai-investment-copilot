@@ -14,6 +14,7 @@ const SYNONYMS: Record<CanonicalField, string[]> = {
   quantity: ["quantity", "qty", "shares", "units"],
   price: ["price", "unit price", "share price", "trade price"],
   amount: ["amount", "total", "net amount", "value", "cash amount"],
+  commission: ["commission", "commissions", "fee", "fees", "broker fee"],
   notes: ["notes", "memo", "description", "comment"],
 };
 

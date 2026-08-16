@@ -12,6 +12,8 @@ const mapping: ColumnMapping = {
   notes: "Notes",
 };
 
+const mappingWithCommission: ColumnMapping = { ...mapping, commission: "Commission" };
+
 describe("validateImportRows", () => {
   it("normalizes a valid buy row, deriving amount from quantity*price with correct sign", () => {
     const result = validateImportRows(
@@ -140,5 +142,97 @@ describe("validateImportRows", () => {
     const result = validateImportRows(rows, mapping);
     expect(result.validRows.map((r) => r.rowIndex)).toEqual([0, 2]);
     expect(result.invalidRows.map((r) => r.rowIndex)).toEqual([1]);
+  });
+
+  // Regression coverage for a real bug found on a real manual import
+  // (not a synthetic test): CANONICAL_FIELDS had no "commission" entry
+  // at all, so a mapped Commission column was silently never read —
+  // 85 of 153 real rows lost their commission, producing a cash balance
+  // that matched sum(amount) exactly but was off from the true balance
+  // by the sum of all commissions ($126.11 on that file). Kept as a
+  // permanent fixture so this can't silently regress again.
+  describe("commission (folded into amount, never silently dropped)", () => {
+    it("reduces a buy's cash-out amount by the commission, beyond the trade principal", () => {
+      const result = validateImportRows(
+        [{ Date: "2025-01-01", Symbol: "AAPL", Action: "Buy", Qty: "10", Price: "100", Amount: "", Commission: "1.50", Notes: "" }],
+        mappingWithCommission
+      );
+      expect(result.invalidRows).toEqual([]);
+      // Without commission this would be -1000 (see the very first test above).
+      expect(result.validRows[0]?.amount).toBeCloseTo(-1001.5);
+    });
+
+    it("reduces a sell's cash-in amount by the commission too, not increases it", () => {
+      const result = validateImportRows(
+        [{ Date: "2025-01-01", Symbol: "AAPL", Action: "Sell", Qty: "4", Price: "150", Amount: "", Commission: "1.50", Notes: "" }],
+        mappingWithCommission
+      );
+      // Without commission this would be +600 (see the sell test above).
+      expect(result.validRows[0]?.amount).toBeCloseTo(598.5);
+    });
+
+    it("treats commission as a cost regardless of the source file's own sign convention", () => {
+      const negativeConvention = validateImportRows(
+        [{ Date: "2025-01-01", Symbol: "AAPL", Action: "Buy", Qty: "1", Price: "100", Amount: "", Commission: "-1.50", Notes: "" }],
+        mappingWithCommission
+      );
+      const positiveConvention = validateImportRows(
+        [{ Date: "2025-01-01", Symbol: "AAPL", Action: "Buy", Qty: "1", Price: "100", Amount: "", Commission: "1.50", Notes: "" }],
+        mappingWithCommission
+      );
+      expect(negativeConvention.validRows[0]?.amount).toBeCloseTo(-101.5);
+      expect(positiveConvention.validRows[0]?.amount).toBeCloseTo(-101.5);
+    });
+
+    it("leaves amount unchanged when commission is zero, blank, or the column isn't mapped at all", () => {
+      const zero = validateImportRows(
+        [{ Date: "2025-01-01", Symbol: "AAPL", Action: "Buy", Qty: "10", Price: "100", Amount: "", Commission: "0", Notes: "" }],
+        mappingWithCommission
+      );
+      const blank = validateImportRows(
+        [{ Date: "2025-01-01", Symbol: "AAPL", Action: "Buy", Qty: "10", Price: "100", Amount: "", Commission: "", Notes: "" }],
+        mappingWithCommission
+      );
+      const unmapped = validateImportRows(
+        [{ Date: "2025-01-01", Symbol: "AAPL", Action: "Buy", Qty: "10", Price: "100", Amount: "", Notes: "" }],
+        mapping // no commission key in this mapping at all
+      );
+      expect(zero.validRows[0]?.amount).toBeCloseTo(-1000);
+      expect(blank.validRows[0]?.amount).toBeCloseTo(-1000);
+      expect(unmapped.validRows[0]?.amount).toBeCloseTo(-1000);
+    });
+
+    it("preserves the raw commission fact in notes rather than silently discarding it", () => {
+      const result = validateImportRows(
+        [{ Date: "2025-01-01", Symbol: "AAPL", Action: "Buy", Qty: "10", Price: "100", Amount: "", Commission: "1.50", Notes: "" }],
+        mappingWithCommission
+      );
+      expect(result.validRows[0]?.notes).toBe("Commission: $1.50");
+    });
+
+    it("appends the commission note to an existing note rather than overwriting it", () => {
+      const result = validateImportRows(
+        [{ Date: "2025-01-01", Symbol: "AAPL", Action: "Buy", Qty: "10", Price: "100", Amount: "", Commission: "1.50", Notes: "limit order" }],
+        mappingWithCommission
+      );
+      expect(result.validRows[0]?.notes).toBe("limit order | Commission: $1.50");
+    });
+
+    it("the fixture that caught the real bug: sum(amount) across a small multi-row import equals the true net cash effect, not just sum of trade principals", () => {
+      // Mirrors the real broker file: several buys/sells each with a small
+      // non-zero commission. Before the fix, sum(amount) silently ignored
+      // all four commissions; after the fix it must equal the true total.
+      const rows = [
+        { Date: "2025-01-01", Symbol: "AAPL", Action: "Buy", Qty: "10", Price: "100", Amount: "", Commission: "1.50", Notes: "" }, // -1001.50
+        { Date: "2025-01-02", Symbol: "MSFT", Action: "Buy", Qty: "2", Price: "50", Amount: "", Commission: "1.50", Notes: "" }, // -101.50
+        { Date: "2025-01-03", Symbol: "AAPL", Action: "Sell", Qty: "5", Price: "120", Amount: "", Commission: "1.50", Notes: "" }, // +598.50
+        { Date: "2025-01-04", Symbol: "", Action: "Deposit", Qty: "", Price: "", Amount: "5000", Commission: "0", Notes: "" }, // +5000 (deposits aren't charged commission)
+      ];
+      const result = validateImportRows(rows, mappingWithCommission);
+      expect(result.invalidRows).toEqual([]);
+      const totalCash = result.validRows.reduce((sum, r) => sum + r.amount, 0);
+      // True total: -1001.50 - 101.50 + 598.50 + 5000 = 4495.50
+      expect(totalCash).toBeCloseTo(4495.5);
+    });
   });
 });
