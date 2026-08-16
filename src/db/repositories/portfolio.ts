@@ -16,6 +16,17 @@ export async function insertImportBatch(db: typeof Db, values: NewImportBatch) {
   return row!;
 }
 
+// ImportBatch is traceability metadata about an import, not a judgment —
+// same "raw fact, correctable" category as Transaction above, not the
+// immutable-history tables in db/repositories/{dna,strategy,decisions,evidence}.ts.
+// Narrow, explicitly-named exception (matching deleteTransaction below):
+// used when an import needs to be fully reverted and redone (e.g. after
+// fixing a real bug in the import logic itself), not a general-purpose
+// "undo my import" UI action.
+export async function deleteImportBatch(db: typeof Db, id: string) {
+  await db.delete(importBatches).where(eq(importBatches.id, id));
+}
+
 export async function insertTransactions(db: typeof Db, values: NewTransaction[]) {
   if (values.length === 0) return [];
   return db.insert(transactions).values(values).returning();
