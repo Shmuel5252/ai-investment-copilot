@@ -12,8 +12,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "@/db/schema";
-import { ensureDefaultRiskPrinciples } from "@/db/repositories/strategy";
+import { ensureDefaultRiskPrinciples, approveStrategyVersion } from "@/db/repositories/strategy";
 import { DEFAULT_RISK_PRINCIPLES } from "@/lib/strategy/default-risk-principles";
+import { isUniqueViolation } from "@/db/errors";
 
 const client = postgres(process.env.DATABASE_URL!, { max: 5 });
 const db = drizzle(client, { schema });
@@ -59,5 +60,31 @@ describe("ensureDefaultRiskPrinciples", () => {
       where: (p, { eq }) => eq(p.investorId, investorId),
     });
     expect(rows).toHaveLength(DEFAULT_RISK_PRINCIPLES.length);
+  });
+});
+
+// Regression coverage for the follow-up gap the user asked about after
+// the double-click incident (git history): the UNIQUE(investor_id,
+// version_number) constraint on strategy_versions stops bad data from
+// being written on a genuine concurrent race, but on its own it would
+// have surfaced as a raw, uncaught Postgres error — this confirms the
+// real error shape a genuine race produces is exactly what
+// src/db/errors.ts's isUniqueViolation() (and therefore
+// src/server/routers/strategy.ts's approveVersion) expects, not a
+// mocked approximation of it.
+describe("approveStrategyVersion — genuine concurrent race", () => {
+  it("one call succeeds and the other's real Postgres error is classified as this exact constraint", async () => {
+    const results = await Promise.allSettled([
+      approveStrategyVersion(db, investorId, "concurrent approval A"),
+      approveStrategyVersion(db, investorId, "concurrent approval B"),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+
+    const err = (rejected[0] as PromiseRejectedResult).reason;
+    expect(isUniqueViolation(err, "strategy_versions_investor_id_version_number_unique")).toBe(true);
   });
 });

@@ -17,6 +17,7 @@ import {
   validateProposedDeclaredPrinciples,
   validateProposedObservedPrinciples,
 } from "@/lib/strategy/validate-principles";
+import { isUniqueViolation } from "@/db/errors";
 
 export const strategyRouter = router({
   // Fixed baseline risk principles (docs/architecture.md §2.4) — code
@@ -136,6 +137,24 @@ export const strategyRouter = router({
           message: "No strategy principles yet — generate or confirm at least one first.",
         });
       }
-      return approveStrategyVersion(db, ctx.investorId, input.changeSummary);
+      // approveStrategyVersion computes the next version_number from the
+      // current latest, then inserts — a genuine concurrent approval (two
+      // tabs, a retried request) can race that computation and hit
+      // UNIQUE(investor_id, version_number). Unlike decisions.create,
+      // there's no earlier app-level check for this to fall back to
+      // (the original double-click incident that led here didn't race in
+      // this narrow sense — see git history), so this is the only place
+      // it's caught. Recoverable by simply retrying, unlike a decision.
+      try {
+        return await approveStrategyVersion(db, ctx.investorId, input.changeSummary);
+      } catch (err) {
+        if (isUniqueViolation(err, "strategy_versions_investor_id_version_number_unique")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Another approval just went through — please try again.",
+          });
+        }
+        throw err;
+      }
     }),
 });

@@ -22,6 +22,7 @@ import { getMarketContextById } from "@/db/repositories/market-context";
 import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
 import { computePortfolioFit } from "@/lib/portfolio/portfolio-fit";
 import { synthesizeDecisionContext } from "@/lib/ai/decision";
+import { isUniqueViolation } from "@/db/errors";
 
 // Decision types that add exposure — the only ones a hypothetical size
 // meaningfully projects onto computePortfolioFit(), which always models
@@ -145,13 +146,33 @@ export const decisionsRouter = router({
         aiInterpretationText: synthesis.thesisInterpretationText,
       });
 
-      const decision = await insertDecision(db, {
-        investorId: ctx.investorId,
-        investmentCaseId: investmentCase.id,
-        ticker: investmentCase.ticker,
-        decisionType: input.decisionType,
-        decisionDate: input.decisionDate ? new Date(input.decisionDate) : new Date(),
-      });
+      // The status check above already blocks the normal case; this
+      // catches the genuine race variant (two concurrent requests both
+      // passing that check before either commits — two tabs, a retried
+      // request) that UNIQUE(investment_case_id) exists specifically to
+      // prevent at the DB level. Same message either way, since it's the
+      // same real-world situation from the user's point of view — a
+      // raw 500 with an internal SQL message here would be the one table
+      // in the whole app where that's worst, since what it's guarding is
+      // a duplicate immutable DecisionSnapshot.
+      let decision;
+      try {
+        decision = await insertDecision(db, {
+          investorId: ctx.investorId,
+          investmentCaseId: investmentCase.id,
+          ticker: investmentCase.ticker,
+          decisionType: input.decisionType,
+          decisionDate: input.decisionDate ? new Date(input.decisionDate) : new Date(),
+        });
+      } catch (err) {
+        if (isUniqueViolation(err, "decisions_investment_case_id_unique")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "This case already has a recorded decision — start a new Idea/Case to decide again.",
+          });
+        }
+        throw err;
+      }
 
       // "today + N days" is computed here, in code, never by the model
       // (CLAUDE.md "AI vs Code": timestamps/time ranges are deterministic
