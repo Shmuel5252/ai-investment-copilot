@@ -104,37 +104,41 @@ export async function listStrategyPrinciplesForInvestor(db: typeof Db, investorI
 
 // Fixed baseline risk principles (docs/architecture.md §2.4) — code
 // only, no AI, no user approval needed since these aren't a claim about
-// this investor. Idempotent by `key`: safe to call every time the
-// Strategy view loads without duplicating principles across calls.
+// this investor. Idempotent by `key`, enforced by the DB's own unique
+// (investor_id, key) constraint via onConflictDoNothing — not an
+// application-level "check existing, then insert" pre-check. A real bug
+// caught live: that pre-check pattern is a TOCTOU race (two
+// near-simultaneous calls — e.g. React StrictMode's intentional
+// double-invoke of a mount effect in dev — can both see "nothing exists
+// yet" before either commits, and both insert), which is exactly what
+// happened and produced real duplicate rows on a real account. The
+// unique constraint is what actually makes this safe; onConflictDoNothing
+// just lets a real conflict resolve to "already there" instead of an
+// error.
 export async function ensureDefaultRiskPrinciples(db: typeof Db, investorId: string) {
-  const existing = await db.query.strategyPrinciples.findMany({
-    where: (p, { eq }) => eq(p.investorId, investorId),
-  });
-  const existingKeys = new Set(existing.map((p) => p.key));
-
   const created = [];
   for (const def of DEFAULT_RISK_PRINCIPLES) {
-    if (existingKeys.has(def.key)) continue;
-    created.push(
-      await db.transaction(async (tx) => {
-        const [principle] = await tx
-          .insert(strategyPrinciples)
-          .values({ investorId, key: def.key })
-          .returning();
-        const [version] = await tx
-          .insert(strategyPrincipleVersions)
-          .values({
-            strategyPrincipleId: principle!.id,
-            versionNumber: 1,
-            principleType: "validated",
-            statementText: def.statementText,
-            rationaleText: def.rationaleText,
-            createdBy: "system_default",
-          })
-          .returning();
-        return { principle: principle!, version: version! };
-      })
-    );
+    const result = await db.transaction(async (tx) => {
+      const [principle] = await tx
+        .insert(strategyPrinciples)
+        .values({ investorId, key: def.key })
+        .onConflictDoNothing({ target: [strategyPrinciples.investorId, strategyPrinciples.key] })
+        .returning();
+      if (!principle) return null; // real conflict at the DB — this default already exists
+      const [version] = await tx
+        .insert(strategyPrincipleVersions)
+        .values({
+          strategyPrincipleId: principle.id,
+          versionNumber: 1,
+          principleType: "validated",
+          statementText: def.statementText,
+          rationaleText: def.rationaleText,
+          createdBy: "system_default",
+        })
+        .returning();
+      return { principle, version: version! };
+    });
+    if (result) created.push(result);
   }
   return created;
 }

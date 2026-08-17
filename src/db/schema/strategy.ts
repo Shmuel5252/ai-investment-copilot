@@ -1,15 +1,31 @@
-import { pgTable, uuid, text, timestamp, integer, primaryKey } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, primaryKey, unique } from "drizzle-orm/pg-core";
 import { investors } from "./identity";
 import { principleTypeEnum, principleCreatedByEnum, evidenceStrengthEnum } from "./enums";
 
-export const strategyPrinciples = pgTable("strategy_principles", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  investorId: uuid("investor_id")
-    .notNull()
-    .references(() => investors.id),
-  key: text("key").notNull(), // stable slug, e.g. "position-sizing-cap"
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const strategyPrinciples = pgTable(
+  "strategy_principles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    investorId: uuid("investor_id")
+      .notNull()
+      .references(() => investors.id),
+    key: text("key").notNull(), // stable slug, e.g. "position-sizing-cap"
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Real bug caught live (not synthetic): ensureDefaultRiskPrinciples()
+  // only guarded against re-creating a default via an application-level
+  // "check existing keys, then insert" — a genuine TOCTOU race with no
+  // DB-level backstop. React StrictMode's intentional double-invoke of
+  // useEffect in dev (next.config.ts: reactStrictMode) fired two
+  // near-simultaneous ensureDefaults calls; both saw zero existing rows
+  // before either committed, both inserted, producing exact duplicates
+  // of all 4 default principles. This constraint is the actual fix —
+  // insertDefaultRiskPrinciples now relies on it via onConflictDoNothing
+  // instead of a racy pre-check — the frontend guard (StrategyPage) is
+  // only a courtesy to avoid a redundant network call, not what makes
+  // this safe.
+  (table) => [unique().on(table.investorId, table.key)]
+);
 
 export const strategyPrincipleVersions = pgTable("strategy_principle_versions", {
   id: uuid("id").primaryKey().defaultRandom(),

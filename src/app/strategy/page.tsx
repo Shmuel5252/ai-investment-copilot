@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/trpc/react";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -38,7 +38,15 @@ export default function StrategyPage() {
   });
   // Idempotent and free (no AI call) — safe to run once whenever the
   // page loads so "validated" baseline principles exist from the start.
+  // Real idempotency is a DB-level unique constraint now (see
+  // ensureDefaultRiskPrinciples), so a duplicate call here can no longer
+  // duplicate data — this ref guard is only to avoid firing a pointless
+  // second network request under React StrictMode's dev-only
+  // double-invoke of mount effects, not a correctness requirement.
+  const ensureDefaultsRan = useRef(false);
   useEffect(() => {
+    if (ensureDefaultsRan.current) return;
+    ensureDefaultsRan.current = true;
     ensureDefaults.mutate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

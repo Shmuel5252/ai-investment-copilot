@@ -1,0 +1,1 @@
+ALTER TABLE "strategy_principles" ADD CONSTRAINT "strategy_principles_investor_id_key_unique" UNIQUE("investor_id","key");
