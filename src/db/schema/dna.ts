@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, unique } from "drizzle-orm/pg-core";
 import { investors } from "./identity";
 import { dnaHypothesisStatusEnum, dnaCreatedByEnum, evidenceStrengthEnum } from "./enums";
 
@@ -17,17 +17,28 @@ export const dnaHypotheses = pgTable("dna_hypotheses", {
 // dna_hypothesis_id — never a mutable flag. evidence_strength is always
 // computed in code from supporting/contradicting counts (docs/data-model.md
 // §2 threshold table) — never an LLM-invented number.
-export const dnaHypothesisVersions = pgTable("dna_hypothesis_versions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  dnaHypothesisId: uuid("dna_hypothesis_id")
-    .notNull()
-    .references(() => dnaHypotheses.id),
-  versionNumber: integer("version_number").notNull(),
-  statementText: text("statement_text").notNull(),
-  evidenceStrength: evidenceStrengthEnum("evidence_strength").notNull(),
-  supportingEvidenceCount: integer("supporting_evidence_count").notNull().default(0),
-  contradictingEvidenceCount: integer("contradicting_evidence_count").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  createdBy: dnaCreatedByEnum("created_by").notNull(),
-  changeReason: text("change_reason"),
-});
+export const dnaHypothesisVersions = pgTable(
+  "dna_hypothesis_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    dnaHypothesisId: uuid("dna_hypothesis_id")
+      .notNull()
+      .references(() => dnaHypotheses.id),
+    versionNumber: integer("version_number").notNull(),
+    statementText: text("statement_text").notNull(),
+    evidenceStrength: evidenceStrengthEnum("evidence_strength").notNull(),
+    supportingEvidenceCount: integer("supporting_evidence_count").notNull().default(0),
+    contradictingEvidenceCount: integer("contradicting_evidence_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: dnaCreatedByEnum("created_by").notNull(),
+    changeReason: text("change_reason"),
+  },
+  // Defense-in-depth, added after the same missing-constraint shape was
+  // found causing a real duplicate elsewhere (strategy_principles.key —
+  // see that migration) — swept across every identity+version table at
+  // once rather than waiting to hit this one too. Two different version
+  // rows for the same identity must never share a version_number; this
+  // is what actually enforces it against true concurrent writes, not
+  // application-level "compute next number, then insert".
+  (table) => [unique().on(table.dnaHypothesisId, table.versionNumber)]
+);

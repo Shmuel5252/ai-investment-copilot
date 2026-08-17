@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { trpc } from "@/trpc/react";
 import { CANONICAL_FIELDS, type CanonicalField } from "@/lib/import/types";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 const FIELD_LABELS: Record<CanonicalField, string> = {
   date: "Date",
@@ -26,6 +27,7 @@ interface OpeningStateDraft {
 }
 
 export default function ImportPage() {
+  const guard = useSubmitGuard();
   const [step, setStep] = useState<Step>("upload");
   const [filename, setFilename] = useState("");
   const [csvContent, setCsvContent] = useState("");
@@ -81,7 +83,7 @@ export default function ImportPage() {
     }));
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     const openingStatesPayload = Object.values(openingStates)
       .filter((os) => os.quantity.trim() !== "")
       .map((os) => ({
@@ -92,10 +94,14 @@ export default function ImportPage() {
         asOfDate: new Date(os.asOfDate),
       }));
 
-    confirmImport.mutate(
-      { csvContent, mapping, filename, openingStates: openingStatesPayload },
-      { onSuccess: () => setStep("done") }
+    // The exact button a real double-click duplicated a full import
+    // through (see git history) — guarded now, not just disabled-on-
+    // isPending (see src/lib/use-submit-guard.ts for why that alone
+    // wasn't enough).
+    const result = await guard(() =>
+      confirmImport.mutateAsync({ csvContent, mapping, filename, openingStates: openingStatesPayload })
     );
+    if (result) setStep("done");
   }
 
   return (

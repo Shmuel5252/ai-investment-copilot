@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { trpc } from "@/trpc/react";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 interface FrozenPortfolioState {
   cash: number;
@@ -42,6 +43,7 @@ type PredictionStatus = "confirmed" | "refuted" | "inconclusive";
 
 export default function DecisionDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const guard = useSubmitGuard();
   const utils = trpc.useUtils();
   const query = trpc.decisions.get.useQuery({ decisionId: id });
   const pendingPredictions = trpc.reviews.pendingPredictions.useQuery({ decisionId: id });
@@ -208,12 +210,14 @@ export default function DecisionDetailPage() {
 
         <button
           onClick={() =>
-            generateReview.mutate({
-              decisionId: id,
-              predictionResolutions: Object.entries(resolutions)
-                .filter(([, v]) => v.status && v.note.trim() !== "")
-                .map(([predictionId, v]) => ({ predictionId, status: v.status, note: v.note.trim() })),
-            })
+            guard(() =>
+              generateReview.mutateAsync({
+                decisionId: id,
+                predictionResolutions: Object.entries(resolutions)
+                  .filter(([, v]) => v.status && v.note.trim() !== "")
+                  .map(([predictionId, v]) => ({ predictionId, status: v.status, note: v.note.trim() })),
+              })
+            )
           }
           disabled={
             generateReview.isPending ||
@@ -276,7 +280,14 @@ export default function DecisionDetailPage() {
                         />
                         <button
                           onClick={() =>
-                            submitCorrection.mutate({ reviewDimensionId: dim.id, userArgumentText: correctionText })
+                            guard(
+                              () =>
+                                submitCorrection.mutateAsync({
+                                  reviewDimensionId: dim.id,
+                                  userArgumentText: correctionText,
+                                }),
+                              dim.id
+                            )
                           }
                           disabled={correctionText.trim() === "" || submitCorrection.isPending}
                           className="w-fit rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50"

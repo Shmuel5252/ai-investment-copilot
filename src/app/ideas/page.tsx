@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/trpc/react";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 export default function IdeasPage() {
   const router = useRouter();
+  const guard = useSubmitGuard();
   const utils = trpc.useUtils();
   const list = trpc.ideas.list.useQuery();
   const create = trpc.ideas.create.useMutation({
@@ -50,7 +52,7 @@ export default function IdeasPage() {
           className="min-h-20 rounded border border-neutral-300 p-2 text-sm"
         />
         <button
-          onClick={() => create.mutate({ ticker, noteText })}
+          onClick={() => guard(() => create.mutateAsync({ ticker, noteText }))}
           disabled={ticker.trim() === "" || noteText.trim() === "" || create.isPending}
           className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
         >
@@ -76,7 +78,7 @@ export default function IdeasPage() {
                 </Link>
               ) : (
                 <button
-                  onClick={() => promote.mutate({ ideaId: idea.id })}
+                  onClick={() => guard(() => promote.mutateAsync({ ideaId: idea.id }), idea.id)}
                   disabled={promote.isPending}
                   className="rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50"
                 >

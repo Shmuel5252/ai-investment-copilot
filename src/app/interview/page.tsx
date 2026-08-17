@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/trpc/react";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 interface Question {
   transactionId: string;
@@ -12,6 +13,7 @@ interface Question {
 }
 
 export default function InterviewPage() {
+  const guard = useSubmitGuard();
   const [session, setSession] = useState<{ sessionId: string; questions: Question[] } | null>(
     null
   );
@@ -38,22 +40,28 @@ export default function InterviewPage() {
   async function submitAnswer(skip: boolean) {
     if (!session || !currentQuestion) return;
 
-    if (!skip && answerDraft.trim() !== "") {
-      await answer.mutateAsync({
-        sessionId: session.sessionId,
-        transactionId: currentQuestion.transactionId,
-        questionText: currentQuestion.questionText,
-        answerText: answerDraft.trim(),
-      });
-      setAnsweredCount((c) => c + 1);
-    }
+    // Shared key across Next/Skip on purpose — both advance the same
+    // session state, so a rapid click on one while the other is still
+    // in flight needs to be blocked too, not just a repeat of the same
+    // button.
+    await guard(async () => {
+      if (!skip && answerDraft.trim() !== "") {
+        await answer.mutateAsync({
+          sessionId: session.sessionId,
+          transactionId: currentQuestion.transactionId,
+          questionText: currentQuestion.questionText,
+          answerText: answerDraft.trim(),
+        });
+        setAnsweredCount((c) => c + 1);
+      }
 
-    setAnswerDraft("");
-    if (index + 1 < session.questions.length) {
-      setIndex(index + 1);
-    } else {
-      await complete.mutateAsync({ sessionId: session.sessionId });
-    }
+      setAnswerDraft("");
+      if (index + 1 < session.questions.length) {
+        setIndex(index + 1);
+      } else {
+        await complete.mutateAsync({ sessionId: session.sessionId });
+      }
+    }, "submitAnswer");
   }
 
   return (
@@ -69,7 +77,7 @@ export default function InterviewPage() {
 
       {!session && !start.isPending && (
         <button
-          onClick={() => start.mutate()}
+          onClick={() => guard(() => start.mutateAsync())}
           className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white"
         >
           Start interview

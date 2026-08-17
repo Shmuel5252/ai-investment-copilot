@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/trpc/react";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 const STRENGTH_LABEL: Record<string, string> = {
   insufficient_evidence: "Insufficient Evidence",
@@ -33,6 +34,7 @@ interface AccuracyPattern {
 }
 
 export default function LearningPage() {
+  const guard = useSubmitGuard();
   const utils = trpc.useUtils();
   const list = trpc.learning.list.useQuery();
   const generate = trpc.learning.generate.useMutation({
@@ -71,7 +73,7 @@ export default function LearningPage() {
       </div>
 
       <button
-        onClick={() => generate.mutate()}
+        onClick={() => guard(() => generate.mutateAsync())}
         disabled={generate.isPending}
         className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
       >
@@ -166,14 +168,14 @@ export default function LearningPage() {
                   />
                   <div className="flex gap-2">
                     <button
-                      onClick={() => agree.mutate({ learningInsightId: insight.id, note })}
+                      onClick={() => guard(() => agree.mutateAsync({ learningInsightId: insight.id, note }), insight.id)}
                       disabled={note.trim() === "" || agree.isPending}
                       className="rounded bg-neutral-900 px-2 py-1 text-xs text-white disabled:opacity-50"
                     >
                       Agree — add to my DNA
                     </button>
                     <button
-                      onClick={() => disagree.mutate({ learningInsightId: insight.id, note })}
+                      onClick={() => guard(() => disagree.mutateAsync({ learningInsightId: insight.id, note }), insight.id)}
                       disabled={note.trim() === "" || disagree.isPending}
                       className="rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50"
                     >

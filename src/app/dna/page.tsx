@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/trpc/react";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 const STRENGTH_LABEL: Record<string, string> = {
   insufficient_evidence: "Insufficient Evidence",
@@ -18,6 +19,7 @@ const STRENGTH_COLOR: Record<string, string> = {
 };
 
 export default function DnaPage() {
+  const guard = useSubmitGuard();
   const utils = trpc.useUtils();
   const list = trpc.dna.list.useQuery();
   const generate = trpc.dna.generate.useMutation({
@@ -44,7 +46,7 @@ export default function DnaPage() {
       </div>
 
       <button
-        onClick={() => generate.mutate()}
+        onClick={() => guard(() => generate.mutateAsync())}
         disabled={generate.isPending}
         className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
       >
@@ -87,7 +89,7 @@ export default function DnaPage() {
                   {expandedId === h.id ? "Hide evidence" : "View evidence"}
                 </button>
                 <button
-                  onClick={() => reject.mutate({ dnaHypothesisId: h.id })}
+                  onClick={() => guard(() => reject.mutateAsync({ dnaHypothesisId: h.id }), h.id)}
                   className="text-xs text-red-600 underline"
                 >
                   Disagree

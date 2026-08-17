@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/trpc/react";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 export default function LoginPage() {
   const router = useRouter();
+  const guard = useSubmitGuard();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -23,7 +25,7 @@ export default function LoginPage() {
         className="flex flex-col gap-3"
         onSubmit={(e) => {
           e.preventDefault();
-          login.mutate({ email, password });
+          guard(() => login.mutateAsync({ email, password }));
         }}
       >
         <input

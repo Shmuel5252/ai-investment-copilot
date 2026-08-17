@@ -6,6 +6,7 @@ import Link from "next/link";
 import { trpc } from "@/trpc/react";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 interface PersonalFitEvidenceRefs {
   dnaHypothesisIds: string[];
@@ -18,6 +19,7 @@ const DECISION_TYPES = ["BUY", "ADD", "HOLD", "REDUCE", "SELL", "PASS"] as const
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const guard = useSubmitGuard();
   const utils = trpc.useUtils();
 
   const caseQuery = trpc.cases.get.useQuery({ caseId: id });
@@ -72,7 +74,7 @@ export default function CaseDetailPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold">Market Intelligence — Financial Modeling Prep</h2>
         <button
-          onClick={() => fetchMarketData.mutate({ caseId: id, forceRefresh: !!intelligence })}
+          onClick={() => guard(() => fetchMarketData.mutateAsync({ caseId: id, forceRefresh: !!intelligence }), "fetchMarketData")}
           disabled={fetchMarketData.isPending}
           className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
         >
@@ -123,7 +125,7 @@ export default function CaseDetailPage() {
             className="rounded border border-neutral-300 p-2 text-sm"
           />
           <button
-            onClick={() => computeFit.mutate({ caseId: id, sizeDollars: parsedSize })}
+            onClick={() => guard(() => computeFit.mutateAsync({ caseId: id, sizeDollars: parsedSize }), "computeFit")}
             disabled={!intelligence || computeFit.isPending}
             className="rounded border border-neutral-300 px-3 py-2 text-sm disabled:opacity-50"
           >
@@ -139,7 +141,7 @@ export default function CaseDetailPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold">Personal Fit — vs. your DNA + Strategy</h2>
         <button
-          onClick={() => generatePersonalFit.mutate({ caseId: id })}
+          onClick={() => guard(() => generatePersonalFit.mutateAsync({ caseId: id }), "generatePersonalFit")}
           disabled={generatePersonalFit.isPending}
           className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
         >
@@ -176,7 +178,7 @@ export default function CaseDetailPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold">Case Synthesis</h2>
         <button
-          onClick={() => generateSynthesis.mutate({ caseId: id, sizeDollars: parsedSize })}
+          onClick={() => guard(() => generateSynthesis.mutateAsync({ caseId: id, sizeDollars: parsedSize }), "generateSynthesis")}
           disabled={!intelligence || generateSynthesis.isPending}
           className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
         >
@@ -255,14 +257,18 @@ export default function CaseDetailPage() {
             />
             <button
               onClick={() =>
-                recordDecision.mutate({
-                  caseId: id,
-                  decisionType,
-                  sizeDollars: parsedSize,
-                  reasoningText,
-                  risksConsideredText: risksConsideredText.trim() || undefined,
-                  exitConditionsText: exitConditionsText.trim() || undefined,
-                })
+                guard(
+                  () =>
+                    recordDecision.mutateAsync({
+                      caseId: id,
+                      decisionType,
+                      sizeDollars: parsedSize,
+                      reasoningText,
+                      risksConsideredText: risksConsideredText.trim() || undefined,
+                      exitConditionsText: exitConditionsText.trim() || undefined,
+                    }),
+                  "recordDecision"
+                )
               }
               disabled={reasoningText.trim() === "" || recordDecision.isPending}
               className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"

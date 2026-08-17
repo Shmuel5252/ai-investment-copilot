@@ -1,0 +1,5 @@
+ALTER TABLE "dna_hypothesis_versions" ADD CONSTRAINT "dna_hypothesis_versions_dna_hypothesis_id_version_number_unique" UNIQUE("dna_hypothesis_id","version_number");--> statement-breakpoint
+ALTER TABLE "strategy_principle_versions" ADD CONSTRAINT "strategy_principle_versions_strategy_principle_id_version_number_unique" UNIQUE("strategy_principle_id","version_number");--> statement-breakpoint
+ALTER TABLE "strategy_versions" ADD CONSTRAINT "strategy_versions_investor_id_version_number_unique" UNIQUE("investor_id","version_number");--> statement-breakpoint
+ALTER TABLE "learning_insight_versions" ADD CONSTRAINT "learning_insight_versions_learning_insight_id_version_number_unique" UNIQUE("learning_insight_id","version_number");--> statement-breakpoint
+ALTER TABLE "decisions" ADD CONSTRAINT "decisions_investment_case_id_unique" UNIQUE("investment_case_id");

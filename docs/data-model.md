@@ -12,7 +12,13 @@ Reference מלא של מודל הנתונים שאושר בשלב 3 (כולל ה
 - **Identity + Version split** — לישויות שצוברות ראיות ברציפות (DNA
   Hypothesis, Strategy Principle, Learning Insight): שורת-זהות יציבה
   (ש-Evidence מתחבר אליה) + שורות-גרסה append-only. "הגרסה הנוכחית" =
-  `MAX(version_number)`, אף פעם לא flag שמתעדכן.
+  `MAX(version_number)`, אף פעם לא flag שמתעדכן. **`UNIQUE(parent_id,
+  version_number)`** ברמת ה-DB על כל טבלת גרסה (dna_hypothesis_versions,
+  strategy_principle_versions, strategy_versions, learning_insight_versions)
+  — נוסף אחרי שכפל אמיתי (double-click / React StrictMode double-invoke)
+  יצר שתי שורות עם אותו `key`/version בפועל; "הגרסה הנוכחית" תקף רק אם
+  אף פעם אין שני version_number זהים לאותו parent, וזה לא היה אכוף עד
+  אז ברמת ה-DB, רק בהנחה יישומית.
 - **Whole-bundle Version** — ל-Strategy בלבד (מאושרת במפורש כמכלול):
   `StrategyVersion` = snapshot של כל העקרונות יחד, דרך טבלת קישור.
 - **Append-only + supersedes pointer** — ל-`InterviewAnswer`: תיקון = שורה
@@ -307,4 +313,7 @@ Append-only.
    בהמשך פותחת Idea/Case חדשים, לא מוסיפה החלטה שנייה לאותו Case —
    לא צוין מפורש בתכנון המקורי, הוחלט בזמן מימוש Decision Snapshot
    task כדי ש-`status` יישאר חד-משמעי בלי לתמוך במעקב multi-decision
-   לא-מתוכנן.
+   לא-מתוכנן. **חוזק בפועל ל-`UNIQUE(investment_case_id)` על `decisions`**
+   אחרי שכפל אמיתי (double-submit) נמצא במקום אחר לגמרי (Strategy) —
+   בלי האילוץ הזה, אותו סוג race יכול לייצר שני `DecisionSnapshot`
+   בלתי-הפיכים לאותו Case; זו הכללה הכרחית, לא רק "ניקיון".

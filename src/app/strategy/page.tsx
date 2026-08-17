@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/trpc/react";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 const TYPE_LABEL: Record<string, string> = {
   declared: "Declared",
@@ -30,6 +31,7 @@ const STRENGTH_COLOR: Record<string, string> = {
 };
 
 export default function StrategyPage() {
+  const guard = useSubmitGuard();
   const utils = trpc.useUtils();
   const list = trpc.strategy.list.useQuery();
 
@@ -107,7 +109,7 @@ export default function StrategyPage() {
         <button
           onClick={() => {
             setConfirmedIds(new Set());
-            proposeDeclared.mutate();
+            guard(() => proposeDeclared.mutateAsync());
           }}
           disabled={proposeDeclared.isPending}
           className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
@@ -130,8 +132,8 @@ export default function StrategyPage() {
             ) : (
               <button
                 onClick={async () => {
-                  await confirmDeclared.mutateAsync(c);
-                  setConfirmedIds((s) => new Set(s).add(i));
+                  const result = await guard(() => confirmDeclared.mutateAsync(c), `declared-${i}`);
+                  if (result) setConfirmedIds((s) => new Set(s).add(i));
                 }}
                 disabled={confirmDeclared.isPending}
                 className="mt-2 rounded border border-neutral-300 px-2 py-1 text-xs disabled:opacity-50"
@@ -147,7 +149,7 @@ export default function StrategyPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold">Observed principles</h2>
         <button
-          onClick={() => generateObserved.mutate()}
+          onClick={() => guard(() => generateObserved.mutateAsync())}
           disabled={generateObserved.isPending}
           className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
         >
@@ -237,7 +239,7 @@ export default function StrategyPage() {
           className="rounded border border-neutral-300 p-2 text-sm"
         />
         <button
-          onClick={() => approveVersion.mutate({ changeSummary })}
+          onClick={() => guard(() => approveVersion.mutateAsync({ changeSummary }))}
           disabled={changeSummary.trim() === "" || approveVersion.isPending}
           className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
         >

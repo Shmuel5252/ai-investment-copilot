@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { trpc } from "@/trpc/react";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 export default function CasesPage() {
   const router = useRouter();
+  const guard = useSubmitGuard();
   const utils = trpc.useUtils();
   const list = trpc.cases.list.useQuery();
   const create = trpc.cases.create.useMutation({
@@ -34,7 +36,7 @@ export default function CasesPage() {
           className="rounded border border-neutral-300 p-2 text-sm"
         />
         <button
-          onClick={() => create.mutate({ ticker })}
+          onClick={() => guard(() => create.mutateAsync({ ticker }))}
           disabled={ticker.trim() === "" || create.isPending}
           className="rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
         >

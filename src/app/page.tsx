@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { trpc } from "@/trpc/react";
+import { useSubmitGuard } from "@/lib/use-submit-guard";
 
 export default function HomePage() {
   const router = useRouter();
+  const guard = useSubmitGuard();
   const me = trpc.auth.me.useQuery();
   const logout = trpc.auth.logout.useMutation({
     onSuccess: () => {
@@ -58,7 +60,7 @@ export default function HomePage() {
         </Link>
       </div>
       <button
-        onClick={() => logout.mutate()}
+        onClick={() => guard(() => logout.mutateAsync())}
         className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm"
       >
         Sign out

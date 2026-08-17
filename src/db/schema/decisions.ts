@@ -42,19 +42,33 @@ export const theses = pgTable("theses", {
 });
 
 // --- Decision (thin identity) ----------------------------------------
-export const decisions = pgTable("decisions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  investorId: uuid("investor_id")
-    .notNull()
-    .references(() => investors.id),
-  investmentCaseId: uuid("investment_case_id")
-    .notNull()
-    .references(() => investmentCases.id),
-  ticker: text("ticker").notNull(),
-  decisionType: decisionTypeEnum("decision_type").notNull(),
-  decisionDate: timestamp("decision_date", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const decisions = pgTable(
+  "decisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    investorId: uuid("investor_id")
+      .notNull()
+      .references(() => investors.id),
+    investmentCaseId: uuid("investment_case_id")
+      .notNull()
+      .references(() => investmentCases.id),
+    ticker: text("ticker").notNull(),
+    decisionType: decisionTypeEnum("decision_type").notNull(),
+    decisionDate: timestamp("decision_date", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Enforces "at most one Decision per Case" — already the app-level
+  // Slice 1 simplification documented in data-model.md's "פישוטים
+  // מכוונים" §6 (a Case moves to status=decided after its one Decision),
+  // but that was only a router-level status check, not a DB guarantee.
+  // The most consequential instance of the same missing-constraint class
+  // found via strategy_principles/strategy_versions: two near-simultaneous
+  // decisions.create calls both reading investmentCase.status="researching"
+  // before either commits would otherwise both succeed, producing two
+  // separate immutable DecisionSnapshots for one Case — the one table in
+  // this whole family where that's genuinely unrecoverable.
+  (table) => [unique().on(table.investmentCaseId)]
+);
 
 // --- DecisionSnapshot (the immutable core) ---------------------------
 // No UPDATE ever — enforced in the repository layer (only `insert` is
