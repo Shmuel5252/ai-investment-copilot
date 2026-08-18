@@ -87,6 +87,32 @@ false`, never a fabricated fallback, when the plan blocks it for that
 ticker) — see that file's top comment for the full reasoning. If FMP's
 plan/whitelist changes, that's the one file to revisit.
 
+## Known gotcha: Docker Desktop stops itself in the background
+
+Happened repeatedly during development (not a one-off): Docker Desktop —
+and with it the local Postgres container — goes down on its own with no
+visible warning, while `npm run dev` keeps running against it. Every
+DB-touching request then fails, including totally unrelated-looking ones
+(`auth.me` on a fresh page load, `ideas.create`, anything) — it's not
+specific to whatever feature you were actually testing.
+
+**The tell:** the error is a bare `Failed query: insert/select ...` with
+**no `code`, `detail`, or `hint`** anywhere in it, even when you inspect
+the full `.cause` chain. That absence is the diagnostic signal, not a
+sign of a hidden/truncated real error — a genuine Postgres-side error
+(a constraint violation, a bad column, etc.) always carries a SQLSTATE
+`code` plus usually `detail`/`hint`, because Postgres itself generated
+those. A connection refusal (`ECONNREFUSED`) never reaches Postgres at
+all, so those fields simply don't exist for it — confirmed by
+reproducing the exact failure and inspecting the full error object, not
+assumed.
+
+**Before investigating a "Failed query" error as an app bug**, check
+`docker ps` (or just `docker compose up -d` — harmless if it's already
+up) first. Costs ten seconds; skipping it has cost real investigation
+time more than once chasing a code-level explanation for what was
+actually an infrastructure hiccup.
+
 ## Data model & architecture
 
 `docs/architecture.md` and `docs/data-model.md` are the living reference —
