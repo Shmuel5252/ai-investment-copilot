@@ -95,8 +95,10 @@ export const strategyRouter = router({
     const proposed = await proposeObservedPrinciples(
       answers.map((a) => ({ id: a.id, questionText: a.questionText, answerText: a.answerText }))
     );
-    const validAnswerIds = new Set(answers.map((a) => a.id));
-    const validated = validateProposedObservedPrinciples(proposed, validAnswerIds);
+    // Same real-gap fix as dna.ts: dedupe evidence by underlying
+    // transaction, not raw answer id, before it feeds evidenceStrength.
+    const answerCaseKeys = new Map(answers.map((a) => [a.id, a.transactionId ?? a.id]));
+    const validated = validateProposedObservedPrinciples(proposed, answerCaseKeys);
 
     const created = [];
     for (const principle of validated) {

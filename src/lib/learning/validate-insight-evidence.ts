@@ -1,4 +1,5 @@
 import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evidence-strength";
+import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
 import type { ProposedLearningInsight } from "@/lib/ai/learning";
 
 export interface ValidatedInsightEvidence {
@@ -23,9 +24,20 @@ export interface ValidatedLearningInsight {
 // trusted. Returns null if nothing survives validation: a proposed
 // insight whose only "evidence" was hallucinated isn't a thin insight,
 // it isn't an insight at all (matches the DNA precedent exactly).
+//
+// `reviewCaseKeys` maps each valid decisionReviewId to its underlying
+// Decision id — the real independent case, not the review row. A
+// Decision can accumulate more than one DecisionReview over time (e.g.
+// re-reviewed at 3mo and again at 12mo); citing two reviews of the same
+// decision must still count as one piece of evidence, not two, for the
+// same reason src/lib/dna/validate-hypotheses.ts dedupes by transaction.
+// listReviewedDecisionsForInvestor already keeps only the latest review
+// per decision today, so this is currently a no-op in practice — kept
+// here anyway so the counting is correct by construction, not by an
+// incidental property of a different function.
 export function validateLearningInsightEvidence(
   proposed: ProposedLearningInsight,
-  validDecisionReviewIds: ReadonlySet<string>
+  reviewCaseKeys: ReadonlyMap<string, string>
 ): ValidatedLearningInsight | null {
   if (!proposed || typeof proposed.statementText !== "string" || proposed.statementText.trim() === "") {
     return null;
@@ -36,7 +48,7 @@ export function validateLearningInsightEvidence(
     (e): e is ValidatedInsightEvidence =>
       !!e &&
       typeof e.decisionReviewId === "string" &&
-      validDecisionReviewIds.has(e.decisionReviewId) &&
+      reviewCaseKeys.has(e.decisionReviewId) &&
       (e.stance === "supporting" || e.stance === "contradicting") &&
       typeof e.description === "string" &&
       e.description.trim() !== ""
@@ -44,8 +56,10 @@ export function validateLearningInsightEvidence(
 
   if (validEvidence.length === 0) return null;
 
-  const supportingCount = validEvidence.filter((e) => e.stance === "supporting").length;
-  const contradictingCount = validEvidence.filter((e) => e.stance === "contradicting").length;
+  const { supportingCount, contradictingCount } = countIndependentCases(
+    validEvidence,
+    (e) => reviewCaseKeys.get(e.decisionReviewId)!
+  );
 
   return {
     statementText: proposed.statementText.trim(),

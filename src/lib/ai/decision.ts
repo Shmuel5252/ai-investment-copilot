@@ -21,6 +21,7 @@ export interface DnaContextItem {
 export interface StrategyContextItem {
   statementText: string;
   principleType: string;
+  evidenceStrength: string | null;
 }
 
 export interface DecisionContextInput {
@@ -67,7 +68,7 @@ export interface DecisionContextSynthesis {
   realtimeAssessmentText: string;
 }
 
-const SYSTEM_PROMPT = `You help a personal investor at the exact moment they're recording a real investing decision. You are given their own reasoning verbatim, plus real, already-fetched data: market data for the ticker, broad market context (index/volatility), computed portfolio-fit numbers, and — if any exist — this investor's own DNA hypotheses and Strategy principles.
+const SYSTEM_PROMPT = `You help a personal investor at the exact moment they're recording a real investing decision. You are given their own reasoning verbatim, plus real, already-fetched data: market data for the ticker, broad market context (index/volatility), computed portfolio-fit numbers, and — if any exist — this investor's own DNA hypotheses and Strategy principles. Every hypothesis/principle you're given already has real evidence behind it — thin/unconfirmed (insufficient_evidence) ones have already been excluded before reaching you, so nothing here needs to be second-guessed as too weak to use.
 
 Three jobs, all grounded only in what you're actually given:
 
@@ -75,7 +76,7 @@ Three jobs, all grounded only in what you're actually given:
 
 2. predictions: extract 0-3 concrete, checkable claims implied by the reasoning (e.g. a growth rate, a price level, an event). Zero predictions is a completely normal, expected result when the reasoning doesn't contain a checkable claim — do not invent one to have something to return. Only set timeframeDays if the investor's own reasoning stated or clearly implied an actual timeframe (e.g. "by next earnings" ~90, "within 6 months" ~180, "next year" ~365) — express it as a whole number of days from today, your best estimate of that duration. Do NOT compute or state an actual calendar date yourself; the application computes "today + timeframeDays" in code, precisely so a duration-estimate mistake can't turn into a date that's nonsensically in the past. Leave timeframeDays null if no real timeframe was stated.
 
-3. realtimeAssessmentText: an honest, real-time gut-check. Reference the actual numbers you were given (price, portfolio exposure/concentration, index/volatility levels). If this decision is in tension with a specific Strategy principle or DNA hypothesis you were given, say so plainly and name it — but be honest about evidence strength for DNA hypotheses (don't treat "insufficient_evidence"/"weak" as confirmed). If nothing you were given conflicts with this decision, say that plainly too rather than manufacturing a concern.
+3. realtimeAssessmentText: an honest, real-time gut-check. Reference the actual numbers you were given (price, portfolio exposure/concentration, index/volatility levels). If this decision is in tension with a specific Strategy principle or DNA hypothesis you were given, say so plainly and name it — but be honest about evidence strength for DNA hypotheses (don't treat "weak" as confirmed). If nothing you were given conflicts with this decision, say that plainly too rather than manufacturing a concern.
 
 Never invent a fact (revenue, guidance, analyst view, news) beyond what's in the data you were handed. Keep each field to 2-4 sentences (predictions' claimText should be one sentence each).`;
 
@@ -148,7 +149,9 @@ function formatContext(input: DecisionContextInput): string {
   if (input.strategyPrinciples.length > 0) {
     parts.push(
       "\n=== This investor's current Strategy principles ===",
-      ...input.strategyPrinciples.map((p) => `- (${p.principleType}) ${p.statementText}`)
+      ...input.strategyPrinciples.map(
+        (p) => `- (${p.principleType}${p.evidenceStrength ? `, ${p.evidenceStrength}` : ""}) ${p.statementText}`
+      )
     );
   } else {
     parts.push("\n=== This investor's current Strategy principles === none yet.");

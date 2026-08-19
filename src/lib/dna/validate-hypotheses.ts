@@ -1,4 +1,5 @@
 import { calculateEvidenceStrength, type EvidenceStrength } from "./evidence-strength";
+import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
 import type { ProposedHypothesis } from "@/lib/ai/dna";
 
 export interface ValidatedEvidence {
@@ -23,9 +24,22 @@ export interface ValidatedHypothesis {
 // hypothesis, it's not a hypothesis at all. evidenceStrength is always
 // computed here in code from the *validated* counts, never taken from
 // the AI's output.
+//
+// `answerCaseKeys` maps each valid interview-answer id to the
+// *underlying* case it's really evidence about — its transaction id if
+// it has one, else the answer's own id. Two different InterviewAnswers
+// about the same transaction (real, reachable: an interview can be
+// re-run in a later session and re-select a transaction already asked
+// about before — select-transactions.ts only dedupes within one
+// session's own selection, not across sessions) must count as one piece
+// of evidence, not two — a real gap found by the user on real data. All
+// validated citations are still kept in the returned `evidence` array
+// for traceability/"View Evidence"; only the counts feeding
+// evidenceStrength are deduped by underlying case
+// (src/lib/evidence/count-independent-cases.ts).
 export function validateProposedHypotheses(
   proposed: ProposedHypothesis[],
-  validAnswerIds: ReadonlySet<string>
+  answerCaseKeys: ReadonlyMap<string, string>
 ): ValidatedHypothesis[] {
   const results: ValidatedHypothesis[] = [];
 
@@ -37,7 +51,7 @@ export function validateProposedHypotheses(
       (e): e is ValidatedEvidence =>
         !!e &&
         typeof e.interviewAnswerId === "string" &&
-        validAnswerIds.has(e.interviewAnswerId) &&
+        answerCaseKeys.has(e.interviewAnswerId) &&
         (e.stance === "supporting" || e.stance === "contradicting") &&
         typeof e.description === "string" &&
         e.description.trim() !== ""
@@ -45,8 +59,10 @@ export function validateProposedHypotheses(
 
     if (validEvidence.length === 0) continue;
 
-    const supportingCount = validEvidence.filter((e) => e.stance === "supporting").length;
-    const contradictingCount = validEvidence.filter((e) => e.stance === "contradicting").length;
+    const { supportingCount, contradictingCount } = countIndependentCases(
+      validEvidence,
+      (e) => answerCaseKeys.get(e.interviewAnswerId)!
+    );
 
     results.push({
       statement: h.statement.trim(),

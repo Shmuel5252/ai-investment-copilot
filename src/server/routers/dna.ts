@@ -30,8 +30,15 @@ export const dnaRouter = router({
       answers.map((a) => ({ id: a.id, questionText: a.questionText, answerText: a.answerText }))
     );
 
-    const validAnswerIds = new Set(answers.map((a) => a.id));
-    const validated = validateProposedHypotheses(proposed, validAnswerIds);
+    // Evidence Strength must count independent investment cases, not raw
+    // Evidence rows (real gap found on real data) — two different
+    // InterviewAnswers about the same transaction (reachable: the
+    // interview can be re-run in a later session and re-select a
+    // transaction already asked about before) map to the same case key
+    // here, so validateProposedHypotheses dedupes them to one piece of
+    // evidence. An answer not about a specific transaction is its own case.
+    const answerCaseKeys = new Map(answers.map((a) => [a.id, a.transactionId ?? a.id]));
+    const validated = validateProposedHypotheses(proposed, answerCaseKeys);
 
     const created = [];
     for (const hypothesis of validated) {

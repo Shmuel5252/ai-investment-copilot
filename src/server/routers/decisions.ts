@@ -23,6 +23,7 @@ import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investo
 import { computePortfolioFit } from "@/lib/portfolio/portfolio-fit";
 import { synthesizeDecisionContext } from "@/lib/ai/decision";
 import { isUniqueViolation } from "@/db/errors";
+import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 
 // Decision types that add exposure — the only ones a hypothetical size
 // meaningfully projects onto computePortfolioFit(), which always models
@@ -107,16 +108,28 @@ export const decisionsRouter = router({
         sizeDollars: sizeDollarsForFit,
       });
 
-      const strategyPrinciplesForAi = bundledPrincipleRows.map((row) => ({
-        statementText: row.principleVersion.statementText,
-        principleType: row.principleVersion.principleType,
-      }));
-      const dnaHypothesesForAi = dnaHypotheses
-        .map((h) => {
-          const version = h.versions[0];
-          return version ? { statementText: version.statementText, evidenceStrength: version.evidenceStrength } : null;
-        })
-        .filter((h): h is NonNullable<typeof h> => h !== null);
+      // insufficient_evidence hypotheses/principles are excluded from
+      // what the AI reasons with (real gap found on real data — a hedge
+      // in the prompt alone wasn't enough to stop them leaning the
+      // narrative). dnaHypothesisVersionIds below is deliberately NOT
+      // filtered — it's what gets frozen into the immutable
+      // DecisionSnapshot as "which DNA versions were in effect", a
+      // historical fact independent of what informed this one narrative.
+      const strategyPrinciplesForAi = excludeInsufficientEvidence(
+        bundledPrincipleRows.map((row) => ({
+          statementText: row.principleVersion.statementText,
+          principleType: row.principleVersion.principleType,
+          evidenceStrength: row.principleVersion.evidenceStrength,
+        }))
+      );
+      const dnaHypothesesForAi = excludeInsufficientEvidence(
+        dnaHypotheses
+          .map((h) => {
+            const version = h.versions[0];
+            return version ? { statementText: version.statementText, evidenceStrength: version.evidenceStrength } : null;
+          })
+          .filter((h): h is NonNullable<typeof h> => h !== null)
+      );
       const dnaHypothesisVersionIds = dnaHypotheses
         .map((h) => h.versions[0]?.id)
         .filter((id): id is string => !!id);

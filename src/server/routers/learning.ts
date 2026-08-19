@@ -88,8 +88,14 @@ export const learningRouter = router({
         }))
       );
 
-      const validAnswerIds = new Set(family.decisions.map((d) => d.decisionReviewId));
-      const validated = validateLearningInsightEvidence(proposed, validAnswerIds);
+      // Same real-gap fix as dna.ts/strategy.ts: dedupe by underlying
+      // Decision, not raw review id, before it feeds evidenceStrength —
+      // matters if a decision is ever re-reviewed and both reviews end
+      // up candidates (listReviewedDecisionsForInvestor already prevents
+      // that today by keeping only the latest per decision, but the
+      // counting is correct by construction either way).
+      const reviewCaseKeys = new Map(family.decisions.map((d) => [d.decisionReviewId, d.decisionId]));
+      const validated = validateLearningInsightEvidence(proposed, reviewCaseKeys);
       if (!validated) continue;
 
       created.push(

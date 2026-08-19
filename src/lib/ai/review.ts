@@ -38,7 +38,7 @@ export interface ReviewInput {
   caseDevilsAdvocateText: string | null;
   casePersonalFitText: string | null;
   casePortfolioFitText: string | null;
-  strategyPrinciplesInEffect: { statementText: string; principleType: string }[];
+  strategyPrinciplesInEffect: { statementText: string; principleType: string; evidenceStrength: string | null }[];
   dnaHypothesesInEffect: { statementText: string; evidenceStrength: string }[];
   predictionsWithResolutions: { claimText: string; status: string; resolutionNote: string | null }[];
   outcome: DecisionOutcome;
@@ -74,7 +74,7 @@ const DIMENSION_LIST = [
   "exit_conditions — whether a real exit/invalidation plan was defined before or at the decision",
 ].join("\n");
 
-const SYSTEM_PROMPT = `You review a personal investor's past investing decision, using only what they actually knew/recorded at decision time (frozen in a Decision Snapshot) plus what's happened since (Outcome, already computed in code and given to you as a fact — you do not compute or judge P&L yourself).
+const SYSTEM_PROMPT = `You review a personal investor's past investing decision, using only what they actually knew/recorded at decision time (frozen in a Decision Snapshot) plus what's happened since (Outcome, already computed in code and given to you as a fact — you do not compute or judge P&L yourself). Any DNA hypothesis or Strategy principle you're given already has real evidence behind it — thin/unconfirmed (insufficient_evidence) ones have already been excluded before reaching you, so treat everything you're given as genuinely evidenced, not something to second-guess as too weak.
 
 You produce two things:
 
@@ -169,7 +169,7 @@ function formatInput(input: ReviewInput): string {
     `casePortfolioFitText: ${input.casePortfolioFitText ?? "(none)"}`,
     `\n=== portfolioStateAtDecision ===\ncash: $${input.portfolioStateAtDecision.cash.toFixed(2)}, positions: ${JSON.stringify(input.portfolioStateAtDecision.positions)}`,
     `\n=== marketContext (broad market at decision time) ===\n${JSON.stringify(input.marketContextAtDecision)}`,
-    `\n=== strategyPrinciplesInEffect ===\n${input.strategyPrinciplesInEffect.map((p) => `- (${p.principleType}) ${p.statementText}`).join("\n") || "(none yet)"}`,
+    `\n=== strategyPrinciplesInEffect ===\n${input.strategyPrinciplesInEffect.map((p) => `- (${p.principleType}${p.evidenceStrength ? `, ${p.evidenceStrength}` : ""}) ${p.statementText}`).join("\n") || "(none yet)"}`,
     `\n=== dnaHypothesesInEffect ===\n${input.dnaHypothesesInEffect.map((h) => `- (${h.evidenceStrength}) ${h.statementText}`).join("\n") || "(none yet)"}`,
     `\n=== predictionsAndResolutions ===\n${input.predictionsWithResolutions.map((p) => `- [${p.status}] ${p.claimText}${p.resolutionNote ? ` — ${p.resolutionNote}` : ""}`).join("\n") || "(no predictions were extracted from this thesis)"}`,
     `\n=== Outcome (computed in code, a fact — not yours to judge) ===\n${formatOutcome(input.outcome)}`,

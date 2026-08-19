@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateEvidenceStrength } from "@/lib/dna/evidence-strength";
+import { calculateEvidenceStrength, excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 
 // Table from docs/data-model.md §2:
 // total<3 -> insufficient_evidence; S/total<0.6 -> weak;
@@ -34,5 +34,35 @@ describe("calculateEvidenceStrength", () => {
 
   it("treats a majority-contradicting hypothesis as weak, not just low-confidence", () => {
     expect(calculateEvidenceStrength(1, 4)).toBe("weak");
+  });
+});
+
+// Regression coverage for a real gap the user found: insufficient_evidence
+// items must never participate in narrative-shaping AI reasoning, hedged
+// or not — enforced by removing them from context entirely, not by
+// trusting a prompt instruction.
+describe("excludeInsufficientEvidence", () => {
+  it("drops items whose evidenceStrength is insufficient_evidence", () => {
+    const items = [
+      { id: "a", evidenceStrength: "insufficient_evidence" as const },
+      { id: "b", evidenceStrength: "weak" as const },
+      { id: "c", evidenceStrength: "moderate" as const },
+      { id: "d", evidenceStrength: "strong" as const },
+    ];
+    expect(excludeInsufficientEvidence(items).map((i) => i.id)).toEqual(["b", "c", "d"]);
+  });
+
+  it("keeps weak items — a real, if shaky, observed pattern, unlike insufficient_evidence", () => {
+    const items = [{ id: "a", evidenceStrength: "weak" as const }];
+    expect(excludeInsufficientEvidence(items)).toHaveLength(1);
+  });
+
+  it("keeps items with null evidenceStrength (e.g. declared/validated Strategy principles, which don't carry a strength at all)", () => {
+    const items = [{ id: "a", evidenceStrength: null }];
+    expect(excludeInsufficientEvidence(items)).toHaveLength(1);
+  });
+
+  it("returns an empty list unchanged", () => {
+    expect(excludeInsufficientEvidence([])).toEqual([]);
   });
 });

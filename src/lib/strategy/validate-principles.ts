@@ -1,4 +1,5 @@
 import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evidence-strength";
+import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
 import type { ProposedDeclaredPrinciple, ProposedObservedPrinciple } from "@/lib/ai/strategy";
 
 // The AI's citations are never trusted blindly here either (same trust
@@ -56,9 +57,17 @@ export interface ValidatedObservedPrinciple {
   evidenceStrength: EvidenceStrength;
 }
 
+// `answerCaseKeys` maps each valid interview-answer id to the underlying
+// case it's really evidence about (its transaction id, or its own id if
+// it isn't about a specific transaction) — same real gap and same fix as
+// src/lib/dna/validate-hypotheses.ts: two answers about the same
+// transaction must count as one independent case, not two, when
+// computing evidenceStrength. All validated citations still stay in the
+// returned `evidence` array for traceability; only the strength-driving
+// counts are deduped.
 export function validateProposedObservedPrinciples(
   proposed: ProposedObservedPrinciple[],
-  validAnswerIds: ReadonlySet<string>
+  answerCaseKeys: ReadonlyMap<string, string>
 ): ValidatedObservedPrinciple[] {
   const results: ValidatedObservedPrinciple[] = [];
 
@@ -70,7 +79,7 @@ export function validateProposedObservedPrinciples(
       (e): e is ValidatedPrincipleEvidence =>
         !!e &&
         typeof e.interviewAnswerId === "string" &&
-        validAnswerIds.has(e.interviewAnswerId) &&
+        answerCaseKeys.has(e.interviewAnswerId) &&
         (e.stance === "supporting" || e.stance === "contradicting") &&
         typeof e.description === "string" &&
         e.description.trim() !== ""
@@ -78,8 +87,10 @@ export function validateProposedObservedPrinciples(
 
     if (validEvidence.length === 0) continue;
 
-    const supportingCount = validEvidence.filter((e) => e.stance === "supporting").length;
-    const contradictingCount = validEvidence.filter((e) => e.stance === "contradicting").length;
+    const { supportingCount, contradictingCount } = countIndependentCases(
+      validEvidence,
+      (e) => answerCaseKeys.get(e.interviewAnswerId)!
+    );
 
     results.push({
       statement: p.statement.trim(),

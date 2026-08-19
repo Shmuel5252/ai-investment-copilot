@@ -5,6 +5,12 @@ import {
 } from "@/lib/strategy/validate-principles";
 import type { ProposedDeclaredPrinciple, ProposedObservedPrinciple } from "@/lib/ai/strategy";
 
+// Each answer id is its own independent case (id -> id) unless a test
+// explicitly wants two ids to resolve to the same underlying transaction.
+function identityCaseKeys(ids: string[]): Map<string, string> {
+  return new Map(ids.map((id) => [id, id]));
+}
+
 describe("validateProposedDeclaredPrinciples", () => {
   it("keeps a principle whose citations all resolve to real answer ids", () => {
     const validIds = new Set(["a1", "a2"]);
@@ -59,7 +65,7 @@ describe("validateProposedDeclaredPrinciples", () => {
 
 describe("validateProposedObservedPrinciples", () => {
   it("computes evidenceStrength from validated counts only, not the AI's raw citation count", () => {
-    const validIds = new Set(["a1", "a2", "a3"]);
+    const caseKeys = identityCaseKeys(["a1", "a2", "a3"]);
     const proposed: ProposedObservedPrinciple[] = [
       {
         statement: "You tend to size new positions consistently.",
@@ -71,13 +77,13 @@ describe("validateProposedObservedPrinciples", () => {
         ],
       },
     ];
-    const result = validateProposedObservedPrinciples(proposed, validIds);
+    const result = validateProposedObservedPrinciples(proposed, caseKeys);
     expect(result[0]?.supportingCount).toBe(3);
     expect(result[0]?.evidenceStrength).toBe("moderate"); // 3 total, ratio 1.0, but total<5
   });
 
   it("drops individual hallucinated citations and drops principles left with zero evidence", () => {
-    const validIds = new Set(["a1"]);
+    const caseKeys = identityCaseKeys(["a1"]);
     const proposed: ProposedObservedPrinciple[] = [
       {
         statement: "No real evidence behind this one.",
@@ -88,12 +94,36 @@ describe("validateProposedObservedPrinciples", () => {
         evidence: [{ interviewAnswerId: "a1", stance: "supporting", description: "x" }],
       },
     ];
-    const result = validateProposedObservedPrinciples(proposed, validIds);
+    const result = validateProposedObservedPrinciples(proposed, caseKeys);
     expect(result).toHaveLength(1);
     expect(result[0]?.statement).toBe("Real evidence behind this one.");
   });
 
   it("returns an empty list for an empty proposal", () => {
-    expect(validateProposedObservedPrinciples([], new Set())).toEqual([]);
+    expect(validateProposedObservedPrinciples([], new Map())).toEqual([]);
+  });
+
+  // Regression coverage for the same real gap as validate-hypotheses.test.ts:
+  // two interview answers about the same underlying transaction must
+  // count as one independent case, not two.
+  it("counts two interview answers about the same transaction as one independent case, not two", () => {
+    const caseKeys = new Map([
+      ["a1", "txn-123"],
+      ["a2", "txn-123"],
+      ["a3", "txn-456"],
+    ]);
+    const proposed: ProposedObservedPrinciple[] = [
+      {
+        statement: "You tend to size new positions consistently.",
+        evidence: [
+          { interviewAnswerId: "a1", stance: "supporting", description: "x" },
+          { interviewAnswerId: "a2", stance: "supporting", description: "Same transaction, different session." },
+          { interviewAnswerId: "a3", stance: "supporting", description: "x" },
+        ],
+      },
+    ];
+    const result = validateProposedObservedPrinciples(proposed, caseKeys);
+    expect(result[0]?.evidence).toHaveLength(3);
+    expect(result[0]?.supportingCount).toBe(2);
   });
 });

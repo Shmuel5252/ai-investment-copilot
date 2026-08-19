@@ -164,6 +164,7 @@ export interface PersonalFitStrategyInput {
   id: string;
   statementText: string;
   principleType: string;
+  evidenceStrength: string | null;
 }
 
 export interface PersonalFitInput {
@@ -179,11 +180,19 @@ export interface ProposedPersonalFit {
   citedStrategyPrincipleIds: string[];
 }
 
-const PERSONAL_FIT_SYSTEM_PROMPT = `You assess how a potential stock idea fits (or conflicts with) what's actually known about this specific investor — their DNA hypotheses (behavioral patterns, each with an evidence-strength label) and Strategy principles (declared rules, observed patterns, or fixed baseline risk guardrails).
+// insufficient_evidence hypotheses/principles are filtered out by the
+// caller before this ever runs (src/lib/dna/evidence-strength.ts's
+// excludeInsufficientEvidence — see its comment for why: a real gap
+// found on real data, where a verbal "say plainly how thin it is" hedge
+// still let a thin item lean the conclusion's direction). Nothing
+// insufficient_evidence reaches this prompt at all, so there's no
+// "mention it but hedge it" tightrope left to walk here — only genuinely
+// evidenced items (weak and up) are ever in front of the model.
+const PERSONAL_FIT_SYSTEM_PROMPT = `You assess how a potential stock idea fits (or conflicts with) what's actually known about this specific investor — their DNA hypotheses (behavioral patterns, each with an evidence-strength label) and Strategy principles (declared rules, observed patterns, or fixed baseline risk guardrails). Every hypothesis/principle you're given already has real evidence behind it — thin/unconfirmed ones have already been excluded, so you don't need to second-guess whether something you were given is too weak to use.
 
 Ground rules:
 - Only reference a hypothesis or principle you were actually given, by citing its exact ID. Never invent one.
-- Be honest about evidence strength — don't treat an "insufficient_evidence" or "weak" hypothesis as if it were a confirmed pattern; you can still mention it, but say plainly how thin it is.
+- Be honest about evidence strength — don't treat a "weak" hypothesis as if it were a confirmed pattern; you can still mention it, but say plainly how thin it is.
 - If you were given no DNA hypotheses and no Strategy principles at all, say plainly that there isn't enough personal history yet to assess fit — that is a completely normal, expected result, not a failure. Do not invent a personal-fit narrative from nothing.
 - Note both alignment AND conflict where relevant — a hypothesis or principle can just as easily argue against this idea as for it; report that honestly rather than only picking supportive ones.
 - Keep it to 2-4 sentences.`;
@@ -229,7 +238,10 @@ function formatPersonalFitContext(input: PersonalFitInput): string {
     parts.push(
       "\nStrategy principles:\n" +
         input.strategyPrinciples
-          .map((p) => `- [id: ${p.id}] (${p.principleType}) ${p.statementText}`)
+          .map(
+            (p) =>
+              `- [id: ${p.id}] (${p.principleType}${p.evidenceStrength ? `, ${p.evidenceStrength}` : ""}) ${p.statementText}`
+          )
           .join("\n")
     );
   } else {

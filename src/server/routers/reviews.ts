@@ -19,6 +19,7 @@ import { computeDecisionOutcome } from "@/lib/review/decision-outcome";
 import { calculateDecisionQualityOverall } from "@/lib/review/decision-quality";
 import { validateReviewDimensions } from "@/lib/review/validate-review-dimensions";
 import { synthesizeDecisionReview } from "@/lib/ai/review";
+import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 
 interface FrozenCaseSnapshot {
@@ -127,14 +128,24 @@ export const reviewsRouter = router({
 
       const caseSnapshot = (snapshot.investmentCaseSnapshotJson ?? {}) as FrozenCaseSnapshot;
       const bundledPrincipleRows = await getStrategyVersionPrinciples(db, snapshot.strategyVersionId);
-      const strategyPrinciplesInEffect = bundledPrincipleRows.map((row) => ({
-        statementText: row.principleVersion.statementText,
-        principleType: row.principleVersion.principleType,
-      }));
-      const dnaHypothesesInEffect = snapshot.dnaReferences.map((ref) => ({
-        statementText: ref.dnaHypothesisVersion.statementText,
-        evidenceStrength: ref.dnaHypothesisVersion.evidenceStrength,
-      }));
+      // insufficient_evidence items are excluded from what the AI
+      // reasons with here too (real gap found on real data) — this
+      // filters only the local input to *this* review's narrative call,
+      // not the frozen DecisionSnapshot references themselves (those
+      // were already written, immutably, when the decision was made).
+      const strategyPrinciplesInEffect = excludeInsufficientEvidence(
+        bundledPrincipleRows.map((row) => ({
+          statementText: row.principleVersion.statementText,
+          principleType: row.principleVersion.principleType,
+          evidenceStrength: row.principleVersion.evidenceStrength,
+        }))
+      );
+      const dnaHypothesesInEffect = excludeInsufficientEvidence(
+        snapshot.dnaReferences.map((ref) => ({
+          statementText: ref.dnaHypothesisVersion.statementText,
+          evidenceStrength: ref.dnaHypothesisVersion.evidenceStrength,
+        }))
+      );
       const marketContext = await getMarketContextById(db, snapshot.marketContextId);
 
       // Outcome — code only (docs/architecture.md §2.7). Not gated behind

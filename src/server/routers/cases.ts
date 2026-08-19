@@ -15,6 +15,7 @@ import { getMarketIntelligence } from "@/lib/market/market-intelligence";
 import { computePortfolioFitForInvestor } from "@/lib/portfolio/portfolio-fit-for-investor";
 import { synthesizeInvestmentCase, synthesizePersonalFit } from "@/lib/ai/case";
 import { validatePersonalFit } from "@/lib/case/validate-personal-fit";
+import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 
 async function requireOwnedCase(investorId: string, caseId: string) {
@@ -128,19 +129,36 @@ export const casesRouter = router({
         listStrategyPrinciplesForInvestor(db, ctx.investorId),
       ]);
 
-      const dnaForAi = dnaHypotheses
-        .map((h) => {
-          const version = h.versions[0];
-          return version ? { id: h.id, statementText: version.statementText, evidenceStrength: version.evidenceStrength } : null;
-        })
-        .filter((h): h is NonNullable<typeof h> => h !== null);
+      // insufficient_evidence hypotheses/principles are excluded here,
+      // at the code layer, before the AI ever sees them — a real gap
+      // found on real data: a verbal "hedge it" prompt instruction still
+      // let a thin item lean the personalFitText's direction, even
+      // labeled "thin". Structurally excluding them is the fix (CLAUDE.md:
+      // code enforces this, not the model's own restraint).
+      const dnaForAi = excludeInsufficientEvidence(
+        dnaHypotheses
+          .map((h) => {
+            const version = h.versions[0];
+            return version ? { id: h.id, statementText: version.statementText, evidenceStrength: version.evidenceStrength } : null;
+          })
+          .filter((h): h is NonNullable<typeof h> => h !== null)
+      );
 
-      const strategyForAi = strategyPrinciples
-        .map((p) => {
-          const version = p.versions[0];
-          return version ? { id: p.id, statementText: version.statementText, principleType: version.principleType } : null;
-        })
-        .filter((p): p is NonNullable<typeof p> => p !== null);
+      const strategyForAi = excludeInsufficientEvidence(
+        strategyPrinciples
+          .map((p) => {
+            const version = p.versions[0];
+            return version
+              ? {
+                  id: p.id,
+                  statementText: version.statementText,
+                  principleType: version.principleType,
+                  evidenceStrength: version.evidenceStrength,
+                }
+              : null;
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null)
+      );
 
       const proposed = await synthesizePersonalFit({
         ticker: investmentCase.ticker,
