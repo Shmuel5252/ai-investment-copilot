@@ -174,6 +174,40 @@ export default function CaseDetailPage() {
         )}
       </section>
 
+      {/* Research Completeness — a plain readout of what data categories
+          this page already has or doesn't, computed from what's already
+          loaded here (no new fetch, no new source). Not a judgment about
+          whether synthesis is "good enough" — just an honest inventory,
+          so a synthesis based on thin research isn't mistaken for one
+          based on complete research. */}
+      <section className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+          Research completeness
+        </h2>
+        <ul className="flex flex-col gap-1 text-sm">
+          <CompletenessRow
+            label="Market Intelligence"
+            done={!!intelligence}
+            detail={intelligence ? `fetched ${new Date(intelligence.fetchedAt).toLocaleDateString()}` : "not fetched — required before synthesis"}
+          />
+          <CompletenessRow
+            label="Personal Fit (DNA + Strategy)"
+            done={!!investmentCase.personalFitText}
+            detail={investmentCase.personalFitText ? "generated" : "not generated — synthesis won't reflect it"}
+          />
+          <CompletenessRow
+            label="DNA hypotheses on file"
+            done={(dnaList.data?.length ?? 0) > 0}
+            detail={`${dnaList.data?.length ?? 0} (informs Personal Fit, not synthesis directly)`}
+          />
+          <CompletenessRow
+            label="Strategy principles on file"
+            done={(strategyList.data?.principles.length ?? 0) > 0}
+            detail={`${strategyList.data?.principles.length ?? 0} (informs Personal Fit, not synthesis directly)`}
+          />
+        </ul>
+      </section>
+
       {/* Case Synthesis */}
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold">Case Synthesis</h2>
@@ -282,6 +316,16 @@ export default function CaseDetailPage() {
         )}
       </section>
     </main>
+  );
+}
+
+function CompletenessRow({ label, done, detail }: { label: string; done: boolean; detail: string }) {
+  return (
+    <li className="flex items-center gap-2">
+      <span className={done ? "text-green-700" : "text-neutral-400"}>{done ? "✓" : "○"}</span>
+      <span className="font-medium">{label}</span>
+      <span className="text-xs text-neutral-500">— {detail}</span>
+    </li>
   );
 }
 

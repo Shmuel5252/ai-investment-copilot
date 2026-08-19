@@ -48,6 +48,7 @@ export default function DecisionDetailPage() {
   const query = trpc.decisions.get.useQuery({ decisionId: id });
   const pendingPredictions = trpc.reviews.pendingPredictions.useQuery({ decisionId: id });
   const reviews = trpc.reviews.listForDecision.useQuery({ decisionId: id });
+  const laterContexts = trpc.decisions.listLaterContext.useQuery({ decisionId: id });
 
   const generateReview = trpc.reviews.generate.useMutation({
     onSuccess: () => {
@@ -59,11 +60,18 @@ export default function DecisionDetailPage() {
   const submitCorrection = trpc.reviews.correct.useMutation({
     onSuccess: () => setCorrectingId(null),
   });
+  const addLaterContext = trpc.decisions.addLaterContext.useMutation({
+    onSuccess: () => {
+      utils.decisions.listLaterContext.invalidate({ decisionId: id });
+      setLaterContextDraft("");
+    },
+  });
 
   const [resolutions, setResolutions] = useState<Record<string, { status: PredictionStatus; note: string }>>({});
   const [showCounterfactual, setShowCounterfactual] = useState(false);
   const [correctingId, setCorrectingId] = useState<string | null>(null);
   const [correctionText, setCorrectionText] = useState("");
+  const [laterContextDraft, setLaterContextDraft] = useState("");
 
   if (query.isLoading) return <main className="p-12 text-sm">Loading...</main>;
   if (!query.data || !query.data.snapshot) {
@@ -158,6 +166,42 @@ export default function DecisionDetailPage() {
           </ul>
         </section>
       )}
+
+      {/* Later Context — additions after the fact, never edits to the
+          immutable snapshot above (docs/CLAUDE.md Historical Integrity:
+          Original Snapshot -> Later Context -> Review). Feeds directly
+          into Decision Review's AI reasoning as an authoritative
+          correction wherever it conflicts with the frozen text. */}
+      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6">
+        <h2 className="text-sm font-semibold">Later Context</h2>
+        <p className="text-xs text-neutral-500">
+          Add clarifications or corrections without rewriting the record above — useful if the AI
+          real-time assessment or a prediction turned out to contain a mistake. Shown to Decision
+          Review as authoritative over anything it corrects.
+        </p>
+        {laterContexts.data?.map((lc) => (
+          <div key={lc.id} className="rounded border border-neutral-200 bg-neutral-50 p-3 text-sm">
+            <p className="text-xs text-neutral-400">
+              {new Date(lc.addedAt).toLocaleString()} · added by {lc.addedBy}
+            </p>
+            <p className="mt-1">{lc.text}</p>
+          </div>
+        ))}
+        <textarea
+          value={laterContextDraft}
+          onChange={(e) => setLaterContextDraft(e.target.value)}
+          placeholder="e.g. Correction: the AI real-time assessment above confused position size with per-share price..."
+          className="min-h-20 rounded border border-neutral-300 p-2 text-sm"
+        />
+        <button
+          onClick={() => guard(() => addLaterContext.mutateAsync({ decisionId: id, text: laterContextDraft }))}
+          disabled={laterContextDraft.trim() === "" || addLaterContext.isPending}
+          className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm disabled:opacity-50"
+        >
+          {addLaterContext.isPending ? "Adding..." : "Add Later Context"}
+        </button>
+        {addLaterContext.isError && <p className="text-sm text-red-600">{addLaterContext.error.message}</p>}
+      </section>
 
       {/* Decision Review */}
       <section className="flex flex-col gap-4 border-t border-neutral-200 pt-6">

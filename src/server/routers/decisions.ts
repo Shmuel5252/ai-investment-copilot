@@ -12,6 +12,8 @@ import {
   getPredictionsForThesis,
   listDecisionsForInvestor,
   getDecisionByCaseId,
+  insertLaterContext,
+  getLaterContextsForDecision,
 } from "@/db/repositories/decisions";
 import { getInvestmentCase, updateInvestmentCase } from "@/db/repositories/ideas-cases";
 import { getLatestStrategyVersion, getStrategyVersionPrinciples } from "@/db/repositories/strategy";
@@ -254,4 +256,32 @@ export const decisionsRouter = router({
   getForCase: protectedProcedure
     .input(z.object({ caseId: z.string().uuid() }))
     .query(({ input }) => getDecisionByCaseId(db, input.caseId)),
+
+  // "אפשר להוסיף הקשר, לא לשנות היסטוריה" — the sanctioned way to
+  // correct or clarify an already-immutable Decision Snapshot without
+  // rewriting it (docs/CLAUDE.md Historical Integrity flow: Original
+  // Snapshot -> Later Context -> Review -> Learning Insight). Real use:
+  // a real-time assessment or extracted Prediction turned out to contain
+  // an AI error (e.g. confusing position size with per-share price) —
+  // this records the correction as a new, separate, timestamped fact
+  // rather than editing the frozen original text.
+  addLaterContext: protectedProcedure
+    .input(z.object({ decisionId: z.string().uuid(), text: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const decision = await getDecision(db, input.decisionId);
+      if (!decision || decision.investorId !== ctx.investorId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Decision not found." });
+      }
+      return insertLaterContext(db, { decisionId: decision.id, text: input.text, addedBy: "user" });
+    }),
+
+  listLaterContext: protectedProcedure
+    .input(z.object({ decisionId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const decision = await getDecision(db, input.decisionId);
+      if (!decision || decision.investorId !== ctx.investorId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Decision not found." });
+      }
+      return getLaterContextsForDecision(db, decision.id);
+    }),
 });

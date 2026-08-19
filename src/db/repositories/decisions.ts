@@ -106,6 +106,13 @@ export async function insertLaterContext(db: typeof Db, values: NewLaterContext)
   return row!;
 }
 
+export async function getLaterContextsForDecision(db: typeof Db, decisionId: string) {
+  return db.query.laterContexts.findMany({
+    where: (lc, { eq }) => eq(lc.decisionId, decisionId),
+    orderBy: (lc, { asc }) => asc(lc.addedAt),
+  });
+}
+
 // Bundles a DecisionReview with its 7 ReviewDimension rows in one
 // transaction — a review without its dimensions (or vice versa) would be
 // a half-written judgment, which is worse than no judgment at all.

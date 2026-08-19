@@ -24,6 +24,7 @@ export const CITABLE_SNAPSHOT_FIELDS = [
   "risksConsideredText",
   "exitConditionsText",
   "aiRealtimeAssessmentText",
+  "laterContexts",
   "thesisText",
   "thesisInterpretationText",
   "priceAtDecision",

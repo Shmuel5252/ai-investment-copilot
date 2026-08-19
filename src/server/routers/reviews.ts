@@ -9,6 +9,7 @@ import {
   insertDecisionReview,
   getDecisionReviewsForDecision,
   resolvePrediction,
+  getLaterContextsForDecision,
 } from "@/db/repositories/decisions";
 import { getStrategyVersionPrinciples } from "@/db/repositories/strategy";
 import { getMarketContextById } from "@/db/repositories/market-context";
@@ -167,6 +168,8 @@ export const reviewsRouter = router({
         asOfDate: new Date(),
       });
 
+      const laterContexts = await getLaterContextsForDecision(db, decision.id);
+
       const proposed = await synthesizeDecisionReview({
         ticker: decision.ticker,
         decisionType: decision.decisionType,
@@ -198,6 +201,7 @@ export const reviewsRouter = router({
         strategyPrinciplesInEffect,
         dnaHypothesesInEffect,
         predictionsWithResolutions,
+        laterContexts: laterContexts.map((lc) => ({ text: lc.text, addedAt: lc.addedAt.toISOString() })),
         outcome,
       });
 

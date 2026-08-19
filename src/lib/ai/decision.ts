@@ -74,9 +74,11 @@ Three jobs, all grounded only in what you're actually given:
 
 1. thesisInterpretationText: restate the investor's reasoning as a specific, falsifiable thesis in your own clearer words. If the reasoning is too vague or generic to produce a specific thesis, say that plainly rather than inventing specificity that isn't there.
 
-2. predictions: extract 0-3 concrete, checkable claims implied by the reasoning (e.g. a growth rate, a price level, an event). Zero predictions is a completely normal, expected result when the reasoning doesn't contain a checkable claim — do not invent one to have something to return. Only set timeframeDays if the investor's own reasoning stated or clearly implied an actual timeframe (e.g. "by next earnings" ~90, "within 6 months" ~180, "next year" ~365) — express it as a whole number of days from today, your best estimate of that duration. Do NOT compute or state an actual calendar date yourself; the application computes "today + timeframeDays" in code, precisely so a duration-estimate mistake can't turn into a date that's nonsensically in the past. Leave timeframeDays null if no real timeframe was stated.
+2. predictions: extract 0-3 concrete, checkable claims implied by the reasoning (e.g. a growth rate, a price level, an event). Zero predictions is a completely normal, expected result when the reasoning doesn't contain a checkable claim — do not invent one to have something to return. If you reference a price anywhere in a claim, it must be the actual per-share Price given in the market data — never the Investment size dollar amount, which is not a price at all. Only set timeframeDays if the investor's own reasoning stated or clearly implied an actual timeframe (e.g. "by next earnings" ~90, "within 6 months" ~180, "next year" ~365) — express it as a whole number of days from today, your best estimate of that duration. Do NOT compute or state an actual calendar date yourself; the application computes "today + timeframeDays" in code, precisely so a duration-estimate mistake can't turn into a date that's nonsensically in the past. Leave timeframeDays null if no real timeframe was stated.
 
 3. realtimeAssessmentText: an honest, real-time gut-check. Reference the actual numbers you were given (price, portfolio exposure/concentration, index/volatility levels). If this decision is in tension with a specific Strategy principle or DNA hypothesis you were given, say so plainly and name it — but be honest about evidence strength for DNA hypotheses (don't treat "weak" as confirmed). If nothing you were given conflicts with this decision, say that plainly too rather than manufacturing a concern.
+
+"Investment size" and "Price" are two different, unrelated numbers — size is the dollar amount being invested, price is the per-share market price. They are not expected to match or relate to each other in any simple way (a $500 investment in a $1278.83/share stock just buys a fraction of a share — completely normal, not an inconsistency). Never describe a "mismatch" or "data inconsistency" between them.
 
 Never invent a fact (revenue, guidance, analyst view, news) beyond what's in the data you were handed. Keep each field to 2-4 sentences (predictions' claimText should be one sentence each).`;
 
@@ -113,13 +115,23 @@ function formatContext(input: DecisionContextInput): string {
   const f = input.portfolioFit;
 
   const parts = [
-    `Decision: ${input.decisionType} ${input.ticker}${input.sizeDollars ? ` (~$${input.sizeDollars.toFixed(2)})` : ""}`,
+    `Decision: ${input.decisionType} ${input.ticker}`,
+    // Deliberately its own clearly-labeled line, not a bare "(~$X)"
+    // parenthetical next to the ticker — that ambiguous placement (right
+    // where a per-share price most commonly appears in financial text)
+    // is exactly what caused a real, live-caught bug: the model
+    // confused this dollar amount with the per-share Price below and
+    // both invented a "data mismatch" between them and mislabeled it as
+    // an entry price in an extracted prediction.
+    input.sizeDollars
+      ? `Investment size: $${input.sizeDollars.toFixed(2)} (the dollar amount being invested — NOT a price; unrelated to the per-share Price below)`
+      : "Investment size: not specified for this decision type.",
     `\nInvestor's own reasoning (verbatim): "${input.reasoningText}"`,
     input.risksConsideredText ? `Risks the investor noted: "${input.risksConsideredText}"` : "Risks the investor noted: none recorded.",
     input.exitConditionsText ? `Exit conditions the investor noted: "${input.exitConditionsText}"` : "Exit conditions the investor noted: none recorded.",
 
     `\n=== Market data for ${m.ticker} ===`,
-    `Price: $${m.price} (${m.changePercentage >= 0 ? "+" : ""}${m.changePercentage.toFixed(2)}% today)`,
+    `Price: $${m.price} per share (${m.changePercentage >= 0 ? "+" : ""}${m.changePercentage.toFixed(2)}% today)`,
     `Sector: ${m.sector ?? "unknown"} / Industry: ${m.industry ?? "unknown"}`,
     m.valuationRatiosAvailable
       ? `P/E ${m.peRatioTtm ?? "n/a"}, P/B ${m.priceToBookRatioTtm ?? "n/a"}, P/S ${m.priceToSalesRatioTtm ?? "n/a"}`

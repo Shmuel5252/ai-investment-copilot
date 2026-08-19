@@ -41,6 +41,17 @@ export interface ReviewInput {
   strategyPrinciplesInEffect: { statementText: string; principleType: string; evidenceStrength: string | null }[];
   dnaHypothesesInEffect: { statementText: string; evidenceStrength: string }[];
   predictionsWithResolutions: { claimText: string; status: string; resolutionNote: string | null }[];
+  /**
+   * Additions made after the original decision, never edits to it
+   * (docs/CLAUDE.md Historical Integrity: Original Snapshot -> Later
+   * Context -> Review). Real case this exists for: aiRealtimeAssessmentText
+   * or a Prediction turned out to contain a real AI error (e.g. confusing
+   * position size with per-share price) — a Later Context entry is how
+   * that gets corrected without rewriting the frozen original text, and
+   * this review must treat it as authoritative over whatever it conflicts
+   * with in the original snapshot fields.
+   */
+  laterContexts: { text: string; addedAt: string }[];
   outcome: DecisionOutcome;
 }
 
@@ -75,6 +86,8 @@ const DIMENSION_LIST = [
 ].join("\n");
 
 const SYSTEM_PROMPT = `You review a personal investor's past investing decision, using only what they actually knew/recorded at decision time (frozen in a Decision Snapshot) plus what's happened since (Outcome, already computed in code and given to you as a fact — you do not compute or judge P&L yourself). Any DNA hypothesis or Strategy principle you're given already has real evidence behind it — thin/unconfirmed (insufficient_evidence) ones have already been excluded before reaching you, so treat everything you're given as genuinely evidenced, not something to second-guess as too weak.
+
+If any laterContexts are given, they are corrections or clarifications the investor added after the original decision — specifically because something in the frozen snapshot (e.g. aiRealtimeAssessmentText, a Prediction's wording) turned out to be wrong. Treat laterContexts as authoritative wherever they conflict with anything else you're given; do not repeat or rely on a claim from the original snapshot that a laterContext has corrected.
 
 You produce two things:
 
@@ -157,6 +170,7 @@ function formatInput(input: ReviewInput): string {
     `\n=== risksConsideredText ===\n${input.risksConsideredText ?? "(none recorded)"}`,
     `\n=== exitConditionsText ===\n${input.exitConditionsText ?? "(none recorded)"}`,
     `\n=== aiRealtimeAssessmentText (given at decision time) ===\n${input.aiRealtimeAssessmentText ?? "(none)"}`,
+    `\n=== laterContexts (added after the decision — authoritative over anything above that they correct) ===\n${input.laterContexts.map((lc) => `[${lc.addedAt}] ${lc.text}`).join("\n") || "(none)"}`,
     `\n=== caseMarketIntelligence (at decision time) ===\n${input.caseMarketIntelligenceSummary}`,
     `\n=== case bull/bear/catalysts/invalidation/blindspot/devil's-advocate/personalFit/portfolioFit ===`,
     `caseBullCaseText: ${input.caseBullCaseText ?? "(none)"}`,
