@@ -87,7 +87,7 @@ false`, never a fabricated fallback, when the plan blocks it for that
 ticker) — see that file's top comment for the full reasoning. If FMP's
 plan/whitelist changes, that's the one file to revisit.
 
-## Known gotcha: Docker Desktop stops itself in the background
+## Known gotcha: Docker Desktop stops itself in the background (variant 1 — daemon down, connection refused)
 
 Happened repeatedly during development (not a one-off): Docker Desktop —
 and with it the local Postgres container — goes down on its own with no
@@ -112,6 +112,38 @@ assumed.
 up) first. Costs ten seconds; skipping it has cost real investigation
 time more than once chasing a code-level explanation for what was
 actually an infrastructure hiccup.
+
+## Known gotcha: Docker Desktop stops itself in the background (variant 2 — silent data-mount loss, `docker ps` looks fine)
+
+A second, different failure mode under the same root instability, worth
+its own diagnostic tag because the tell is the *opposite* of variant 1
+above: `docker ps` reports the container `Up` the whole time (most
+likely Docker Desktop's WSL2 host-filesystem passthrough going stale,
+plausibly after the host slept — not confirmed which layer specifically
+broke, only the symptom), so the "check `docker ps` first" advice from
+variant 1 doesn't catch it. The container process stays alive but can no
+longer read its own data directory.
+
+**The tell:** every query fails with a bare `Failed query: ...` whose
+`.cause` bottoms out in a real Postgres-side `FATAL`/`PostgresError` —
+**not** `ECONNREFUSED` — with a message like `could not open file
+"global/pg_filenode.map": I/O error`. `docker logs <container>` shows
+the same line repeating once a minute indefinitely once it starts.
+
+**Recovery:** a plain `docker compose restart` (or `down` + `up -d`) is
+not enough — it fails outright with `error while creating mount source
+path ... file exists`, since the mount problem lives at the Docker
+Desktop level, not the container's. Fully quit Docker Desktop (kill
+`Docker Desktop.exe` and its `com.docker.*` helper processes if it
+doesn't exit cleanly) and relaunch it fresh; wait for `docker info` to
+succeed before touching the container again. On the next container
+start, Postgres's own crash recovery runs automatically (`database
+system was interrupted... automatic recovery in progress`) and this is
+the normal, safe path back — but confirm real data survived by actually
+querying something afterward (row counts, a known value) rather than
+trusting the recovery log alone; a `redo`/checkpoint completing without
+error is reassuring but isn't the same as verifying nothing from the
+last few seconds before the crash was lost.
 
 ## Data model & architecture
 
