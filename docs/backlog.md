@@ -27,6 +27,73 @@ Evidence שמקורו הערה חופשית, לא ציטוט תשובת ראיו
 אמיתית (האם זה סוג עיקרון נפרד? האם נדרש נימוק?) — לא להתחיל לבנות
 בלי לסכם קודם.
 
+### Personal Fit / Portfolio Fit — אין חישוב חשיפה מצטברת לפי sector/industry, למרות עיקרון Strategy שמפנה אליה
+**נמצא:** 2026-08-20, בעקבות בקשת המשתמש לבדוק (לא לתקן) למה Personal
+Fit על SNDK הזכיר ריכוזיות. בדיקה עובדתית בשלושה שלבים, בלי הנחה
+מראש:
+
+1. **sector/industry נשלף בפועל?** כן — לכל holding, לא רק לטיקר
+   הנחקר. `computePortfolioFitForInvestor`
+   (`src/lib/portfolio/portfolio-fit-for-investor.ts`) קורא
+   ל-`getMarketIntelligence()` עבור כל טיקר מוחזק אחר כדי לתמחר אותו,
+   וזה אותו `fetchProfile` מ-FMP שמחזיר גם `sector`/`industry`
+   (`src/lib/market/fmp.ts`) ונשמר במלואו ב-cache
+   (`market_data_cache.payload_json`, ר' `market-intelligence.ts`).
+   הנתון האמיתי קיים ונשלף — הבעיה אינה בשליפה.
+2. **מחושבת חשיפה מצטברת לפי sector/industry?** לא. מיד אחרי
+   ה-fetch, `computePortfolioFitForInvestor` שולף רק `.price` מהתוצאה
+   (`prices[ticker] = intelligence.price`) וזורק את שאר האובייקט.
+   `computePortfolioFit()` (`src/lib/portfolio/portfolio-fit.ts`) עוקב
+   רק אחרי משקל טיקר בודד ואחרי הפוזיציה הגדולה ביותר — אין בכלל שדה
+   sector/industry ב-`PortfolioFit`, לא כל שכן צבירה לפי sector.
+3. **מוזן כ-context מובנה ל-AI?** לא, בשני המקומות שבהם AI מתייחס
+   לריכוזיות: (א) `generatePersonalFit`
+   (`src/server/routers/cases.ts` → `synthesizePersonalFit` ב-
+   `src/lib/ai/case.ts`) מקבל **רק** ticker + הערת הרעיון + DNA
+   hypotheses + Strategy principles — לא holdings, לא sector, לא
+   `PortfolioFit` בכלל. (ב) גם `portfolioFitText` של Case Synthesis
+   (`formatPortfolioFit` באותו קובץ) מקבל רק מספרי משקל ברמת טיקר, לא
+   שדה sector.
+
+**שורש מה שהמשתמש ראה בפועל:** אחד מארבעת עקרונות ה-Strategy הקבועים
+(`avoid-correlated-concentration`,
+`src/lib/strategy/default-risk-principles.ts`) מנוסח במפורש: "Watch
+for concentration across positions that would all move together on
+the same underlying risk (sector, theme, or macro driver)". העיקרון
+הזה validated מברירת המחדל ולכן כן מגיע ל-prompt של Personal Fit. אבל
+כשה-AI מיישם אותו על SNDK אין לו שום מספר חשיפה אמיתי שחושב מהנתונים
+של המשקיע הזה להיבנות עליו — הוא יכול רק "לדעת" מהידע הכללי שלו לאיזה
+sector שייך SNDK ולנחש קורלציה, לא מנתון שחושב בפועל. זו בדיוק הפרה
+עדינה של "AI לא ממציא facts": הנתון הגולמי (sector/industry) כן אמיתי
+וכן קיים ב-DB, אבל לא מוזן כ-context מובנה, אז ה-AI ממלא את החוסר
+מהידע הפנימי שלו במקום.
+
+**כיוון אפשרי (לא סוכם):** לחשב חשיפה מצטברת לפי sector/industry
+בתוך/לצד `computePortfolioFit` (הנתון כבר נשלף היום ונזרק — צריך רק
+"לצנרר" אותו הלאה במקום לזרוק), ולהזין את התוצאה כ-context מובנה גם
+ל-Portfolio Fit וגם ל-Personal Fit, באותו אופן שכבר עובד ל-DNA/Strategy
+citations. דורש גם החלטה אם/איך זה מוצג למשתמש (מספר %? אזהרה בלבד
+כמו `warnings` הקיים?) — לא להתחיל לבנות בלי לסכם קודם.
+
+### Concentration מעבר ל-sector — theme/risk-driver משותף (SNDK/NVDA כדוגמה)
+**נמצא:** 2026-08-20, באותה בדיקה כמו הפער למעלה, אך **רעיון נפרד
+ומורכב יותר במכוון** — לא לערבב את השניים.
+
+גם אם הפער למעלה ייבנה (צבירת חשיפה לפי sector/industry קטגוריים כפי
+שמגיעים מ-FMP), זה עדיין לא תופס את כל הריכוזיות האמיתית: שתי מניות
+יכולות לחלוק risk-driver כלכלי אמיתי (למשל מחזור AI/capex) גם כש-
+sector/industry הרשמיים שלהן שונים — וגם ההפך, לשתף sector רשמי בלי
+להיות קורלטיביות כלכלית בפועל. `sector`/`industry` מ-FMP הוא שדה
+קטגורי סטנדרטי (טקסונומיה חיצונית קבועה); "theme/risk-driver משותף"
+הוא **לא** שדה כזה — זה judgment אמיתי שדורש AI לזהות תזה/מחזור
+משותף בין טיקרים, עם Evidence/Traceability משלו (בהתאם ל-CLAUDE.md:
+AI vs Code + Traceable Judgments) — לא רק שדה DB נוסף שאפשר "להביא
+מ-FMP". דורש החלטת Product/UX אמיתית לפני בנייה: זו ממדיות חדשה על
+MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
+בכלל "Evidence" אומר לגבי סיווג מבני-שוק (לא התנהגות המשקיע עצמו)?
+לא לעצב את זה יותר כאן — רק לתעד כרעיון נפרד לדיון עתידי, לא כתיקון
+לפער הראשון.
+
 ### 3 מתוך 5 ה-UNIQUE constraints החדשים (double-submit fix) — עדיין נכשלים כ-500 גולמי בהתנגשות אמיתית
 **נמצא:** 2026-08-17, תוך כדי בירור שאלת המשתמש "האם constraint שנתקל
 בהתנגשות אמיתית נכשל בהודעה ברורה או כ-500 גולמי". התשובה: **לא**,
