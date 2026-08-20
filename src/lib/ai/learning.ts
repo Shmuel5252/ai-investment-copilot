@@ -18,6 +18,16 @@ export interface DecisionForAnalysis {
   thesisAccuracy: string;
   outcomeSummary: string;
   narrativeSummaryText: string;
+  /**
+   * Additions the investor made after the decision (docs/CLAUDE.md
+   * Historical Integrity) — passed through explicitly here, not just
+   * hoped to survive into narrativeSummaryText, because a decision can
+   * be flagged as a deliberate non-representative test (e.g. "recorded
+   * to test system behavior on an atypical stock, not a genuine
+   * thesis") and that must reliably reach this call, which is exactly
+   * where a real behavioral pattern gets asserted about the investor.
+   */
+  laterContexts: string[];
 }
 
 export interface ProposedInsightEvidence {
@@ -38,6 +48,7 @@ Ground rules:
 - Cite evidence using the exact "Review ID" given for each decision. Never invent an ID, and never cite a decision as evidence for something it doesn't actually support.
 - Distinguish supporting from contradicting evidence honestly — if one decision in the group doesn't fit the pattern, cite it as contradicting, don't omit it or pretend the pattern is cleaner than it is.
 - Separate Skill From Luck explicitly: a decision with a good outcome but a weak/insufficient-evidence process is NOT supporting evidence for "this investor is good at X" — if anything it's a caution. Ground the pattern in process quality and thesis accuracy, not just P&L.
+- If a decision's "Later Context" says it was a deliberate test, not representative of genuine behavior, an atypical trade, or similar — do NOT cite that decision as evidence (supporting or contradicting) for a real behavioral pattern at all. Treat it as if it weren't in the family; a synthetic test case says nothing real about how this investor actually invests.
 - It is completely fine, and expected with few decisions, to describe a thin or uncertain pattern — that's for the system to label via evidence strength, not for you to oversell.
 - Write the statement the way you'd describe a real tendency to the investor directly ("You tend to...", "Your decisions in this sector..."), grounded only in what's actually in the reviews you were given — never invent numbers or facts not present in the text you were given.`;
 
@@ -75,7 +86,7 @@ function formatDecisions(family: string, decisions: DecisionForAnalysis[]): stri
   const rows = decisions
     .map(
       (d) =>
-        `Review ID: ${d.decisionReviewId}\n${d.decisionType} ${d.ticker} on ${d.decisionDate}\nDecision quality: ${d.decisionQualityOverall} | Thesis accuracy: ${d.thesisAccuracy}\nOutcome: ${d.outcomeSummary}\nReview narrative: ${d.narrativeSummaryText}`
+        `Review ID: ${d.decisionReviewId}\n${d.decisionType} ${d.ticker} on ${d.decisionDate}\nDecision quality: ${d.decisionQualityOverall} | Thesis accuracy: ${d.thesisAccuracy}\nOutcome: ${d.outcomeSummary}\nReview narrative: ${d.narrativeSummaryText}\nLater Context: ${d.laterContexts.length > 0 ? d.laterContexts.join(" | ") : "(none)"}`
     )
     .join("\n\n");
   return `Family (shared sector): ${family}\n\n${rows}`;

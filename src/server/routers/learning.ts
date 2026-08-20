@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/db/client";
-import { listReviewedDecisionsForInvestor } from "@/db/repositories/decisions";
+import { listReviewedDecisionsForInvestor, getLaterContextsForDecision } from "@/db/repositories/decisions";
 import {
   insertLearningInsightWithEvidence,
   listLearningInsightsForInvestor,
@@ -31,6 +31,7 @@ interface RichDecision extends ReviewedDecisionInput {
   thesisAccuracy: ThesisAccuracy;
   outcomeSummary: string;
   narrativeSummaryText: string;
+  laterContexts: string[];
 }
 
 function formatOutcomeSummary(outcome: DecisionOutcome): string {
@@ -53,6 +54,21 @@ export const learningRouter = router({
   generate: protectedProcedure.mutation(async ({ ctx }) => {
     const reviewedDecisions = await listReviewedDecisionsForInvestor(db, ctx.investorId);
 
+    // Fetched per decision, not just hoped to survive into
+    // narrativeSummaryText: a decision can be flagged via Later Context
+    // as a deliberate non-representative test (real case: a decision
+    // recorded specifically to test system behavior, not a genuine
+    // thesis) — that must reliably reach the AI call that asserts a
+    // behavioral pattern, not depend on whether a prior Review's 2-4
+    // sentence summary happened to mention it.
+    const laterContextsByDecision = new Map(
+      await Promise.all(
+        reviewedDecisions.map(
+          async (d) => [d.id, (await getLaterContextsForDecision(db, d.id)).map((lc) => lc.text)] as const
+        )
+      )
+    );
+
     const richDecisions: RichDecision[] = reviewedDecisions.map((d) => {
       const review = d.reviews[0]!;
       const caseSnapshot = (d.snapshot!.investmentCaseSnapshotJson ?? {}) as FrozenCaseSnapshotSector;
@@ -67,6 +83,7 @@ export const learningRouter = router({
         thesisAccuracy: review.thesisAccuracy,
         outcomeSummary: formatOutcomeSummary(review.outcomeJson as DecisionOutcome),
         narrativeSummaryText: review.narrativeSummaryText,
+        laterContexts: laterContextsByDecision.get(d.id) ?? [],
       };
     });
 
@@ -85,6 +102,7 @@ export const learningRouter = router({
           thesisAccuracy: d.thesisAccuracy,
           outcomeSummary: d.outcomeSummary,
           narrativeSummaryText: d.narrativeSummaryText,
+          laterContexts: d.laterContexts,
         }))
       );
 
