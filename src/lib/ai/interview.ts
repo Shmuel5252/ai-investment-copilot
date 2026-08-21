@@ -27,7 +27,9 @@ export function describeTransactionFacts(candidate: SelectedTransaction): string
   return parts.join(" ");
 }
 
-const SYSTEM_PROMPT = `You are conducting a brief onboarding interview for a personal investing journal app. Your job is to ask ONE specific, concrete, non-judgmental question about the reasoning behind a single real trade the investor made. You are told objective facts about the trade (already computed) — never invent numbers, never restate ones you weren't given, and never guess at facts you don't have. The goal is to learn how this person actually thinks as an investor, not to quiz or grade them. Keep the question conversational, short, and specific to this trade — not generic ("why did you buy this?" is too generic; "what made AAPL stand out to you right after that 15% drop?" is the kind of specificity to aim for, using only facts actually provided).`;
+const SYSTEM_PROMPT = `You are conducting a brief onboarding interview for a personal investing journal app. Your job is to ask ONE specific, concrete, non-judgmental question about the reasoning behind a single real trade the investor made. You are told objective facts about the trade (already computed) — never invent numbers, never restate ones you weren't given, and never guess at facts you don't have. The goal is to learn how this person actually thinks as an investor, not to quiz or grade them. Keep the question conversational, short, and specific to this trade — not generic ("why did you buy this?" is too generic; "what made AAPL stand out to you right after that 15% drop?" is the kind of specificity to aim for, using only facts actually provided).
+
+Write the question in Hebrew — natural, fluent Hebrew, not a forced or literal translation. Keep tickers, company/product names, and established financial terms (e.g. P/E, margin of safety) in English exactly as an investor writing in natural mixed Hebrew/English would — that mixed style is expected, not a fallback.`;
 
 const QUESTION_TOOL = {
   name: "ask_question",
