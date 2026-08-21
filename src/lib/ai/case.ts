@@ -33,11 +33,13 @@ export interface CaseSynthesis {
 
 const CASE_SYSTEM_PROMPT = `You help a personal investor think through a potential stock position. You are given real, already-fetched data — a company/valuation snapshot and computed portfolio-fit numbers — and nothing else. You do not have access to financial statements, analyst estimates, or news.
 
+Write bullCaseText, bearCaseText, catalystsText, invalidationConditionsText, marketBlindspotText, devilsAdvocateText, portfolioFitText, and synthesisText in Hebrew — natural, fluent Hebrew, not a forced or literal translation. Keep tickers, company/product names, and established financial terms (e.g. P/E, margin of safety) in English exactly as an investor writing in natural mixed Hebrew/English would — that mixed style is expected, not a fallback. Keep these fixed terms in English exactly as spelled, never translated: DNA, Evidence Strength, Personal Fit, Portfolio Fit, and Strategy (when naming a Strategy principle specifically).
+
 Ground rules:
 - Use ONLY the numbers and facts you are actually given (price, market cap, sector, industry, beta, valuation ratios if present, description, portfolio fit numbers). Never invent revenue, earnings, guidance, analyst price targets, news events, or any other fact not present in what you were handed.
 - If a valuation ratio (P/E, price/book, price/sales, dividend yield) is marked unavailable, say plainly that it wasn't available rather than guessing at it or working around it with an invented number.
 - marketBlindspotText should be an honest statement of what this data snapshot genuinely can't tell you (no cash-flow trend, no forward guidance, no news/sentiment, no financial-statement detail) — not a generic disclaimer, and not a fabricated additional risk dressed up as a blind spot.
-- portfolioFitText should narrate the portfolio-fit numbers you were given in plain English (current exposure, projected weight if a hypothetical size was given, how it compares to the largest current position, any cash-shortfall warning) — do not introduce new numbers or a concentration threshold that wasn't given to you.
+- portfolioFitText should narrate the portfolio-fit numbers you were given in plain language (current exposure, projected weight if a hypothetical size was given, how it compares to the largest current position, any cash-shortfall warning) — do not introduce new numbers or a concentration threshold that wasn't given to you.
 - devilsAdvocateText should genuinely argue against taking this position, not restate the bear case in different words.
 - Keep each field to 2-4 sentences. Be specific to the actual data given, not generic boilerplate that could apply to any stock.`;
 
@@ -189,6 +191,8 @@ export interface ProposedPersonalFit {
 // "mention it but hedge it" tightrope left to walk here — only genuinely
 // evidenced items (weak and up) are ever in front of the model.
 const PERSONAL_FIT_SYSTEM_PROMPT = `You assess how a potential stock idea fits (or conflicts with) what's actually known about this specific investor — their DNA hypotheses (behavioral patterns, each with an evidence-strength label) and Strategy principles (declared rules, observed patterns, or fixed baseline risk guardrails). Every hypothesis/principle you're given already has real evidence behind it — thin/unconfirmed ones have already been excluded, so you don't need to second-guess whether something you were given is too weak to use.
+
+Write personalFitText in Hebrew — natural, fluent Hebrew, not a forced or literal translation. Keep tickers, company/product names, and established financial terms in English as an investor writing in natural mixed Hebrew/English would. Keep these fixed terms in English exactly as spelled, never translated: DNA, Evidence Strength, Personal Fit, Portfolio Fit, and Strategy (when naming a Strategy principle specifically).
 
 Ground rules:
 - Only reference a hypothesis or principle you were actually given, by citing its exact ID. Never invent one.
