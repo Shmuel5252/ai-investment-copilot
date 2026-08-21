@@ -211,8 +211,14 @@ Advocate, ניסוח השערות DNA/Strategy, שאלות ראיון) יצא ב
 Decision Review/Learning Insight שנשארים מחוץ ל-UI redesign (אותה
 סיבה: פערים פתוחים ב-`docs/backlog.md`).
 
-**Rollout:** `case.ts` בוצע; `decision.ts`, `dna.ts`, `strategy.ts`,
-`interview.ts` בתהליך.
+**Rollout:** הושלם — `case.ts`, `decision.ts`, `dna.ts`, `strategy.ts`,
+`interview.ts` כולם מנחים עברית. תוך כדי הרולאאוט נמצא ותוקן גם overclaim
+אמיתי (השערת DNA/Observed-Strategy שהסיקה preference/goal מוצהר
+מ-tendency בודדת, מעבר למה שהראיה תמכה בו) — הכלל המתקן חי בתוך
+ה-ground rules של `dna.ts`/`strategy.ts` עצמם (`OBSERVE_SYSTEM_PROMPT`),
+לא כאן; ר' git history וההערה העקרונית ב-`docs/backlog.md` (Market
+Scanner עתידי — אותה הגזמה, אם תוזן פעם למנגנון הצעה אוטומטי, עלולה
+ליצור feedback loop).
 
 ### מונחים שנשארים באנגלית — בשתי השכבות, ללא יוצא מן הכלל
 DNA, Evidence Strength, Personal Fit, Portfolio Fit — לעולם לא
