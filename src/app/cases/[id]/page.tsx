@@ -3,10 +3,24 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { Frank_Ruhl_Libre, Assistant } from "next/font/google";
 import { trpc } from "@/trpc/react";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
+import { Num } from "@/components/num";
+import { BackLink } from "@/components/back-link";
+import {
+  caseDetailPage as t,
+  casesListPage,
+  decisionTypeLabel,
+  caseStatusLabel,
+  evidenceStrengthLabel,
+  common,
+} from "@/lib/i18n/strings";
+
+const serifHeader = Frank_Ruhl_Libre({ subsets: ["latin", "hebrew"], weight: ["400", "700"], display: "swap" });
+const sansBody = Assistant({ subsets: ["latin", "hebrew"], weight: ["400", "500", "600", "700"], display: "swap" });
 
 interface PersonalFitEvidenceRefs {
   dnaHypothesisIds: string[];
@@ -62,31 +76,39 @@ export default function CaseDetailPage() {
   const parsedSize = sizeDollars.trim() === "" ? undefined : Number(sizeDollars);
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-12">
-      <div>
-        <h1 className="text-xl font-semibold">{investmentCase.ticker}</h1>
-        <p className="text-xs text-neutral-500">
-          {investmentCase.status} · created {new Date(investmentCase.createdAt).toLocaleDateString()}
+    <main
+      dir="rtl"
+      lang="he"
+      className={`${sansBody.className} mx-auto flex max-w-2xl flex-col gap-8 px-4 py-12 text-journal-ink`}
+    >
+      <BackLink href="/cases" label={casesListPage.title} />
+
+      <div className="flex flex-col gap-1 border-b border-journal-rule pb-6">
+        <h1 className={`${serifHeader.className} text-2xl font-bold`}>{investmentCase.ticker}</h1>
+        <p className="text-xs text-journal-muted">
+          {caseStatusLabel[investmentCase.status] ?? investmentCase.status} · {common.createdOnLabel}{" "}
+          <Num>{new Date(investmentCase.createdAt).toLocaleDateString("he-IL")}</Num>
         </p>
       </div>
 
       {/* Market Intelligence */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold">Market Intelligence — Financial Modeling Prep</h2>
+        <h2 className="text-sm font-semibold">{t.marketIntelligenceTitle}</h2>
         <button
           onClick={() => guard(() => fetchMarketData.mutateAsync({ caseId: id, forceRefresh: !!intelligence }), "fetchMarketData")}
           disabled={fetchMarketData.isPending}
-          className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+          className="w-fit rounded bg-journal-accent px-3 py-2 text-sm text-white disabled:opacity-50"
         >
-          {fetchMarketData.isPending
-            ? "Fetching..."
-            : intelligence
-              ? "Refresh market data"
-              : "Fetch market data"}
+          {fetchMarketData.isPending ? t.fetchingButton : intelligence ? t.refreshButton : t.fetchButton}
         </button>
         {fetchMarketData.isError && <p className="text-sm text-red-600">{fetchMarketData.error.message}</p>}
         {intelligence && (
-          <div className="rounded border border-neutral-200 p-4 text-sm">
+          <div className="rounded border border-journal-rule bg-journal-surface p-4 text-sm">
+            {/* Company name, price and % change: all-Latin content (a
+                real company name plus real numbers), stays one plain
+                right-aligned block like any other real-data line — no
+                Hebrew label is mixed into it, so there's no bidi
+                boundary to isolate. */}
             <p className="font-medium">
               {intelligence.companyName} — ${intelligence.price.toFixed(2)}{" "}
               <span className={intelligence.changePercentage >= 0 ? "text-green-700" : "text-red-700"}>
@@ -94,21 +116,30 @@ export default function CaseDetailPage() {
                 {intelligence.changePercentage.toFixed(2)}%)
               </span>
             </p>
-            <p className="mt-1 text-xs text-neutral-500">
-              {intelligence.sector ?? "Unknown sector"} · {intelligence.industry ?? "Unknown industry"} · Market
-              cap ${intelligence.marketCap.toLocaleString()} · Beta {intelligence.beta ?? "n/a"} · 52w range{" "}
-              {intelligence.fiftyTwoWeekRange ?? "n/a"}
+            {/* sector/industry are FMP's own category strings (real
+                data, not UI copy) — left exactly as fetched, never
+                translated, same principle as companyName/description. */}
+            <p className="mt-1 text-xs text-journal-muted">
+              {intelligence.sector ?? t.unknownSector} · {intelligence.industry ?? t.unknownIndustry} ·{" "}
+              {t.marketCapLabel} <Num>${intelligence.marketCap.toLocaleString()}</Num> · {t.betaLabel}{" "}
+              <Num>{intelligence.beta ?? t.naLabel}</Num> · {t.weekRangeLabel}{" "}
+              <Num>{intelligence.fiftyTwoWeekRange ?? t.naLabel}</Num>
             </p>
-            <p className="mt-1 text-xs text-neutral-500">
+            {/* P/E, P/B, P/S, Div yield: standard Latin finance
+                abbreviations (kept English, like S&P 500/VIX elsewhere)
+                each directly followed by their own number — left as one
+                unwrapped run per <Num>'s usage rule, not isolated
+                piecemeal. */}
+            <p className="mt-1 text-xs text-journal-muted">
               {intelligence.valuationRatiosAvailable
                 ? `P/E ${intelligence.peRatioTtm?.toFixed(2)} · P/B ${intelligence.priceToBookRatioTtm?.toFixed(2)} · P/S ${intelligence.priceToSalesRatioTtm?.toFixed(2)} · Div yield ${intelligence.dividendYieldTtm ?? "n/a"}`
-                : "Valuation ratios unavailable on the current data plan for this ticker."}
+                : t.valuationRatiosUnavailable}
             </p>
             {intelligence.description && (
-              <p className="mt-2 text-xs text-neutral-600">{intelligence.description}</p>
+              <p className="mt-2 text-xs text-journal-muted">{intelligence.description}</p>
             )}
-            <p className="mt-2 text-xs text-neutral-400">
-              Fetched {new Date(intelligence.fetchedAt).toLocaleString()}
+            <p className="mt-2 text-xs text-journal-muted">
+              {t.fetchedAtLabel} <Num>{new Date(intelligence.fetchedAt).toLocaleString("he-IL")}</Num>
             </p>
           </div>
         )}
@@ -116,52 +147,53 @@ export default function CaseDetailPage() {
 
       {/* Portfolio Fit */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold">Portfolio Fit — computed live, not stored</h2>
+        <h2 className="text-sm font-semibold">{t.portfolioFitTitle}</h2>
         <div className="flex gap-2">
           <input
             value={sizeDollars}
             onChange={(e) => setSizeDollars(e.target.value)}
-            placeholder="Hypothetical size in $ (optional)"
-            className="rounded border border-neutral-300 p-2 text-sm"
+            placeholder={t.hypotheticalSizePlaceholder}
+            className="rounded border border-journal-rule bg-journal-surface p-2 text-sm"
           />
           <button
             onClick={() => guard(() => computeFit.mutateAsync({ caseId: id, sizeDollars: parsedSize }), "computeFit")}
             disabled={!intelligence || computeFit.isPending}
-            className="rounded border border-neutral-300 px-3 py-2 text-sm disabled:opacity-50"
+            className="rounded border border-journal-rule px-3 py-2 text-sm disabled:opacity-50"
           >
-            {computeFit.isPending ? "Computing..." : "Compute portfolio fit"}
+            {computeFit.isPending ? t.computingButton : t.computeFitButton}
           </button>
         </div>
-        {!intelligence && <p className="text-xs text-neutral-500">Fetch market data first.</p>}
+        {!intelligence && <p className="text-xs text-journal-muted">{t.fetchMarketDataFirst}</p>}
         {computeFit.isError && <p className="text-sm text-red-600">{computeFit.error.message}</p>}
         {computeFit.data && <PortfolioFitView fit={computeFit.data} />}
       </section>
 
       {/* Personal Fit */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold">Personal Fit — vs. your DNA + Strategy</h2>
+        <h2 className="text-sm font-semibold">{t.personalFitTitle}</h2>
         <button
           onClick={() => guard(() => generatePersonalFit.mutateAsync({ caseId: id }), "generatePersonalFit")}
           disabled={generatePersonalFit.isPending}
-          className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+          className="w-fit rounded bg-journal-accent px-3 py-2 text-sm text-white disabled:opacity-50"
         >
-          {generatePersonalFit.isPending ? "Assessing..." : "Generate personal fit"}
+          {generatePersonalFit.isPending ? t.assessingButton : t.generatePersonalFitButton}
         </button>
         {generatePersonalFit.isError && (
           <p className="text-sm text-red-600">{generatePersonalFit.error.message}</p>
         )}
         {investmentCase.personalFitText && (
-          <div className="rounded border border-neutral-200 p-4 text-sm">
+          <div className="rounded border border-journal-rule bg-journal-surface p-4 text-sm">
             <div className="flex items-start justify-between gap-2">
+              {/* AI-generated narrative — content, not chrome. */}
               <p>{investmentCase.personalFitText}</p>
               {!evidenceRefs?.hasTraceableEvidence && (
                 <span className="shrink-0 rounded bg-neutral-200 px-2 py-0.5 text-xs text-neutral-600">
-                  Insufficient Evidence
+                  {evidenceStrengthLabel.insufficient_evidence}
                 </span>
               )}
             </div>
             {evidenceRefs && evidenceRefs.hasTraceableEvidence && (
-              <ul className="mt-2 flex flex-col gap-1 border-t border-neutral-100 pt-2 text-xs text-neutral-600">
+              <ul className="mt-2 flex flex-col gap-1 border-t border-journal-rule pt-2 text-xs text-journal-muted">
                 {evidenceRefs.dnaHypothesisIds.map((refId) => (
                   <li key={refId}>[DNA] {dnaById.get(refId) ?? refId}</li>
                 ))}
@@ -180,114 +212,128 @@ export default function CaseDetailPage() {
           whether synthesis is "good enough" — just an honest inventory,
           so a synthesis based on thin research isn't mistaken for one
           based on complete research. */}
-      <section className="flex flex-col gap-2 rounded border border-neutral-200 p-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-          Research completeness
+      <section className="flex flex-col gap-2 rounded border border-journal-rule bg-journal-surface p-4">
+        <h2 className="text-xs font-semibold tracking-wide text-journal-muted">
+          {t.researchCompletenessTitle}
         </h2>
         <ul className="flex flex-col gap-1 text-sm">
           <CompletenessRow
-            label="Market Intelligence"
+            label={t.marketIntelligenceRow}
             done={!!intelligence}
-            detail={intelligence ? `fetched ${new Date(intelligence.fetchedAt).toLocaleDateString()}` : "not fetched — required before synthesis"}
+            detail={
+              intelligence ? (
+                <>
+                  {t.fetchedLabel} <Num>{new Date(intelligence.fetchedAt).toLocaleDateString("he-IL")}</Num>
+                </>
+              ) : (
+                t.notFetchedRequired
+              )
+            }
           />
           <CompletenessRow
-            label="Personal Fit (DNA + Strategy)"
+            label={t.personalFitRow}
             done={!!investmentCase.personalFitText}
-            detail={investmentCase.personalFitText ? "generated" : "not generated — synthesis won't reflect it"}
+            detail={investmentCase.personalFitText ? t.generatedLabel : t.notGeneratedWontReflect}
           />
           <CompletenessRow
-            label="DNA hypotheses on file"
+            label={t.dnaOnFileRow}
             done={(dnaList.data?.length ?? 0) > 0}
-            detail={`${dnaList.data?.length ?? 0} (informs Personal Fit, not synthesis directly)`}
+            detail={
+              <>
+                <Num>{dnaList.data?.length ?? 0}</Num> ({t.informsPersonalFitNotSynthesis})
+              </>
+            }
           />
           <CompletenessRow
-            label="Strategy principles on file"
+            label={t.strategyOnFileRow}
             done={(strategyList.data?.principles.length ?? 0) > 0}
-            detail={`${strategyList.data?.principles.length ?? 0} (informs Personal Fit, not synthesis directly)`}
+            detail={
+              <>
+                <Num>{strategyList.data?.principles.length ?? 0}</Num> ({t.informsPersonalFitNotSynthesis})
+              </>
+            }
           />
         </ul>
       </section>
 
       {/* Case Synthesis */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold">Case Synthesis</h2>
+        <h2 className="text-sm font-semibold">{t.caseSynthesisTitle}</h2>
         <button
           onClick={() => guard(() => generateSynthesis.mutateAsync({ caseId: id, sizeDollars: parsedSize }), "generateSynthesis")}
           disabled={!intelligence || generateSynthesis.isPending}
-          className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+          className="w-fit rounded bg-journal-accent px-3 py-2 text-sm text-white disabled:opacity-50"
         >
-          {generateSynthesis.isPending ? "Synthesizing..." : "Generate synthesis"}
+          {generateSynthesis.isPending ? t.synthesizingButton : t.generateSynthesisButton}
         </button>
-        {!intelligence && <p className="text-xs text-neutral-500">Fetch market data first.</p>}
+        {!intelligence && <p className="text-xs text-journal-muted">{t.fetchMarketDataFirst}</p>}
         {generateSynthesis.isError && <p className="text-sm text-red-600">{generateSynthesis.error.message}</p>}
 
         {investmentCase.synthesisText && (
-          <div className="flex flex-col gap-3 rounded border border-neutral-200 p-4 text-sm">
+          <div className="flex flex-col gap-3 rounded border border-journal-rule bg-journal-surface p-4 text-sm">
+            {/* Everything below is AI-generated synthesis — content, not
+                chrome; only the TextBlock labels are translated. */}
             <p className="font-medium">{investmentCase.synthesisText}</p>
-            <TextBlock label="Bull case" text={investmentCase.bullCaseText} />
-            <TextBlock label="Bear case" text={investmentCase.bearCaseText} />
-            <TextBlock label="Catalysts" text={investmentCase.catalystsText} />
-            <TextBlock label="Invalidation conditions" text={investmentCase.invalidationConditionsText} />
-            <TextBlock label="Portfolio fit (narrative)" text={investmentCase.portfolioFitText} />
-            <TextBlock label="Market blindspot" text={investmentCase.marketBlindspotText} />
-            <TextBlock label="Devil's advocate" text={investmentCase.devilsAdvocateText} />
+            <TextBlock label={t.bullCase} text={investmentCase.bullCaseText} />
+            <TextBlock label={t.bearCase} text={investmentCase.bearCaseText} />
+            <TextBlock label={t.catalysts} text={investmentCase.catalystsText} />
+            <TextBlock label={t.invalidationConditions} text={investmentCase.invalidationConditionsText} />
+            <TextBlock label={t.portfolioFitNarrative} text={investmentCase.portfolioFitText} />
+            <TextBlock label={t.marketBlindspot} text={investmentCase.marketBlindspotText} />
+            <TextBlock label={t.devilsAdvocate} text={investmentCase.devilsAdvocateText} />
           </div>
         )}
       </section>
 
       {/* Record Decision */}
-      <section className="flex flex-col gap-3 border-t border-neutral-200 pt-6">
-        <h2 className="text-sm font-semibold">Record Decision</h2>
+      <section className="flex flex-col gap-3 border-t border-journal-rule pt-6">
+        <h2 className="text-sm font-semibold">{t.recordDecisionTitle}</h2>
 
         {existingDecision.data ? (
           <p className="text-sm">
-            Decision already recorded for this case —{" "}
-            <Link href={`/decisions/${existingDecision.data.id}`} className="underline">
-              view the Decision Snapshot
+            {t.decisionAlreadyRecordedPrefix}{" "}
+            <Link href={`/decisions/${existingDecision.data.id}`} className="text-journal-accent underline">
+              {t.viewDecisionSnapshot}
             </Link>
             .
           </p>
         ) : (
           <>
-            <p className="text-xs text-neutral-500">
-              Freezes price, portfolio state, market context, and the Strategy/DNA versions in effect
-              right now, together with your reasoning — permanently. Nothing here can be edited
-              afterward, only added to later as Later Context.
-            </p>
+            <p className="text-xs text-journal-muted">{t.freezeDescription}</p>
             <select
               value={decisionType}
               onChange={(e) => setDecisionType(e.target.value as (typeof DECISION_TYPES)[number])}
-              className="w-fit rounded border border-neutral-300 p-2 text-sm"
+              className="w-fit rounded border border-journal-rule bg-journal-surface p-2 text-sm"
             >
-              {DECISION_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              {DECISION_TYPES.map((dt) => (
+                <option key={dt} value={dt}>
+                  {decisionTypeLabel[dt] ?? dt}
                 </option>
               ))}
             </select>
             <input
               value={sizeDollars}
               onChange={(e) => setSizeDollars(e.target.value)}
-              placeholder="Size in $ (optional)"
-              className="rounded border border-neutral-300 p-2 text-sm"
+              placeholder={t.sizePlaceholder}
+              className="rounded border border-journal-rule bg-journal-surface p-2 text-sm"
             />
             <textarea
               value={reasoningText}
               onChange={(e) => setReasoningText(e.target.value)}
-              placeholder="Your reasoning and thesis — why this decision, what do you believe will happen?"
-              className="min-h-24 rounded border border-neutral-300 p-2 text-sm"
+              placeholder={t.reasoningPlaceholder}
+              className="min-h-24 rounded border border-journal-rule bg-journal-surface p-2 text-sm"
             />
             <textarea
               value={risksConsideredText}
               onChange={(e) => setRisksConsideredText(e.target.value)}
-              placeholder="Risks you considered (optional)"
-              className="min-h-16 rounded border border-neutral-300 p-2 text-sm"
+              placeholder={t.risksPlaceholder}
+              className="min-h-16 rounded border border-journal-rule bg-journal-surface p-2 text-sm"
             />
             <textarea
               value={exitConditionsText}
               onChange={(e) => setExitConditionsText(e.target.value)}
-              placeholder="Exit conditions — what would change your mind? (optional)"
-              className="min-h-16 rounded border border-neutral-300 p-2 text-sm"
+              placeholder={t.exitConditionsPlaceholder}
+              className="min-h-16 rounded border border-journal-rule bg-journal-surface p-2 text-sm"
             />
             <button
               onClick={() =>
@@ -305,9 +351,11 @@ export default function CaseDetailPage() {
                 )
               }
               disabled={reasoningText.trim() === "" || recordDecision.isPending}
-              className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+              className="w-fit rounded bg-journal-accent px-3 py-2 text-sm text-white disabled:opacity-50"
             >
-              {recordDecision.isPending ? "Recording..." : `Record ${decisionType} — permanent`}
+              {recordDecision.isPending
+                ? t.recordingButton
+                : `${t.recordPrefix} ${decisionTypeLabel[decisionType] ?? decisionType} ${t.recordSuffix}`}
             </button>
             {recordDecision.isError && (
               <p className="text-sm text-red-600">{recordDecision.error.message}</p>
@@ -319,12 +367,20 @@ export default function CaseDetailPage() {
   );
 }
 
-function CompletenessRow({ label, done, detail }: { label: string; done: boolean; detail: string }) {
+function CompletenessRow({
+  label,
+  done,
+  detail,
+}: {
+  label: string;
+  done: boolean;
+  detail: React.ReactNode;
+}) {
   return (
     <li className="flex items-center gap-2">
-      <span className={done ? "text-green-700" : "text-neutral-400"}>{done ? "✓" : "○"}</span>
+      <span className={done ? "text-green-700" : "text-journal-muted"}>{done ? "✓" : "○"}</span>
       <span className="font-medium">{label}</span>
-      <span className="text-xs text-neutral-500">— {detail}</span>
+      <span className="text-xs text-journal-muted">— {detail}</span>
     </li>
   );
 }
@@ -333,35 +389,48 @@ function TextBlock({ label, text }: { label: string; text: string | null }) {
   if (!text) return null;
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className="mt-1 text-neutral-700">{text}</p>
+      <p className="text-xs font-semibold tracking-wide text-journal-muted">{label}</p>
+      <p className="mt-1 leading-relaxed text-journal-ink">{text}</p>
     </div>
   );
 }
 
 function PortfolioFitView({ fit }: { fit: PortfolioFit }) {
   return (
-    <div className="rounded border border-neutral-200 p-4 text-sm">
+    <div className="rounded border border-journal-rule bg-journal-surface p-4 text-sm">
       <p>
-        Total portfolio value: ${fit.totalPortfolioValueUsd.toFixed(2)}
-        {fit.totalPortfolioValueApproximate ? " (approximate)" : ""}
+        {t.totalPortfolioValueLabel}: <Num>${fit.totalPortfolioValueUsd.toFixed(2)}</Num>
+        {fit.totalPortfolioValueApproximate ? ` ${t.approximateNote}` : ""}
       </p>
       <p>
-        Existing exposure: {fit.existingHoldingQuantity} shares · ${fit.existingPositionValueUsd.toFixed(2)} ·{" "}
-        {fit.existingWeightPercent.toFixed(1)}% of portfolio
+        {t.existingExposureLabel}: <Num>{fit.existingHoldingQuantity}</Num> {t.sharesOfLabel}{" "}
+        <Num>${fit.existingPositionValueUsd.toFixed(2)}</Num> ·{" "}
+        <Num>{fit.existingWeightPercent.toFixed(1)}%</Num> {t.ofPortfolioLabel}
       </p>
       {fit.projectedWeightPercent !== null && (
         <p>
-          Projected: ${fit.projectedPositionValueUsd?.toFixed(2)} · {fit.projectedWeightPercent.toFixed(1)}% of
-          portfolio
+          {t.projectedLabel}: <Num>${fit.projectedPositionValueUsd?.toFixed(2)}</Num> ·{" "}
+          <Num>{fit.projectedWeightPercent.toFixed(1)}%</Num> {t.ofPortfolioLabel}
         </p>
       )}
-      <p className="text-xs text-neutral-500">
-        {fit.holdingsCount} current holding(s)
-        {fit.largestCurrentPositionTicker
-          ? ` · largest: ${fit.largestCurrentPositionTicker} (${fit.largestCurrentPositionWeightPercent?.toFixed(1)}%)`
-          : ""}
+      <p className="text-xs text-journal-muted">
+        <Num>{fit.holdingsCount}</Num> {t.currentHoldingsLabel}
+        {fit.largestCurrentPositionTicker ? (
+          <>
+            {" "}
+            · {t.largestLabel}: {fit.largestCurrentPositionTicker} (
+            <Num>{fit.largestCurrentPositionWeightPercent?.toFixed(1)}%</Num>)
+          </>
+        ) : (
+          ""
+        )}
       </p>
+      {/* Warnings are generated by computePortfolioFit() itself
+          (src/lib/portfolio/portfolio-fit.ts) — a protected, unit-tested
+          calculation module (CLAUDE.md: computePositions/
+          computePortfolioFit are never reimplemented or edited casually
+          elsewhere). Left in English exactly as returned, not translated
+          here, same boundary as AI-generated or user-authored text. */}
       {fit.warnings.length > 0 && (
         <ul className="mt-2 flex flex-col gap-1 text-xs text-amber-700">
           {fit.warnings.map((w, i) => (

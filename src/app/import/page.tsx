@@ -1,20 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { Frank_Ruhl_Libre, Assistant } from "next/font/google";
 import { trpc } from "@/trpc/react";
 import { CANONICAL_FIELDS, type CanonicalField } from "@/lib/import/types";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
+import { Num } from "@/components/num";
+import { BackLink } from "@/components/back-link";
+import { importFieldLabel, importPage as t, costBasisConfidenceLabel, common, nav } from "@/lib/i18n/strings";
 
-const FIELD_LABELS: Record<CanonicalField, string> = {
-  date: "Date",
-  ticker: "Ticker",
-  type: "Type (buy/sell/dividend/...)",
-  quantity: "Quantity",
-  price: "Price",
-  amount: "Amount",
-  commission: "Commission (optional — folded into Amount)",
-  notes: "Notes",
-};
+const serifHeader = Frank_Ruhl_Libre({ subsets: ["latin", "hebrew"], weight: ["400", "700"], display: "swap" });
+const sansBody = Assistant({ subsets: ["latin", "hebrew"], weight: ["400", "500", "600", "700"], display: "swap" });
 
 type Step = "upload" | "mapping" | "review" | "done";
 
@@ -105,14 +101,16 @@ export default function ImportPage() {
   }
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-12">
-      <div>
-        <h1 className="text-xl font-semibold">Trade History Import</h1>
-        <p className="text-sm text-neutral-500">
-          Upload a partial trade history (e.g. the last 6–12 months). If a position was opened
-          before the window you upload, you&apos;ll be asked for its opening balance separately —
-          we never assume the file is your whole portfolio.
-        </p>
+    <main
+      dir="rtl"
+      lang="he"
+      className={`${sansBody.className} mx-auto flex max-w-3xl flex-col gap-6 px-4 py-12 text-journal-ink`}
+    >
+      <BackLink href="/" label={nav.home} />
+
+      <div className="flex flex-col gap-2 border-b border-journal-rule pb-6">
+        <h1 className={`${serifHeader.className} text-2xl font-bold`}>{t.title}</h1>
+        <p className="text-sm text-journal-muted">{t.description}</p>
       </div>
 
       {step === "upload" && (
@@ -129,22 +127,22 @@ export default function ImportPage() {
       {step === "mapping" && preview.data && (
         <div className="flex flex-col gap-4">
           <p className="text-sm">
-            {preview.data.rowCount} rows detected. Map your columns below (best guess pre-filled):
+            <Num>{preview.data.rowCount}</Num> {t.rowsDetectedLabel}
           </p>
           <table className="w-full text-sm">
             <tbody>
               {CANONICAL_FIELDS.map((field) => (
                 <tr key={field}>
-                  <td className="py-1 pr-4 font-medium">{FIELD_LABELS[field]}</td>
+                  <td className="py-1 pl-4 font-medium">{importFieldLabel[field]}</td>
                   <td>
                     <select
-                      className="rounded border border-neutral-300 px-2 py-1"
+                      className="rounded border border-journal-rule bg-journal-surface px-2 py-1"
                       value={mapping[field] ?? ""}
                       onChange={(e) =>
                         setMapping((prev) => ({ ...prev, [field]: e.target.value || undefined }))
                       }
                     >
-                      <option value="">— not mapped —</option>
+                      <option value="">{t.notMappedOption}</option>
                       {preview.data.headers.map((h) => (
                         <option key={h} value={h}>
                           {h}
@@ -157,9 +155,9 @@ export default function ImportPage() {
             </tbody>
           </table>
 
-          <details className="text-xs text-neutral-500">
-            <summary>Preview first rows</summary>
-            <pre className="mt-2 overflow-x-auto rounded bg-neutral-100 p-2">
+          <details className="text-xs text-journal-muted">
+            <summary>{t.previewFirstRows}</summary>
+            <pre dir="ltr" className="mt-2 overflow-x-auto rounded bg-journal-bg p-2 text-left">
               {JSON.stringify(preview.data.previewRows, null, 2)}
             </pre>
           </details>
@@ -167,30 +165,30 @@ export default function ImportPage() {
           <button
             onClick={startReview}
             disabled={!mapping.date || !mapping.type}
-            className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+            className="w-fit rounded bg-journal-accent px-3 py-2 text-sm text-white disabled:opacity-50"
           >
-            Validate
+            {t.validateButton}
           </button>
         </div>
       )}
 
       {step === "review" && (
         <div className="flex flex-col gap-4">
-          {validation.isLoading && <p>Validating...</p>}
+          {validation.isLoading && <p>{t.validatingLabel}</p>}
           {validation.data && (
             <>
               <p className="text-sm">
-                {validation.data.validCount} valid row(s), {validation.data.invalidRows.length}{" "}
-                invalid row(s).
+                <Num>{validation.data.validCount}</Num> {t.validRowsLabel}{" "}
+                <Num>{validation.data.invalidRows.length}</Num> {t.invalidRowsLabel}
               </p>
 
               {validation.data.invalidRows.length > 0 && (
                 <div className="rounded border border-red-300 bg-red-50 p-3 text-sm">
-                  <p className="font-medium">Fix these rows in your CSV and re-upload:</p>
-                  <ul className="mt-1 list-disc pl-5">
+                  <p className="font-medium">{t.fixRowsInstruction}</p>
+                  <ul className="mt-1 list-disc pr-5">
                     {validation.data.invalidRows.slice(0, 10).map((r) => (
                       <li key={r.rowIndex}>
-                        Row {r.rowIndex + 1}: {r.errors.join(", ")}
+                        {t.rowLabel} <Num>{r.rowIndex + 1}</Num>: {r.errors.join(", ")}
                       </li>
                     ))}
                   </ul>
@@ -199,12 +197,7 @@ export default function ImportPage() {
 
               {validation.data.tickersNeedingOpeningState.length > 0 && (
                 <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
-                  <p className="font-medium">
-                    These tickers have a SELL that isn&apos;t explained by this file alone —
-                    likely a position opened before the imported window. Enter what you held just
-                    before the file&apos;s start date (self-reported, marked as such — not
-                    derived from transaction history):
-                  </p>
+                  <p className="font-medium">{t.openingStateInstruction}</p>
                   <div className="mt-3 flex flex-col gap-3">
                     {validation.data.tickersNeedingOpeningState.map((ticker) => {
                       const draft = openingStates[ticker];
@@ -213,22 +206,22 @@ export default function ImportPage() {
                           <span className="w-16 font-medium">{ticker}</span>
                           <input
                             type="number"
-                            placeholder="Quantity"
-                            className="w-24 rounded border border-neutral-300 px-2 py-1"
+                            placeholder={t.quantityPlaceholder}
+                            className="w-24 rounded border border-journal-rule px-2 py-1"
                             value={draft?.quantity ?? ""}
                             onChange={(e) => updateOpeningState(ticker, { quantity: e.target.value })}
                           />
                           <input
                             type="number"
-                            placeholder="Cost basis/share"
-                            className="w-32 rounded border border-neutral-300 px-2 py-1"
+                            placeholder={t.costBasisPlaceholder}
+                            className="w-32 rounded border border-journal-rule px-2 py-1"
                             value={draft?.costBasisPerShare ?? ""}
                             onChange={(e) =>
                               updateOpeningState(ticker, { costBasisPerShare: e.target.value })
                             }
                           />
                           <select
-                            className="rounded border border-neutral-300 px-2 py-1"
+                            className="rounded border border-journal-rule px-2 py-1"
                             value={draft?.costBasisConfidence ?? "approximate"}
                             onChange={(e) =>
                               updateOpeningState(ticker, {
@@ -236,13 +229,13 @@ export default function ImportPage() {
                               })
                             }
                           >
-                            <option value="known">Known exactly</option>
-                            <option value="approximate">Approximate</option>
-                            <option value="unknown">Unknown</option>
+                            <option value="known">{costBasisConfidenceLabel.known}</option>
+                            <option value="approximate">{costBasisConfidenceLabel.approximate}</option>
+                            <option value="unknown">{costBasisConfidenceLabel.unknown}</option>
                           </select>
                           <input
                             type="date"
-                            className="rounded border border-neutral-300 px-2 py-1"
+                            className="rounded border border-journal-rule px-2 py-1"
                             value={draft?.asOfDate ?? new Date().toISOString().slice(0, 10)}
                             onChange={(e) => updateOpeningState(ticker, { asOfDate: e.target.value })}
                           />
@@ -256,9 +249,9 @@ export default function ImportPage() {
               <button
                 onClick={handleConfirm}
                 disabled={validation.data.invalidRows.length > 0 || confirmImport.isPending}
-                className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white disabled:opacity-50"
+                className="w-fit rounded bg-journal-accent px-3 py-2 text-sm text-white disabled:opacity-50"
               >
-                {confirmImport.isPending ? "Importing..." : "Confirm Import"}
+                {confirmImport.isPending ? t.importingButton : t.confirmImportButton}
               </button>
               {confirmImport.isError && (
                 <p className="text-sm text-red-600">{confirmImport.error.message}</p>
@@ -271,19 +264,22 @@ export default function ImportPage() {
       {step === "done" && confirmImport.data && (
         <div className="flex flex-col gap-3">
           <p className="text-sm">
-            Imported {confirmImport.data.importedCount} transaction(s).
+            <Num>{confirmImport.data.importedCount}</Num> {t.importedLabel}
           </p>
           <div>
-            <p className="text-sm font-medium">Current positions:</p>
+            <p className="text-sm font-medium">{t.currentPositions}</p>
             <ul className="mt-1 text-sm">
               {confirmImport.data.positions.positions.map((p) => (
                 <li key={p.ticker}>
-                  {p.ticker}: {p.quantity} @ avg cost {p.costBasisPerShare?.toFixed(2)} (
-                  {p.costBasisConfidence})
+                  {p.ticker}: <Num>{p.quantity}</Num> · {common.avgCostLabel}{" "}
+                  <Num>{p.costBasisPerShare?.toFixed(2)}</Num> (
+                  {costBasisConfidenceLabel[p.costBasisConfidence] ?? p.costBasisConfidence})
                 </li>
               ))}
             </ul>
-            <p className="mt-1 text-sm">Cash: {confirmImport.data.positions.cash.toFixed(2)}</p>
+            <p className="mt-1 text-sm">
+              {common.cashLabel}: <Num>{confirmImport.data.positions.cash.toFixed(2)}</Num>
+            </p>
           </div>
         </div>
       )}

@@ -2,17 +2,29 @@
 // Written directly in this file — never copy Hebrew text out of a chat
 // transcript into a project file; encoding has broken doing that before.
 //
-// Grows page-by-page as the redesign rolls out (see docs/backlog.md /
-// the redesign task notes for scope and order) — only what Decision
-// Snapshot + Later Context actually use is populated so far. Every other
-// page keeps its own local English strings until it's this module's turn.
+// Covers all seven live-verified Slice 1 pages (Import, Interview, DNA,
+// Strategy, Ideas, Cases, Decisions) as of the redesign rollout. Decision
+// Review inside decisions/[id]/page.tsx is the one deliberate exception —
+// stays English until its own open backlog items close (see that file's
+// .legacy-scope wrapper).
 //
 // DNA, Evidence Strength, Personal Fit, Portfolio Fit stay in English
 // everywhere, by explicit product decision — never add Hebrew entries
 // for those four terms specifically. Tickers and $ amounts also stay as
-// written elsewhere in the app; this module only covers surrounding
-// UI copy and value labels for enums the app already defines
-// (src/db/schema/enums.ts is the source of truth for the raw values).
+// written elsewhere in the app. AI-generated or user-authored free text
+// (thesis interpretation, DNA statements, evidence descriptions, a
+// user's own note) is never translated — only static UI chrome (labels,
+// buttons, instructions) is.
+//
+// Deliberately label-only, not value-embedding functions — the actual
+// numeric/currency/date value always renders through <Num>
+// (src/components/num.tsx) at the call site, never baked into a
+// translated string template. Keeps the two concerns (translation vs.
+// bidi-safe number formatting) separate.
+
+// --- Shared enum-value maps (src/db/schema/enums.ts is the source of
+// truth for the raw values) — reused verbatim across every page that
+// shows one of these, instead of each page keeping its own copy. ---
 
 export const decisionTypeLabel: Record<string, string> = {
   BUY: "קנייה",
@@ -23,9 +35,9 @@ export const decisionTypeLabel: Record<string, string> = {
   SELL: "מכירה",
 };
 
-// evidenceStrengthEnum (src/db/schema/enums.ts) — shared by DNA,
-// Strategy (observed) and Learning Insight, so this map is reusable
-// well beyond Decision Snapshot once those pages are translated too.
+// evidenceStrengthEnum — shared by DNA, Strategy (observed) and
+// Learning Insight. "insufficient_evidence" doubles as the standalone
+// "Insufficient Evidence" badge text wherever that's shown alone.
 export const evidenceStrengthLabel: Record<string, string> = {
   insufficient_evidence: "ראיות בלתי מספיקות",
   weak: "חלשה",
@@ -47,16 +59,56 @@ export const addedByLabel: Record<string, string> = {
   ai: "AI",
 };
 
+// evidenceStanceEnum
+export const evidenceStanceLabel: Record<string, string> = {
+  supporting: "תומך",
+  contradicting: "סותר",
+};
+
+// principleTypeEnum
+export const principleTypeLabel: Record<string, string> = {
+  declared: "מוצהר",
+  observed: "נצפה",
+  validated: "מאומת",
+};
+
+export const principleTypeHint: Record<string, string> = {
+  declared: "אמרת את זה בעצמך בראיון.",
+  observed: "דפוס שהמערכת שמה לב אליו — עדיין נבדק.",
+  validated: "גדר סיכון בסיסית קבועה, לא נלמדה ממך.",
+};
+
+// costBasisConfidenceEnum
+export const costBasisConfidenceLabel: Record<string, string> = {
+  known: "ידוע במדויק",
+  approximate: "משוער",
+  unknown: "לא ידוע",
+};
+
+// caseStatusEnum
+export const caseStatusLabel: Record<string, string> = {
+  researching: "בתהליך מחקר",
+  decided: "הוחלט",
+  archived: "בארכיון",
+};
+
+// --- Cross-page labels ---
+
+export const common = {
+  cashLabel: "מזומן",
+  sharesLabel: "מניות",
+  avgCostLabel: "עלות ממוצעת",
+  costUnknown: "לא ידועה",
+  createdOnLabel: "נוצר",
+};
+
 export const nav = {
+  home: "בית",
   allDecisions: "כל ההחלטות",
 };
 
-// Deliberately label-only, not value-embedding functions — the actual
-// numeric/currency/date value always renders through <Num>
-// (src/components/num.tsx) at the call site, never baked into a
-// translated string template. Keeps the two concerns (translation vs.
-// bidi-safe number formatting) separate, which matters once the same
-// pattern repeats across six more pages full of prices/percentages.
+// --- Decision Snapshot (src/app/decisions/[id]/page.tsx) ---
+
 export const decisionSnapshot = {
   immutableBadge: "רשומה קבועה",
   decidedOnLabel: "התקבלה ב",
@@ -70,10 +122,6 @@ export const decisionSnapshot = {
   predictionsTitle: "תחזיות שחולצו מהתזה שלך",
   checkableByLabel: "ניתנת לבדיקה עד",
   portfolioStateTitle: "מצב התיק במועד ההחלטה",
-  cashLabel: "מזומן",
-  sharesLabel: "מניות",
-  avgCostLabel: "עלות ממוצעת",
-  costUnknown: "לא ידועה",
   noOtherHoldings: "לא היו החזקות נוספות במועד זה.",
   marketContextTitle: "הקשר שוק במועד ההחלטה",
   onThatDay: "באותו יום",
@@ -88,4 +136,205 @@ export const laterContext = {
   placeholder: "לדוגמה: תיקון — הערכת ה-AI למעלה בלבלה בין גודל הפוזיציה למחיר למניה...",
   addButton: "הוספת הקשר מאוחר",
   addingButton: "מוסיף...",
+};
+
+// --- Trade History Import (src/app/import/page.tsx) ---
+
+export const importFieldLabel: Record<string, string> = {
+  date: "תאריך",
+  ticker: "טיקר",
+  type: "סוג (קנייה/מכירה/דיבידנד/...)",
+  quantity: "כמות",
+  price: "מחיר",
+  amount: "סכום",
+  commission: "עמלה (אופציונלי — נכלל בתוך הסכום)",
+  notes: "הערות",
+};
+
+export const importPage = {
+  title: "ייבוא היסטוריית מסחר",
+  description:
+    "העלה היסטוריית מסחר חלקית (למשל 6–12 החודשים האחרונים). אם פוזיציה נפתחה לפני החלון שאתה מעלה, תתבקש להזין את יתרת הפתיחה שלה בנפרד — לעולם לא מניחים שהקובץ הוא כל התיק שלך.",
+  rowsDetectedLabel: "שורות זוהו. מפה את העמודות שלך למטה (ניחוש ראשוני כבר מולא):",
+  validatingLabel: "מאמת...",
+  notMappedOption: "— לא ממופה —",
+  previewFirstRows: "תצוגה מקדימה של השורות הראשונות",
+  validateButton: "אמת",
+  validRowsLabel: "שורות תקינות,",
+  invalidRowsLabel: "שורות לא תקינות.",
+  fixRowsInstruction: "תקן את השורות האלה בקובץ ה-CSV והעלה מחדש:",
+  rowLabel: "שורה",
+  openingStateInstruction:
+    "לטיקרים האלה יש מכירה (SELL) שלא מוסברת על ידי הקובץ הזה בלבד — כנראה פוזיציה שנפתחה לפני החלון המיובא. הזן מה החזקת ממש לפני תאריך ההתחלה של הקובץ (מדווח עצמית, מסומן ככזה — לא נגזר מהיסטוריית עסקאות):",
+  quantityPlaceholder: "כמות",
+  costBasisPlaceholder: "עלות בסיס למניה",
+  confirmImportButton: "אשר ייבוא",
+  importingButton: "מייבא...",
+  importedLabel: "עסקאות יובאו.",
+  currentPositions: "פוזיציות נוכחיות:",
+};
+
+// --- Onboarding Interview (src/app/interview/page.tsx) ---
+
+export const interviewPage = {
+  title: "ראיון פתיחה",
+  description:
+    "כמה שאלות על עסקאות ספציפיות מההיסטוריה שלך — תשובות חופשיות, דלג על כל מה שאתה לא רוצה להיכנס אליו. ככה המערכת מתחילה ללמוד איך אתה באמת חושב, לא רק מה סחרת.",
+  startButton: "התחל ראיון",
+  preparingQuestions: "מכין שאלות...",
+  questionLabel: "שאלה",
+  ofLabel: "מתוך",
+  whyAskedThis: "למה אתה נשאל את זה",
+  answerPlaceholder: "התשובה שלך...",
+  nextButton: "הבא",
+  finishButton: "סיום",
+  skipButton: "דלג",
+  completePrefix: "הראיון הושלם — נענו",
+  completeMiddle: "מתוך",
+  completeSuffix: "שאלות. התשובות האלה יזינו את השערות ה-DNA שלך בשלב הבא.",
+};
+
+// --- Investor DNA (src/app/dna/page.tsx) ---
+
+export const dnaPage = {
+  title: "DNA משקיע",
+  description:
+    "השערות על איך אתה חושב ומתנהג כמשקיע — מוצעות על ידי AI מתוך ראיון הפתיחה שלך, אבל תמיד מגובות רק בראיות שאפשר לבדוק. שום דבר כאן לא מוצג כמוכח; דפוסים חלשים או דלים מסומנים ככאלה.",
+  generateButton: "צור השערות מהראיון",
+  analyzingButton: "מנתח תשובות ראיון...",
+  createdLabel: "השערות נוצרו",
+  droppedPrefix: "(",
+  droppedSuffix: "הוצעו אך נפסלו בשל ראיות לא תקפות)",
+  supportingLabel: "תומכות",
+  contradictingLabel: "סותרות",
+  viewEvidence: "הצג ראיות",
+  hideEvidence: "הסתר ראיות",
+  disagree: "לא מסכים",
+  noHypothesesYet: "אין עדיין השערות — השלם את ראיון הפתיחה, ואז צור כמה.",
+};
+
+// --- Baseline Strategy (src/app/strategy/page.tsx) ---
+
+export const strategyPage = {
+  title: "אסטרטגיית בסיס",
+  description:
+    "שלושה סוגי עקרונות, שנשארים נפרדים באופן ברור: מה שאמרת לנו ישירות (מוצהר), דפוסים שהמערכת עדיין בודקת (נצפה), וגדרות סיכון בסיסיות קבועות (מאומת). שום דבר כאן לא מוצג כוודאי יותר מהמקור שלו.",
+  currentVersionLabel: "גרסת אסטרטגיה נוכחית: v",
+  declaredTitle: "עקרונות מוצהרים",
+  findDeclaredButton: "מצא כללים מוצהרים מהראיון",
+  readingAnswersButton: "קורא תשובות ראיון...",
+  noExplicitRule: "לא נמצא כלל מפורש בתשובות הראיון שלך עדיין — זו תוצאה נורמלית, לא שגיאה.",
+  confirmedLabel: "אושר.",
+  confirmButton: "אשר — כן, זה הכלל שלי",
+  observedTitle: "עקרונות נצפים",
+  generateObservedButton: "צור עקרונות נצפים",
+  analyzingButton: "מנתח תשובות ראיון...",
+  createdLabel: "עקרונות נוצרו",
+  droppedPrefix: "(",
+  droppedSuffix: "הוצעו אך נפסלו בשל ראיות לא תקפות)",
+  noneYet: "אין עדיין.",
+  supportingLabel: "תומכות",
+  contradictingLabel: "סותרות",
+  viewEvidence: "הצג ראיות",
+  hideEvidence: "הסתר ראיות",
+  noEvidenceRecorded: "לא נרשמו ראיות.",
+  approveTitle: "אשר אסטרטגיית בסיס",
+  approveDescription:
+    "מאגד כל עיקרון למעלה (כפי שהוא עכשיו) לגרסת אסטרטגיה חדשה וממוספרת — שום דבר כאן לא נכתב מחדש בשקט אחר כך, רק מוחלף בגרסה מאושרת חדשה.",
+  changeSummaryPlaceholder: "לדוגמה: אסטרטגיית בסיס ראשונית",
+  approveButton: "אשר כגרסת אסטרטגיה חדשה",
+  approvingButton: "מאשר...",
+  approvedAsLabel: "אושר כ-v",
+};
+
+// --- Ideas (src/app/ideas/page.tsx) ---
+
+export const ideasPage = {
+  title: "רעיונות",
+  description: "הערה קצרה על טיקר שאתה סקרן לגביו — קדם אותו לתיק השקעה מלא כשתרצה לחקור אותו ברצינות.",
+  tickerPlaceholder: "טיקר, למשל AAPL",
+  notePlaceholder: "מה גרם לך לחשוב על זה?",
+  addButton: "הוסף רעיון",
+  savingButton: "שומר...",
+  viewCase: "צפה בתיק המחקר",
+  promoteButton: "קדם לתיק השקעה",
+  noIdeasYet: "אין עדיין רעיונות.",
+};
+
+// --- Investment Cases: list (src/app/cases/page.tsx) ---
+
+export const casesListPage = {
+  title: "תיקי השקעה",
+  description: "חקור טיקר ישירות, או קדם אחד מהרעיונות שלך לתיק מחקר.",
+  tickerPlaceholder: "טיקר, למשל AAPL",
+  createButton: "תיק חדש",
+  creatingButton: "יוצר...",
+  noCasesYet: "אין עדיין תיקים.",
+};
+
+// --- Investment Cases: detail (src/app/cases/[id]/page.tsx) ---
+
+export const caseDetailPage = {
+  marketIntelligenceTitle: "מודיעין שוק — Financial Modeling Prep",
+  fetchButton: "שלוף נתוני שוק",
+  refreshButton: "רענן נתוני שוק",
+  fetchingButton: "שולף...",
+  todayLabel: "היום",
+  unknownSector: "sector לא ידוע",
+  unknownIndustry: "industry לא ידוע",
+  marketCapLabel: "שווי שוק",
+  betaLabel: "בטא",
+  weekRangeLabel: "טווח 52 שבועות",
+  naLabel: "לא זמין",
+  valuationRatiosUnavailable: "יחסי שווי לא זמינים בתוכנית הנתונים הנוכחית לטיקר הזה.",
+  divYieldLabel: "תשואת דיבידנד",
+  fetchedAtLabel: "נשלף",
+  portfolioFitTitle: "Portfolio Fit — מחושב בזמן אמת, לא נשמר",
+  hypotheticalSizePlaceholder: "גודל היפותטי ב-$ (אופציונלי)",
+  computeFitButton: "חשב Portfolio Fit",
+  computingButton: "מחשב...",
+  fetchMarketDataFirst: "שלוף קודם נתוני שוק.",
+  totalPortfolioValueLabel: "שווי תיק כולל",
+  approximateNote: "(משוער)",
+  existingExposureLabel: "חשיפה קיימת",
+  sharesOfLabel: "מניות ·",
+  ofPortfolioLabel: "מהתיק",
+  projectedLabel: "צפוי",
+  currentHoldingsLabel: "החזקות נוכחיות",
+  largestLabel: "הגדולה ביותר",
+  personalFitTitle: "Personal Fit — לעומת ה-DNA וה-Strategy שלך",
+  generatePersonalFitButton: "צור Personal Fit",
+  assessingButton: "מעריך...",
+  researchCompletenessTitle: "שלמות המחקר",
+  marketIntelligenceRow: "מודיעין שוק",
+  notFetchedRequired: "לא נשלף — נדרש לפני סינתזה",
+  fetchedLabel: "נשלף",
+  personalFitRow: "Personal Fit (DNA + Strategy)",
+  generatedLabel: "נוצר",
+  notGeneratedWontReflect: "לא נוצר — הסינתזה לא תשקף אותו",
+  dnaOnFileRow: "השערות DNA בתיק",
+  informsPersonalFitNotSynthesis: "משפיע על Personal Fit, לא ישירות על הסינתזה",
+  strategyOnFileRow: "עקרונות Strategy בתיק",
+  caseSynthesisTitle: "סינתזת התיק",
+  generateSynthesisButton: "צור סינתזה",
+  synthesizingButton: "מסנתז...",
+  bullCase: "תזת עלייה (Bull)",
+  bearCase: "תזת ירידה (Bear)",
+  catalysts: "קטליזטורים",
+  invalidationConditions: "תנאי הפרכה",
+  portfolioFitNarrative: "Portfolio Fit (נרטיב)",
+  marketBlindspot: "נקודה עיוורת בשוק",
+  devilsAdvocate: "עורך דין לשטן",
+  recordDecisionTitle: "רשום החלטה",
+  decisionAlreadyRecordedPrefix: "החלטה כבר נרשמה לתיק הזה —",
+  viewDecisionSnapshot: "צפה ברשומת ההחלטה",
+  freezeDescription:
+    "מקפיא מחיר, מצב תיק, הקשר שוק, וגרסאות האסטרטגיה/DNA בתוקף כרגע, יחד עם הנימוק שלך — לצמיתות. שום דבר כאן לא ניתן לעריכה אחר כך, רק להוספה כהקשר מאוחר.",
+  sizePlaceholder: "גודל ב-$ (אופציונלי)",
+  reasoningPlaceholder: "הנימוק והתזה שלך — למה ההחלטה הזו, מה אתה מאמין שיקרה?",
+  risksPlaceholder: "סיכונים ששקלת (אופציונלי)",
+  exitConditionsPlaceholder: "תנאי יציאה — מה היה משנה את דעתך? (אופציונלי)",
+  recordPrefix: "רשום",
+  recordSuffix: "— לצמיתות",
+  recordingButton: "רושם...",
 };

@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { Frank_Ruhl_Libre, Assistant } from "next/font/google";
 import { trpc } from "@/trpc/react";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
 import { Num } from "@/components/num";
+import { BackLink } from "@/components/back-link";
 import {
   decisionTypeLabel,
   evidenceStrengthLabel,
   predictionStatusLabel,
   addedByLabel,
+  common,
   nav,
   decisionSnapshot as t,
   laterContext as tLater,
@@ -109,24 +110,7 @@ export default function DecisionDetailPage() {
           scope for the redesign. Decision Review below is not: see the
           wrapper further down. */}
       <div dir="rtl" lang="he" className={`${sansBody.className} flex flex-col gap-8 text-journal-ink`}>
-        <Link
-          href="/decisions"
-          className="flex w-fit items-center gap-1.5 text-sm text-journal-muted hover:text-journal-accent"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="9 6 15 12 9 18" />
-          </svg>
-          {nav.allDecisions}
-        </Link>
+        <BackLink href="/decisions" label={nav.allDecisions} />
 
         <div className="flex flex-col gap-2 border-b border-journal-rule pb-6">
           <div className="flex items-center gap-2">
@@ -182,14 +166,18 @@ export default function DecisionDetailPage() {
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold">{t.portfolioStateTitle}</h2>
           <p className="text-sm">
-            {t.cashLabel}: <Num>${portfolioState.cash.toFixed(2)}</Num>
+            {common.cashLabel}: <Num>${portfolioState.cash.toFixed(2)}</Num>
           </p>
           {portfolioState.positions.length > 0 ? (
             <ul className="text-sm text-journal-muted">
               {portfolioState.positions.map((p) => (
                 <li key={p.ticker}>
-                  {p.ticker}: <Num>{p.quantity}</Num> {t.sharesLabel} · {t.avgCostLabel}{" "}
-                  {p.costBasisPerShare !== null ? <Num>${p.costBasisPerShare.toFixed(2)}</Num> : t.costUnknown}
+                  {p.ticker}: <Num>{p.quantity}</Num> {common.sharesLabel} · {common.avgCostLabel}{" "}
+                  {p.costBasisPerShare !== null ? (
+                    <Num>${p.costBasisPerShare.toFixed(2)}</Num>
+                  ) : (
+                    common.costUnknown
+                  )}
                 </li>
               ))}
             </ul>
