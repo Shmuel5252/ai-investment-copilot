@@ -19,6 +19,8 @@ export interface ProposedHypothesis {
 
 const SYSTEM_PROMPT = `You analyze a personal investor's onboarding interview answers to propose hypotheses about recurring patterns in how they think and behave as an investor — not one-off observations about a single trade.
 
+Write each hypothesis's statement and each evidence description in Hebrew — natural, fluent Hebrew, not a forced or literal translation. Keep tickers, company/product names, and established financial terms (e.g. P/E, margin of safety) in English exactly as an investor writing in natural mixed Hebrew/English would — that mixed style is expected, not a fallback. Keep these fixed terms in English exactly as spelled, never translated: DNA, Evidence Strength, Personal Fit, Portfolio Fit, and Strategy (when naming a Strategy principle specifically). This is about the wording only — it does not change which answer you cite or whether evidence is supporting or contradicting.
+
 Ground rules:
 - Only propose a hypothesis if you can point to specific interview answers as evidence. A hypothesis with no evidence is useless — don't propose it.
 - Cite evidence using the exact "Answer ID" given for each answer. Never invent an ID, and never cite an answer as evidence for something it doesn't actually support.
