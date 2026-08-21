@@ -26,6 +26,8 @@ export interface ProposedDeclaredPrinciple {
 
 const DECLARE_SYSTEM_PROMPT = `You read a personal investor's onboarding interview answers and pull out any explicit rule, preference, or guideline they stated about how they invest — something they said they do, avoid, or require of themselves. This is NOT about inferring a pattern from their behavior; it's about transcribing a rule they actually put into words (e.g. "I never put more than a small slice into one stock", "I always wait for a pullback before buying", "I don't touch anything I don't understand").
 
+Write statementText and rationaleText in Hebrew — natural, fluent Hebrew, not a forced or literal translation. Keep tickers, company/product names, and established financial terms (e.g. P/E, margin of safety) in English exactly as an investor writing in natural mixed Hebrew/English would — that mixed style is expected, not a fallback. Keep these fixed terms in English exactly as spelled, never translated: DNA, Evidence Strength, Personal Fit, Portfolio Fit, and Strategy (when naming a Strategy principle specifically).
+
 Ground rules:
 - Only extract a principle if the investor's own words state it as a rule or preference they hold — not a one-off comment about a single trade, and not something you're inferring from their behavior without them saying it.
 - Cite the exact "Answer ID" of every answer that states this rule. Never invent an ID.
@@ -130,9 +132,12 @@ export interface ProposedObservedPrinciple {
 
 const OBSERVE_SYSTEM_PROMPT = `You analyze a personal investor's onboarding interview answers to propose hypotheses about recurring risk-management and strategy-relevant behavior — position sizing habits, diversification, exit/stop discipline, whether they average down, holding-period consistency. This is specifically about risk and strategy behavior, not general psychology (that's covered elsewhere) — don't propose a hypothesis about something outside that scope.
 
+Write each hypothesis's statement and each evidence description in Hebrew — natural, fluent Hebrew, not a forced or literal translation. Keep tickers, company/product names, and established financial terms (e.g. P/E, margin of safety) in English exactly as an investor writing in natural mixed Hebrew/English would — that mixed style is expected, not a fallback. Keep these fixed terms in English exactly as spelled, never translated: DNA, Evidence Strength, Personal Fit, Portfolio Fit, and Strategy (when naming a Strategy principle specifically). This is about the wording only — it does not change which answer you cite or whether evidence is supporting or contradicting.
+
 Ground rules:
 - Only propose a hypothesis if you can point to specific interview answers as evidence. A hypothesis with no evidence is useless — don't propose it.
 - Cite evidence using the exact "Answer ID" given for each answer. Never invent an ID, and never cite an answer as evidence for something it doesn't actually support.
+- Do not overclaim: a hypothesis (and its evidence description) should describe only the behavioral tendency the answer actually shows, never a broader stated preference or goal you're inferring from it. For example, an answer showing more confidence deciding on a company the investor already knew well supports "you tend to feel more confident in familiar names" — it does NOT support "you prefer to avoid unfamiliar companies", a stronger, different claim the answer doesn't establish. This applies to the evidence description too, not just the hypothesis statement: describe what the answer actually says, not the wider conclusion you're drawing from it.
 - Distinguish supporting from contradicting evidence honestly — if an answer partially undercuts a pattern you're proposing, cite it as contradicting, don't omit it.
 - It is completely fine, and expected with a small number of answers, to propose few hypotheses (even none) or hypotheses with only 1-2 pieces of evidence — thin evidence is for the system to flag as low-confidence, not for you to pad or oversell.
 - Write each hypothesis statement the way you'd describe a real tendency to the investor directly ("You tend to...", "You seem to..."), grounded only in what's actually in the answers — never invent numbers, percentages, or facts not present in the text you were given.
