@@ -1,1 +1,38 @@
 @import "tailwindcss";
+
+/* Direction A ("יומן אנליטי" — Analyst Journal), chosen for the UI/RTL
+   redesign task. Registered as theme tokens only — Tailwind v4 turns
+   each `--color-journal-*` custom property into opt-in utilities
+   (bg-journal-bg, text-journal-ink, ...), it does not touch `body`,
+   `html`, or any existing selector. Nothing renders differently until a
+   component explicitly uses one of these classes, so pages/sections
+   that haven't been redesigned yet — including the Decision Review
+   section living inside the same file as the redesigned Decision
+   Snapshot — are unaffected by construction. */
+@theme {
+  --color-journal-bg: #faf6ef;
+  --color-journal-surface: #ffffff;
+  --color-journal-rule: #e4dccb;
+  --color-journal-ink: #2b2621;
+  --color-journal-muted: #7a7168;
+  --color-journal-accent: #2f3b57;
+}
+
+/* Explicit legacy-look pin for a not-yet-redesigned section that lives
+   inside an otherwise-redesigned page (today: the Decision Review
+   section in src/app/decisions/[id]/page.tsx — see that file's
+   `.legacy-scope` wrapper). Correct today by construction (no base
+   body/html rule above), but kept explicit on purpose: if a future
+   redesign pass ever adds a body/html-level rule (font, color,
+   background) as part of full rollout, this class still wins locally
+   and Decision Review keeps looking exactly as it does today until
+   someone deliberately redesigns it too. Values are today's actual
+   effective defaults (browser/Tailwind-preflight default sans stack,
+   default black text, white background) — not a guess. */
+.legacy-scope {
+  font-family:
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+    "Noto Color Emoji";
+  color: #000000;
+  background-color: #ffffff;
+}
