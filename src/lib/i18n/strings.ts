@@ -107,6 +107,14 @@ export const nav = {
   allDecisions: "כל ההחלטות",
 };
 
+// --- Decisions: list (src/app/decisions/page.tsx) ---
+
+export const decisionsListPage = {
+  title: "החלטות",
+  description: "כל החלטה שנרשמה — בלתי ניתנת לשינוי מהרגע שנוצרה. רשום החלטה חדשה מתוך תיק השקעה.",
+  noDecisionsYet: "עדיין לא נרשמו החלטות.",
+};
+
 // --- Decision Snapshot (src/app/decisions/[id]/page.tsx) ---
 
 export const decisionSnapshot = {
