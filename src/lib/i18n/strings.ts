@@ -53,6 +53,13 @@ export const predictionStatusLabel: Record<string, string> = {
   inconclusive: "לא חד-משמעית",
 };
 
+// predictionKindEnum — null (no label shown) for predictions created
+// before this distinction existed, never backfilled.
+export const predictionKindLabel: Record<string, string> = {
+  forecast: "תחזית",
+  reentry_condition: "תנאי לשקילה מחדש",
+};
+
 // addedByEnum (LaterContext.added_by)
 export const addedByLabel: Record<string, string> = {
   user: "המשתמש",

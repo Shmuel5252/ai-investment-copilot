@@ -54,6 +54,17 @@ export const predictionStatusEnum = pgEnum("prediction_status", [
   "inconclusive",
 ]);
 
+// forecast: a stated belief about what WILL happen ("I think X will
+// happen"). reentry_condition: a trigger for reconsidering the decision
+// later ("I'd reconsider if X happens") — not a claim that X will
+// happen, so "refuted" on one of these doesn't mean the reasoning was
+// wrong the way it does for a forecast (docs/backlog.md: live-caught
+// conflating the two, an exit condition extracted and judged as if it
+// were a predicted outcome). Nullable — existing predictions created
+// before this distinction existed have no real classification to
+// backfill; never invented after the fact.
+export const predictionKindEnum = pgEnum("prediction_kind", ["forecast", "reentry_condition"]);
+
 export const addedByEnum = pgEnum("added_by", ["user", "ai"]);
 
 export const thesisAccuracyEnum = pgEnum("thesis_accuracy", [

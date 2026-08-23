@@ -20,6 +20,7 @@ import {
   thesisAccuracyEnum,
   reviewDimensionNameEnum,
   predictionStatusEnum,
+  predictionKindEnum,
 } from "./enums";
 
 // Table order in this file matters: Decision -> DecisionSnapshot ->
@@ -169,6 +170,10 @@ export const predictions = pgTable("predictions", {
     .notNull()
     .references(() => theses.id),
   claimText: text("claim_text").notNull(),
+  // Nullable on purpose — set once at creation like claimText, never
+  // backfilled for predictions created before this distinction existed
+  // (src/db/schema/enums.ts has the full reasoning).
+  kind: predictionKindEnum("kind"),
   checkableByDate: timestamp("checkable_by_date", { withTimezone: true }),
   status: predictionStatusEnum("status").notNull().default("pending"),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),

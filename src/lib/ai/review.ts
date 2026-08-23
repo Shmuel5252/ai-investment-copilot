@@ -40,7 +40,14 @@ export interface ReviewInput {
   casePortfolioFitText: string | null;
   strategyPrinciplesInEffect: { statementText: string; principleType: string; evidenceStrength: string | null }[];
   dnaHypothesesInEffect: { statementText: string; evidenceStrength: string }[];
-  predictionsWithResolutions: { claimText: string; status: string; resolutionNote: string | null }[];
+  // kind is null only for predictions created before this distinction
+  // existed (never backfilled — see src/db/schema/enums.ts).
+  predictionsWithResolutions: {
+    claimText: string;
+    kind: "forecast" | "reentry_condition" | null;
+    status: string;
+    resolutionNote: string | null;
+  }[];
   /**
    * Additions made after the original decision, never edits to it
    * (docs/CLAUDE.md Historical Integrity: Original Snapshot -> Later
@@ -91,7 +98,7 @@ If any laterContexts are given, they are corrections or clarifications the inves
 
 You produce two things:
 
-1. thesisAccuracy: based ONLY on the given prediction resolutions (each already resolved by the investor themselves as confirmed/refuted/inconclusive — you do not decide whether a prediction came true, only synthesize an overall category from resolutions you're given). If there are no predictions, or none have been resolved, use "insufficient_evidence" — that is a normal, expected result, not a failure.
+1. thesisAccuracy: based on the given prediction resolutions (each already resolved by the investor themselves as confirmed/refuted/inconclusive — you do not decide whether a prediction came true, only synthesize an overall category from resolutions you're given). Each prediction has a "kind": "forecast" predictions are independent stated beliefs — weigh each on its own. "reentry_condition" predictions are triggers for reconsidering the decision, not beliefs about what would happen — do NOT treat one refuted reentry_condition the same as a refuted forecast. Read userReasoningText/exitConditionsText (given in full above) to tell whether several reentry_condition predictions were alternatives ("I'd reconsider if X, or Y, or Z" — only one needed to hold) or all separately required; if they were alternatives, one confirmed among them means that part of the reasoning held even if the others stayed unresolved or were refuted — don't let unfired siblings drag thesisAccuracy down. If there are no predictions, or none have been resolved, use "insufficient_evidence" — that is a normal, expected result, not a failure.
 
 2. Exactly these 7 ReviewDimension verdicts, each strong/reasonable/weak/insufficient_evidence, each with a rationale AND a list of citedSnapshotFields:
 ${DIMENSION_LIST}
@@ -185,7 +192,7 @@ function formatInput(input: ReviewInput): string {
     `\n=== marketContext (broad market at decision time) ===\n${JSON.stringify(input.marketContextAtDecision)}`,
     `\n=== strategyPrinciplesInEffect ===\n${input.strategyPrinciplesInEffect.map((p) => `- (${p.principleType}${p.evidenceStrength ? `, ${p.evidenceStrength}` : ""}) ${p.statementText}`).join("\n") || "(none yet)"}`,
     `\n=== dnaHypothesesInEffect ===\n${input.dnaHypothesesInEffect.map((h) => `- (${h.evidenceStrength}) ${h.statementText}`).join("\n") || "(none yet)"}`,
-    `\n=== predictionsAndResolutions ===\n${input.predictionsWithResolutions.map((p) => `- [${p.status}] ${p.claimText}${p.resolutionNote ? ` — ${p.resolutionNote}` : ""}`).join("\n") || "(no predictions were extracted from this thesis)"}`,
+    `\n=== predictionsAndResolutions ===\n${input.predictionsWithResolutions.map((p) => `- [${p.status}] (${p.kind ?? "kind unknown — created before forecast/reentry_condition existed"}) ${p.claimText}${p.resolutionNote ? ` — ${p.resolutionNote}` : ""}`).join("\n") || "(no predictions were extracted from this thesis)"}`,
     `\n=== Outcome (computed in code, a fact — not yours to judge) ===\n${formatOutcome(input.outcome)}`,
   ];
   return parts.join("\n");

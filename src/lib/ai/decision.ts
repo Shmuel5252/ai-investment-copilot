@@ -46,6 +46,16 @@ export interface DecisionContextInput {
 export interface ProposedPrediction {
   claimText: string;
   /**
+   * "forecast": a stated belief about what WILL happen ("I think X will
+   * happen"). "reentry_condition": a trigger for reconsidering the
+   * decision later ("I'd reconsider if X happens") — not a claim that X
+   * will happen. A live check caught this collapsed into one thing: an
+   * exit condition extracted and later judged exactly like a forecast,
+   * "refuted" reading as "the reasoning was wrong" when it only meant
+   * one specific trigger didn't fire (docs/backlog.md).
+   */
+  kind: "forecast" | "reentry_condition";
+  /**
    * A whole number of days from today, ONLY when the investor's own
    * reasoning stated or clearly implied a concrete timeframe (e.g. "next
    * earnings" ~90, "within 6 months" ~180, "by year end" ~computed from
@@ -76,7 +86,11 @@ Three jobs, all grounded only in what you're actually given:
 
 1. thesisInterpretationText: restate the investor's reasoning as a specific, falsifiable thesis in your own clearer words. If the reasoning is too vague or generic to produce a specific thesis, say that plainly rather than inventing specificity that isn't there.
 
-2. predictions: extract 0-3 concrete, checkable claims implied by the reasoning (e.g. a growth rate, a price level, an event). Zero predictions is a completely normal, expected result when the reasoning doesn't contain a checkable claim — do not invent one to have something to return. If you reference a price anywhere in a claim, it must be the actual per-share Price given in the market data — never the Investment size dollar amount, which is not a price at all. Only set timeframeDays if the investor's own reasoning stated or clearly implied an actual timeframe (e.g. "by next earnings" ~90, "within 6 months" ~180, "next year" ~365) — express it as a whole number of days from today, your best estimate of that duration. Do NOT compute or state an actual calendar date yourself; the application computes "today + timeframeDays" in code, precisely so a duration-estimate mistake can't turn into a date that's nonsensically in the past. Leave timeframeDays null if no real timeframe was stated.
+2. predictions: extract 0-5 concrete, checkable claims implied by the reasoning (e.g. a growth rate, a price level, an event). Zero predictions is a completely normal, expected result when the reasoning doesn't contain a checkable claim — do not invent one to have something to return. Every claim needs a "kind":
+   - "forecast" — the investor is stating what they believe WILL happen ("I think revenue growth stays above 20%").
+   - "reentry_condition" — the investor is stating what would make them RECONSIDER this decision later, for a PASS/HOLD/REDUCE especially ("I'd reconsider if it pulls back 15%", "I'd add more only if guidance improves"). This is a trigger, not a prediction that it will happen — do not phrase it as one (never "X will happen"; phrase it as the condition itself, e.g. "A pullback of 15% or more" or "Guidance improving in the next earnings report").
+   - If the reasoning lists SEVERAL alternative reconsideration triggers ("I'd reconsider if X, or Y, or Z"), extract EACH one as its OWN separate reentry_condition claim — never collapse several real alternatives into just one and drop the rest, and never invent a single merged claim that blends them together.
+   If you reference a price anywhere in a claim, it must be the actual per-share Price given in the market data — never the Investment size dollar amount, which is not a price at all. Only set timeframeDays if the investor's own reasoning stated or clearly implied an actual timeframe (e.g. "by next earnings" ~90, "within 6 months" ~180, "next year" ~365) — express it as a whole number of days from today, your best estimate of that duration. Do NOT compute or state an actual calendar date yourself; the application computes "today + timeframeDays" in code, precisely so a duration-estimate mistake can't turn into a date that's nonsensically in the past. Leave timeframeDays null if no real timeframe was stated.
 
 3. realtimeAssessmentText: an honest, real-time gut-check. Reference the actual numbers you were given (price, portfolio exposure/concentration, index/volatility levels). If this decision is in tension with a specific Strategy principle or DNA hypothesis you were given, say so plainly and name it — but be honest about evidence strength for DNA hypotheses (don't treat "weak" as confirmed). If nothing you were given conflicts with this decision, say that plainly too rather than manufacturing a concern.
 
@@ -97,12 +111,18 @@ const TOOL = {
           type: "object" as const,
           properties: {
             claimText: { type: "string" as const },
+            kind: {
+              type: "string" as const,
+              enum: ["forecast", "reentry_condition"],
+              description:
+                "forecast: a stated belief about what WILL happen. reentry_condition: a trigger for reconsidering the decision later — not a claim that it will happen.",
+            },
             timeframeDays: {
               type: ["integer", "null"] as const,
               description: "Whole number of days from today — an estimated duration, never a calendar date. Only if the investor's own reasoning stated or implied a real timeframe; otherwise null.",
             },
           },
-          required: ["claimText", "timeframeDays"],
+          required: ["claimText", "kind", "timeframeDays"],
         },
       },
       realtimeAssessmentText: { type: "string" as const },

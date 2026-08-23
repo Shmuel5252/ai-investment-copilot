@@ -159,12 +159,28 @@ created_at`. Immutable. **אין** עמודת `decision_snapshot_id`: הכיוו
 Snapshot משתמש בתזה הזאת" הוא lookup הפוך טריוויאלי). תוקן בזמן המימוש,
 ר' Core Data Model task.
 
-**Prediction** — `id, thesis_id, claim_text, checkable_by_date?,
-status(pending|confirmed|refuted|inconclusive), resolved_at?,
-resolved_by_review_id?, resolution_note?`. `claim_text` immutable מרגע
-היצירה; שדות רזולוציה נכתבים פעם אחת ע"י Decision Review שפותר אותם.
+**Prediction** — `id, thesis_id, claim_text, kind(forecast|reentry_condition)?,
+checkable_by_date?, status(pending|confirmed|refuted|inconclusive),
+resolved_at?, resolved_by_review_id?, resolution_note?`. `claim_text`
+ו-`kind` immutable מרגע היצירה; שדות רזולוציה נכתבים פעם אחת ע"י
+Decision Review שפותר אותם.
 - נוצר ע"י: AI (מחלץ מה-Thesis). נצרך ע"י: Decision Review (Thesis
   Accuracy).
+- `kind` — `forecast` (טענה על מה שיקרה) לעומת `reentry_condition`
+  (תנאי לשקילה מחדש של ההחלטה, לא טענה על מה שיקרה). נוסף
+  2026-08-23 אחרי שנמצא בפועל (ר' `docs/backlog.md` — "נבנה") שה-AI
+  בלבל בין השניים: תנאי-יציאה ("אשקול מחדש אם X") חולץ וכונה בניסוח
+  תחזית ("X יקרה"), ואם כמה תנאים חלופיים (OR) נאמרו יחד — רק אחד
+  חולץ, וסטטוס הפתרון שלו לבדו נתפס כאילו הוא קובע את כל הטענה.
+  `kind` הוא `null` עבור Prediction-ים שנוצרו לפני התאריך הזה — לא
+  משוחזר בדיעבד. Decision Review (`synthesizeDecisionReview`,
+  `src/lib/ai/review.ts`) מקבל את מלוא `userReasoningText`/
+  `exitConditionsText` המקוריים (לא רק את רשימת ה-Predictions
+  המבודדת) כדי להסיק בעצמו אם כמה `reentry_condition` שייכים לאותה
+  קבוצת-OR — **אין** מבנה `group_id` פורמלי בטבלה (אופציה חלופית
+  ששקלנו ונדחתה במכוון בשלב הזה: פחות over-engineering, אבל דורש
+  שה-AI יקרא נכון את הקשר הלוגי מהטקסט המקורי בכל פעם, לא מובטח
+  ע"י מבנה נתונים).
 
 **Decision** (זהות דקה) — `id, investor_id, investment_case_id, ticker,
 decision_type(BUY|PASS|HOLD|ADD|REDUCE|SELL), decision_date, created_at`.

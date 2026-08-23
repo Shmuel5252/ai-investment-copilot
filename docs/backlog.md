@@ -162,60 +162,6 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
 להוסיף אז את אותה תבנית catch בדיוק (`isUniqueViolation` כבר קיים
 וגנרי, רק לחבר אותו בנקודת ה-insert הרלוונטית).
 
-### Prediction extraction מבלבל forecast עם decision/re-entry condition
-**נמצא:** 2026-08-20, אתגור מהמשתמש לפני סגירת רשומת SNDK PASS
-כ"נקייה": הנימוק המקורי פירט 3 תנאים חלופיים (OR) ל"אני אשקול מחדש
-אם..." (pullback/consolidation; מידע fundamental/valuation שמצדיק את
-המחיר; setup חדש להגדרת סיכון) — וה-extractor הפך רק את החלופה
-הראשונה ל-Prediction בניסוח forecast: "SNDK will experience a
-pullback or period of consolidation...". בדיקה בשלוש רמות, בלי לשנות
-קוד:
-
-1. **רמת מסמך:** `docs/data-model.md` §5 מגדיר Prediction כ-`claim_text`
-   גנרי בלבד — אין שדה שמבחין forecast ("אני חושב ש-X יקרה") מ-
-   decision/re-entry condition ("אני אשקול מחדש אם X יקרה"). הפער קיים
-   כבר ברמת התכנון, לא רק במימוש.
-2. **רמת קוד:** ה-SYSTEM_PROMPT ב-`src/lib/ai/decision.ts` מנחה "extract
-   0-3 concrete, checkable claims implied by the reasoning" — בלי הנחיה
-   לשמר מבנה OR בין כמה תנאים חלופיים, ובלי להבחין בין שני סוגי המשפט.
-   זה בדיוק מה שחזר בפועל אצל המשתמש.
-3. **השפעה בהמשך — מאושרת כאמיתית:** את סטטוס הפתרון (confirmed/
-   refuted/inconclusive) **המשתמש** קובע בעצמו, לא ה-AI
-   (`reviews.generate` ב-`src/server/routers/reviews.ts`,
-   `predictionResolutions`), כולל `resolutionNote` חופשי שכן מגיע
-   ל-AI של ה-Review. אבל: (א) `claim_text` immutable מרגע היצירה
-   (`docs/data-model.md` §5) — אי אפשר לתקן את הניסוח השגוי, רק
-   "לעקוף" אותו בהערה חופשית; (ב) אם התנאי שבפועל הפעיל BUY היה חלופה
-   #2 (fundamentals) ולא #1 (pullback) — התשובה הכנה למה שבאמת נשאל
-   ("did SNDK pull back") היא "לא" → refuted, גם אם ה-logic האמיתי
-   (כל אחד מ-3 התנאים) התקיים; (ג) `thesisAccuracy` ב-
-   `synthesizeDecisionReview` (`src/lib/ai/review.ts`) מסונתז "based
-   ONLY on the given prediction resolutions" — ונכתב immutable ל-
-   `decision_reviews.thesis_accuracy`; (ד) זה מוזן הלאה ל-
-   `computeThesisAccuracyPattern`
-   (`src/lib/learning/pattern-aggregation.ts`) וגם כטקסט מפורש
-   ("Thesis accuracy: refuted") ל-AI של Learning Insight
-   (`src/lib/ai/learning.ts`). כלומר — **כן, זה יכול להשפיע** על
-   Decision Review (immutable) ועל Learning Insight, אלא אם ה-`resolutionNote`
-   מנוסח בקפידה מספיק כדי להטות את סינתזת ה-AI חזרה לכיוון הנכון —
-   ותלוי-ניסוח כזה הוא בדיוק סוג האי-ודאות ש-No Fake Certainty נועד
-   למנוע ברמת השדה עצמו, לא רק בפרוזה מתקנת בהמשך.
-
-**נראה שוב, חי, 2026-08-21:** תוך כדי בדיקת הנחיית השפה החדשה
-ב-`decision.ts` (investor זמני, MSFT, לא קשור לשינוי השפה עצמו) —
-אותה תבנית בדיוק חזרה: תנאי יציאה שכתבתי במפורש ("would exit if
-Azure growth drops below 15% for a quarter") חולץ כ-Prediction נפרד
-משלו, לא רק אותה מגמה בהיפותזה — reproduction ממשי, לא רק חשש
-תיאורטי. עדיין לא תוקן, עדיין דורש החלטת Product/UX לפני בנייה (ר'
-למטה) — לא שינה עדיפות, רק מוסיף ראיה נוספת.
-
-**כיוון אפשרי (לא סוכם):** להבחין ב-extraction בין "forecast" ל-
-"decision/re-entry condition", ולשמר קבוצת תנאים חלופיים (OR) כיחידה
-אחת שנפתרת יחד ("התקיים לפחות תנאי אחד מהקבוצה") במקום לפרק לתחזית
-בודדת. דורש החלטת Product/UX אמיתית (מבנה נתונים חדש? שדה `kind` על
-Prediction? איך זה משפיע על thesis_accuracy rollup הקיים?) — לא להתחיל
-לבנות בלי לסכם קודם.
-
 ### עקרון עיצוב עתידי (Market Scanner) — השערות DNA/Strategy מוגזמות עלולות ליצור feedback loop
 **נמצא:** 2026-08-21, אגב תיקון overclaim ב-`src/lib/ai/dna.ts`
 (השערה שטענה "מעדיף להימנע מחברות לא-מוכרות" כשמה שהראיה תמכה בו
@@ -257,3 +203,29 @@ Prediction? איך זה משפיע על thesis_accuracy rollup הקיים?) — 
   אלו עושות type assertion דומה בלי validation; `decision.ts` עלה
   לעדיפות גבוהה (ר' למעלה), `dna.ts`/`strategy.ts` לא עלו — לא
   קיימת שם עדות דומה לרגישות אמיתית בפועל.
+- **Prediction extraction — forecast/re-entry-condition distinction**
+  (2026-08-23): גישה A מתוך שלוש שהוצגו למשתמש (ר' `docs/data-model.md`
+  §5 להסבר המלא). שדה `kind(forecast|reentry_condition)?` חדש על
+  `Prediction` (migration `0005_confused_rattler.sql`, נוסף nullable —
+  לא נגזר בדיעבד ל-Prediction-ים ישנים). `src/lib/ai/decision.ts`
+  מחלץ כל חלופה בקבוצת-OR כ-Prediction נפרד משלה (לא רק את הראשונה),
+  עם ניסוח כתנאי ולא כתחזית. `src/lib/ai/review.ts`'s thesisAccuracy
+  קורא את מלוא `userReasoningText`/`exitConditionsText` (כבר היו שם,
+  רק לא נוצלו לצורך הזה) כדי להסיק בעצמו יחס OR בין כמה
+  `reentry_condition`, במקום לדרוש שכולם יתקיימו בנפרד. UI: תג kind
+  מוצג גם ב-Decision Snapshot (עברית, `predictionKindLabel`) וגם
+  בטופס הפתרון של Decision Review (אנגלית, לא מעוצב — תואם את שאר
+  הסקשן).
+
+  **אומת חי מקצה לקצה**, לא רק typecheck: החלטת PASS עם 3 תנאים
+  חלופיים (PLTR, investor זמני) — כל השלושה חולצו כ-`reentry_condition`
+  נפרדים, מנוסחים כתנאי לא כתחזית. פתרון שבו רק אחד אושר ושניים
+  הופרכו הניב `thesisAccuracy: "partially_confirmed"` (לא `refuted`),
+  עם נרטיב שמסביר במפורש: "since these were stated as alternatives,
+  this still counts as partial confirmation of the reasoning, not a
+  failure" — בדיוק ההתנהגות שהתלונה המקורית (SNDK) ביקשה.
+
+  **לא נבנה (אופציה B שנדחתה במכוון בשלב הזה):** אין `group_id`
+  פורמלי בטבלה שמקשר תנאים חלופיים כמבנה נתונים מפורש; ה-AI מסיק את
+  יחס ה-OR מהטקסט המקורי בכל Review מחדש, לא ממבנה מובטח. תיעוד מלא
+  של הבחירה ב-`docs/data-model.md` §5.

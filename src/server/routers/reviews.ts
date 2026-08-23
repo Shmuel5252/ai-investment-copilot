@@ -123,8 +123,8 @@ export const reviewsRouter = router({
       const predictionsWithResolutions = allPredictions.map((p) => {
         const newRes = resolutionByPredictionId.get(p.id);
         return newRes
-          ? { claimText: p.claimText, status: newRes.status, resolutionNote: newRes.note }
-          : { claimText: p.claimText, status: p.status, resolutionNote: p.resolutionNote };
+          ? { claimText: p.claimText, kind: p.kind, status: newRes.status, resolutionNote: newRes.note }
+          : { claimText: p.claimText, kind: p.kind, status: p.status, resolutionNote: p.resolutionNote };
       });
 
       const caseSnapshot = (snapshot.investmentCaseSnapshotJson ?? {}) as FrozenCaseSnapshot;

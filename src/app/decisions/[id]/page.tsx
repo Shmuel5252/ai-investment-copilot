@@ -11,6 +11,7 @@ import {
   decisionTypeLabel,
   evidenceStrengthLabel,
   predictionStatusLabel,
+  predictionKindLabel,
   addedByLabel,
   common,
   nav,
@@ -147,6 +148,9 @@ export default function DecisionDetailPage() {
             <ul className="flex flex-col gap-2">
               {predictions.map((p) => (
                 <li key={p.id} className="rounded border border-journal-rule bg-journal-surface p-3 text-sm">
+                  {p.kind && (
+                    <p className="mb-1 text-xs text-journal-accent">{predictionKindLabel[p.kind] ?? p.kind}</p>
+                  )}
                   <p>{p.claimText}</p>
                   <p className="mt-1 text-xs text-journal-muted">
                     {predictionStatusLabel[p.status] ?? p.status}
@@ -287,6 +291,11 @@ export default function DecisionDetailPage() {
               </p>
               {pendingPredictions.data!.map((p) => (
                 <div key={p.id} className="flex flex-col gap-1">
+                  {p.kind && (
+                    <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                      {p.kind === "reentry_condition" ? "Re-entry condition (not a forecast)" : "Forecast"}
+                    </p>
+                  )}
                   <p className="text-sm">{p.claimText}</p>
                   <div className="flex gap-2">
                     {(["confirmed", "refuted", "inconclusive"] as const).map((status) => (

@@ -197,6 +197,7 @@ export const decisionsRouter = router({
         await insertPrediction(db, {
           thesisId: thesis.id,
           claimText: prediction.claimText,
+          kind: prediction.kind,
           checkableByDate:
             prediction.timeframeDays !== null
               ? new Date(Date.now() + prediction.timeframeDays * 86_400_000)
