@@ -11,8 +11,34 @@
 
 ## עדיפות גבוהה
 
-*(ריק כרגע — הפריט היחיד שהיה כאן, אימות שדות required ב-Case
-Synthesis/Personal Fit, נבנה. ר' "נבנה" למטה.)*
+### decision.ts — אותו cast-בלי-validation שתוקן ב-case.ts, על קובץ שכבר הוכיח רגישות אמיתית בשדה
+**נמצא:** 2026-08-23, תוך כדי סגירת הפריט המקביל ב-`case.ts`
+(`assertNonEmptyStrings`, ר' "נבנה" למטה) — אותו pattern בדיוק עדיין
+קיים ב-`synthesizeDecisionContext` (`src/lib/ai/decision.ts`):
+`toolUse.input as DecisionContextSynthesis` הוא type assertion בזמן
+קומפילציה בלבד, בלי שום runtime check ש-`thesisInterpretationText`,
+`realtimeAssessmentText`, ו-`predictions[].claimText` (כולם `required`
+ב-`TOOL`'s schema) באמת הגיעו מה-AI.
+
+**עדיפות גבוהה, לא "עוד אפשרות" בסוגריים** — `decision.ts` הוא בדיוק
+הקובץ שכבר הוכיח בעבר שהשדות האלה פגיעים: באג בלבול size/price
+ב-`thesisInterpretationText`/תחזית שחולצה (ר' git history — התיקון
+שהוסיף את הבהרת "Investment size... NOT a price" ל-`formatContext`
+ול-SYSTEM_PROMPT). זו לא סתם השערה שאותו pattern *עלול* להיות רגיש
+כאן כמו בכל קובץ AI אחר — זה שדה שכבר *הוכח* רגיש על הקובץ הזה
+בפועל.
+
+**הבחנה חשובה שלא לטשטש:** `assertNonEmptyStrings` (התיקון שנבנה
+ב-case.ts) תופס רק שדה *חסר/ריק לגמרי* — לא תופס שדה *נוכח אך תוכנו
+שגוי מהותית* (בדיוק סוג הבאג ההיסטורי כאן, שכבר תוקן בנפרד ברמת
+ה-prompt, לא ברמת validation). כלומר גם אחרי שמוסיפים כאן runtime
+presence-check מקביל, זה סוגר רק את הפער המבני (שדה נעלם בשקט) — לא
+טוען לפתור מחדש את סוג-הבאג התוכני ההיסטורי, שכבר טופל בדרך אחרת.
+
+**כיוון אפשרי (לא סוכם):** אותו `assertNonEmptyStrings`-style check
+(אפשר לייבא ישירות מ-`src/lib/ai/case.ts` אם מייצאים אותו משם, או
+לשכפל מקומית) על שלושת השדות הנ"ל, מיד אחרי ה-cast ב-
+`synthesizeDecisionContext`. לא תוקן עדיין.
 
 ---
 
@@ -228,5 +254,6 @@ Prediction? איך זה משפיע על thesis_accuracy rollup הקיים?) — 
   (`tests/unit/case-assert-non-empty-strings.test.ts`) — לא smoke test.
   אומת חי שגם לא יוצר false positive על תשובה תקינה אמיתית (PLTR,
   investor זמני). לא הורחב ל-`decision.ts`/`dna.ts`/`strategy.ts` —
-  אלו עושות type assertion דומה בלי validation, אבל זה מחוץ ל-scope
-  של הפריט הזה; לשקול כפריט חדש נפרד אם ירצו.
+  אלו עושות type assertion דומה בלי validation; `decision.ts` עלה
+  לעדיפות גבוהה (ר' למעלה), `dna.ts`/`strategy.ts` לא עלו — לא
+  קיימת שם עדות דומה לרגישות אמיתית בפועל.
