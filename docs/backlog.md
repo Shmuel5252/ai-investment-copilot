@@ -42,6 +42,16 @@ assertion בזמן קומפילציה בלבד, בלי שום בדיקת runtime
 
 ## פתוח
 
+### Dashboard — תווית "Learning Insights" בניווט צריכה עדכון כש-Learning Insight יתורגם
+**נמצא:** 2026-08-23, תוך כדי redesign ה-Dashboard. `src/app/page.tsx`
+משאיר את תווית הניווט ל-`/learning` באנגלית במפורש (`{ href:
+"/learning", label: "Learning Insights" }`), עקבי עם זה שהעמוד עצמו
+עדיין באנגלית (נדחה עד לסגירת פער forecast/re-entry-condition, ר'
+הפריט מעל). **תזכורת בלבד:** כשLearning Insight יתורגם בעתיד, קל
+לעדכן את `src/lib/ai/review.ts`/`learning.ts` ואת עמוד ה-Learning עצמו
+ולשכוח שתווית הניווט הזו ב-Dashboard נשארה מקודדת-קשיח באנגלית באותו
+קובץ — לבדוק אז.
+
 ### Baseline Strategy — אין דרך להוסיף עיקרון משלי ישירות
 **נמצא:** 2026-08-17, תוך כדי מעבר על עמוד ה-Strategy לפני אישור
 ה-Bundle הראשון.
