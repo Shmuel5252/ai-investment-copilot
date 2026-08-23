@@ -2,6 +2,26 @@ import { anthropic, CLAUDE_MODEL } from "./client";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
 
+// A required tool-response field silently disappearing (undefined/null/
+// empty) is exactly what No Fake Certainty exists to catch, not a mere
+// convenience gap: a live check once caught CASE_TOOL's `synthesisText`
+// coming back `null` despite being `required` in the schema below, with
+// nothing anywhere flagging that anything was missing — it would have
+// quietly leaked through to the DB/UI as if it were a normal empty
+// field (docs/backlog.md, "עדיפות גבוהה"). This turns that failure mode
+// into a loud, specific error at the one place both functions in this
+// file cast a raw tool response, instead of trusting the type assertion
+// alone.
+export function assertNonEmptyStrings<T extends object>(obj: T, fields: (keyof T & string)[], toolName: string): void {
+  const missing = fields.filter((f) => {
+    const value = obj[f];
+    return typeof value !== "string" || value.trim() === "";
+  });
+  if (missing.length > 0) {
+    throw new Error(`AI's "${toolName}" response is missing required field(s): ${missing.join(", ")}.`);
+  }
+}
+
 // ---------------------------------------------------------------------
 // Case synthesis — Bull/Bear/Catalysts/Invalidation/Market Blindspot/
 // Devil's Advocate/overall synthesis, plus a narrative read of the
@@ -144,7 +164,22 @@ export async function synthesizeInvestmentCase(input: CaseSynthesisInput): Promi
     throw new Error("AI did not return a case synthesis via the expected tool call.");
   }
 
-  return toolUse.input as CaseSynthesis;
+  const result = toolUse.input as CaseSynthesis;
+  assertNonEmptyStrings(
+    result,
+    [
+      "bullCaseText",
+      "bearCaseText",
+      "catalystsText",
+      "invalidationConditionsText",
+      "marketBlindspotText",
+      "devilsAdvocateText",
+      "portfolioFitText",
+      "synthesisText",
+    ],
+    "synthesize_case"
+  );
+  return result;
 }
 
 // ---------------------------------------------------------------------
@@ -270,5 +305,12 @@ export async function synthesizePersonalFit(input: PersonalFitInput): Promise<Pr
     throw new Error("AI did not return a personal-fit assessment via the expected tool call.");
   }
 
-  return toolUse.input as ProposedPersonalFit;
+  // Only personalFitText is checked here — citedDnaHypothesisIds/
+  // citedStrategyPrincipleIds are arrays that can legitimately be empty
+  // (no citations is a normal result), and a genuinely missing array
+  // fails loudly on its own the moment the caller maps over it, unlike
+  // a missing string quietly becoming an empty field with no error.
+  const result = toolUse.input as ProposedPersonalFit;
+  assertNonEmptyStrings(result, ["personalFitText"], "assess_personal_fit");
+  return result;
 }

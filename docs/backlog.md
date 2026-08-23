@@ -11,32 +11,8 @@
 
 ## עדיפות גבוהה
 
-### Case Synthesis / Personal Fit — שדה `required` נעלם בלי שום סימון, לא רק runtime validation חסר
-**נמצא:** 2026-08-21, תוך כדי בדיקה חיה של הנחיית השפה החדשה בעברית
-ב-`src/lib/ai/case.ts` (לא קשור ספציפית לשינוי השפה עצמו — אותו קוד
-ואותו סיכון היו קיימים גם לפני זה; פשוט נצפה עכשיו לראשונה בבדיקה
-חיה ממוקדת). **הועלה לעדיפות גבוהה** (2026-08-21) — זה לא רק חוסר-נוחות
-טכני, זו בדיוק הנקודה ש-**No Fake Certainty** אמור לתפוס: שדה שהמערכת
-עצמה הגדירה כ-`required` נעלם בשקט, בלי כל סימון שמשהו חסר — ברמת
-העיקרון, זה זהה ל"ודאות שאין לה כיסוי", רק בכיוון ההפוך (חוסר מוצג
-כאילו הוא null תקין, לא כפער מסומן).
-
-`synthesizeInvestmentCase`/`synthesizePersonalFit` עושים
-`toolUse.input as CaseSynthesis`/`as ProposedPersonalFit` — type
-assertion בזמן קומפילציה בלבד, בלי שום בדיקת runtime שכל השדות
-ה-required בסכימת ה-tool באמת הגיעו מה-AI. בקריאה חיה אחת מתוך
-שתיים שהרצתי, `synthesisText` חזר `null` (השדה פשוט לא הגיע, למרות
-שהוא `required` בסכימה) — לא reproduced בניסיון החוזר המיידי, אז לא
-ברור אם זו תקלת רשת חד-פעמית או שדפוס אמיתי שחוזר בתדירות נמוכה.
-`src/lib/ai/dna.ts` כבר עושה בדיקת מבנה בסיסית (`Array.isArray`) לפני
-שהוא סומך על הפלט — `case.ts` לא עושה מקבילה.
-
-**כיוון אפשרי (לא סוכם):** runtime check שכל שדה string נדרש קיים
-ולא ריק לפני ה-cast, עם שגיאה ברורה למשתמש אם חסר — במקום לתת ל-`null`
-"לדלוף" עד ל-DB/UI בלי אזהרה (`synthesisText: null` היה מוצג היום
-כפשוט לא מוצג ב-UI, בלי שום סימן שמשהו נכשל). לא לתקן עכשיו — זו
-תוספת לוגיקת validation, לא ניסוח prompt, מחוץ ל-scope של משימת
-הנחיית-השפה הנוכחית.
+*(ריק כרגע — הפריט היחיד שהיה כאן, אימות שדות required ב-Case
+Synthesis/Personal Fit, נבנה. ר' "נבנה" למטה.)*
 
 ---
 
@@ -243,3 +219,14 @@ Prediction? איך זה משפיע על thesis_accuracy rollup הקיים?) — 
   ברמת ה-DB. `decisions` ו-`strategy_versions` גם מטפלים בהתנגשות
   אמיתית בהודעה ברורה (לא 500 גולמי) — ר' פירוט מעל למה 3 האחרים
   עדיין לא.
+- **Case Synthesis / Personal Fit — validation על שדות `required`
+  שנעלמים בשקט** (2026-08-23): `assertNonEmptyStrings()` חדשה
+  ב-`src/lib/ai/case.ts`, מופעלת על שני מקומות ה-cast
+  (`synthesizeInvestmentCase`/`synthesizePersonalFit`) — זורקת שגיאה
+  ברורה עם שמות השדות החסרים ושם ה-tool, במקום לתת ל-`null`/`undefined`
+  לדלוף עד ה-DB/UI בלי אזהרה. 9 בדיקות unit ייעודיות
+  (`tests/unit/case-assert-non-empty-strings.test.ts`) — לא smoke test.
+  אומת חי שגם לא יוצר false positive על תשובה תקינה אמיתית (PLTR,
+  investor זמני). לא הורחב ל-`decision.ts`/`dna.ts`/`strategy.ts` —
+  אלו עושות type assertion דומה בלי validation, אבל זה מחוץ ל-scope
+  של הפריט הזה; לשקול כפריט חדש נפרד אם ירצו.
