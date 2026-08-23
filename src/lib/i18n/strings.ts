@@ -107,6 +107,21 @@ export const nav = {
   allDecisions: "כל ההחלטות",
 };
 
+// --- Dashboard (src/app/page.tsx) ---
+// Nav link labels are deliberately NOT duplicated here — each links to a
+// page that already owns its own title string (dnaPage.title,
+// strategyPage.title, etc.); the Dashboard reuses those directly. Only
+// "Learning Insights" stays a literal English label below, since that
+// page itself is still English (deferred with Decision Review).
+
+export const dashboardPage = {
+  signedInAs: "מחובר בתור",
+  loading: "טוען...",
+  description:
+    "עוזר השקעות אישי מבוסס AI שלומד איך אתה חושב כמשקיע — לא ממליץ מה לקנות. זיכרון מובנה של תהליך ההחלטות שלך, עם ראיות ומעקב אחורה לכל מסקנה.",
+  signOut: "התנתקות",
+};
+
 // --- Decisions: list (src/app/decisions/page.tsx) ---
 
 export const decisionsListPage = {

@@ -2,8 +2,31 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Frank_Ruhl_Libre, Assistant } from "next/font/google";
 import { trpc } from "@/trpc/react";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
+import { dashboardPage as t, importPage, interviewPage, dnaPage, strategyPage, ideasPage, casesListPage, decisionsListPage } from "@/lib/i18n/strings";
+
+const serifHeader = Frank_Ruhl_Libre({ subsets: ["latin", "hebrew"], weight: ["400", "700"], display: "swap" });
+const sansBody = Assistant({ subsets: ["latin", "hebrew"], weight: ["400", "500", "600", "700"], display: "swap" });
+
+// Reuses each destination page's own title string (imported above)
+// rather than a second, parallel copy of the same eight labels — see
+// dashboardPage's comment in strings.ts. Order matches the actual
+// product flow (docs/architecture.md §2), not alphabetical.
+const SECTIONS = [
+  { href: "/import", label: importPage.title },
+  { href: "/interview", label: interviewPage.title },
+  { href: "/dna", label: dnaPage.title },
+  { href: "/strategy", label: strategyPage.title },
+  { href: "/ideas", label: ideasPage.title },
+  { href: "/cases", label: casesListPage.title },
+  { href: "/decisions", label: decisionsListPage.title },
+  // Learning Insights stays English on purpose — that page itself is
+  // still English, deferred alongside Decision Review (open backlog
+  // items) — see CLAUDE.md's "שפת תוכן" section.
+  { href: "/learning", label: "Learning Insights" },
+] as const;
 
 export default function HomePage() {
   const router = useRouter();
@@ -17,53 +40,39 @@ export default function HomePage() {
   });
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-4 px-4 py-12">
-      <h1 className="text-xl font-semibold">AI Investment Copilot</h1>
-      {me.isLoading && <p>Loading...</p>}
-      {me.data && (
-        <p>
-          Signed in as <strong>{me.data.displayName}</strong> ({me.data.email})
-        </p>
-      )}
-      <p className="text-sm text-neutral-500">
-        Project Foundation is up: Next.js + tRPC + Drizzle + auth are wired end to
-        end. The Investment Memory itself (DNA, Strategy, Cases, Decisions...)
-        is built in the tasks that follow — see CLAUDE.md.
-      </p>
-      <div className="flex gap-2">
-        <Link href="/import" className="w-fit rounded bg-neutral-900 px-3 py-2 text-sm text-white">
-          Import trade history
-        </Link>
-        <Link
-          href="/interview"
-          className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm"
-        >
-          Onboarding interview
-        </Link>
-        <Link href="/dna" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
-          Investor DNA
-        </Link>
-        <Link href="/strategy" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
-          Baseline Strategy
-        </Link>
-        <Link href="/ideas" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
-          Ideas
-        </Link>
-        <Link href="/cases" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
-          Investment Cases
-        </Link>
-        <Link href="/decisions" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
-          Decisions
-        </Link>
-        <Link href="/learning" className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm">
-          Learning Insights
-        </Link>
+    <main
+      dir="rtl"
+      lang="he"
+      className={`${sansBody.className} mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-4 py-12 text-journal-ink`}
+    >
+      <div className="flex flex-col gap-2 border-b border-journal-rule pb-6">
+        <h1 className={`${serifHeader.className} text-2xl font-bold`}>AI Investment Copilot</h1>
+        {me.isLoading && <p className="text-sm text-journal-muted">{t.loading}</p>}
+        {me.data && (
+          <p className="text-sm text-journal-muted">
+            {t.signedInAs} <strong className="text-journal-ink">{me.data.displayName}</strong> ({me.data.email})
+          </p>
+        )}
+        <p className="text-sm text-journal-muted">{t.description}</p>
       </div>
+
+      <div className="flex flex-col gap-2">
+        {SECTIONS.map((s) => (
+          <Link
+            key={s.href}
+            href={s.href}
+            className="rounded border border-journal-rule bg-journal-surface p-3 text-sm hover:bg-journal-bg"
+          >
+            {s.label}
+          </Link>
+        ))}
+      </div>
+
       <button
         onClick={() => guard(() => logout.mutateAsync())}
-        className="w-fit rounded border border-neutral-300 px-3 py-2 text-sm"
+        className="w-fit rounded border border-journal-rule px-3 py-2 text-sm text-journal-ink hover:bg-journal-bg"
       >
-        Sign out
+        {t.signOut}
       </button>
     </main>
   );
