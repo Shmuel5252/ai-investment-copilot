@@ -133,7 +133,7 @@ export const dashboardPage = {
 
 export const decisionsListPage = {
   title: "החלטות",
-  description: "כל החלטה שנרשמה — בלתי ניתנת לשינוי מהרגע שנוצרה. רשום החלטה חדשה מתוך תיק השקעה.",
+  description: "כל החלטה שנרשמה — בלתי ניתנת לשינוי מהרגע שנוצרה. רשום החלטה חדשה מתוך תיק מחקר.",
   noDecisionsYet: "עדיין לא נרשמו החלטות.",
 };
 
@@ -281,20 +281,20 @@ export const strategyPage = {
 
 export const ideasPage = {
   title: "רעיונות",
-  description: "הערה קצרה על טיקר שאתה סקרן לגביו — קדם אותו לתיק השקעה מלא כשתרצה לחקור אותו ברצינות.",
+  description: "הערה קצרה על טיקר שאתה סקרן לגביו — קדם אותו לתיק מחקר מלא כשתרצה לחקור אותו ברצינות.",
   tickerPlaceholder: "טיקר, למשל AAPL",
   notePlaceholder: "מה גרם לך לחשוב על זה?",
   addButton: "הוסף רעיון",
   savingButton: "שומר...",
   viewCase: "צפה בתיק המחקר",
-  promoteButton: "קדם לתיק השקעה",
+  promoteButton: "קדם לתיק מחקר",
   noIdeasYet: "אין עדיין רעיונות.",
 };
 
 // --- Investment Cases: list (src/app/cases/page.tsx) ---
 
 export const casesListPage = {
-  title: "תיקי השקעה",
+  title: "תיקי מחקר",
   description: "חקור טיקר ישירות, או קדם אחד מהרעיונות שלך לתיק מחקר.",
   tickerPlaceholder: "טיקר, למשל AAPL",
   createButton: "תיק חדש",
