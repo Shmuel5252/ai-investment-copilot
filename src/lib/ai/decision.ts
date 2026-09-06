@@ -1,6 +1,7 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
+import { formatSizeDollarsLine } from "./format-price-size";
 
 // Three things happen together at the moment a Decision is recorded
 // (docs/architecture.md §2.6): the user's free-form reasoning gets
@@ -131,7 +132,10 @@ const TOOL = {
   },
 };
 
-function formatContext(input: DecisionContextInput): string {
+// Exported for direct unit testing — see tests/unit/format-price-size.test.ts,
+// which regression-tests this exact output stayed byte-identical after
+// the shared formatSizeDollarsLine() extraction.
+export function formatContext(input: DecisionContextInput): string {
   const m = input.marketIntelligence;
   const mc = input.marketContext;
   const f = input.portfolioFit;
@@ -144,9 +148,10 @@ function formatContext(input: DecisionContextInput): string {
     // is exactly what caused a real, live-caught bug: the model
     // confused this dollar amount with the per-share Price below and
     // both invented a "data mismatch" between them and mislabeled it as
-    // an entry price in an extracted prediction.
+    // an entry price in an extracted prediction. See format-price-size.ts
+    // for why this line goes through a shared helper, not local text.
     input.sizeDollars
-      ? `Investment size: $${input.sizeDollars.toFixed(2)} (the dollar amount being invested — NOT a price; unrelated to the per-share Price below)`
+      ? formatSizeDollarsLine("Investment size", input.sizeDollars, "below")
       : "Investment size: not specified for this decision type.",
     `\nInvestor's own reasoning (verbatim): "${input.reasoningText}"`,
     input.risksConsideredText ? `Risks the investor noted: "${input.risksConsideredText}"` : "Risks the investor noted: none recorded.",

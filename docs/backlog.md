@@ -44,6 +44,47 @@ presence-check מקביל, זה סוגר רק את הפער המבני (שדה �
 
 ## פתוח
 
+### Decision Review — Later Context factual precedence אינו אכוף מבנית, רק prompt instruction
+**נמצא:** 2026-09-06, תוך כדי בדיקת ה-Review האמיתי של LLY (וידוא חי
+מול DB + קוד, ר' git history). `narrativeSummaryText` כתב "the $500
+entry" — מספר שתוקן במפורש כ-sizeDollars, לא מחיר — למרות ש-Prediction
+#3's own claim_text עדיין קורא "$500" (immutable). התיקון ב-`case.ts`/
+`review.ts` (formatSizeDollarsLine, ר' "נבנה" למטה) סוגר את המנגנון
+הקונקרטי שנמצא (Outcome formatting חסר את אותה הבחנה שכבר הייתה
+ב-decision.ts) — אבל **זה לא סוגר את הבעיה הרחבה יותר**.
+
+**הממצא המרכזי שחשוב לתעד:** proximity/prompt wording לבד אינו מספיק
+אמין. במקרה LLY, התיקון "$1278.83, not $500" הופיע **בשלושה מקומות
+נפרדים** באותה קריאת AI בדיוק: (1) ב-Later Context עצמו, (2) בתוך
+`resolutionNote` הצמוד ישירות ל-Prediction #3 (אותה שורה ממש בפרומפט),
+(3) ב-`Outcome.priceAtDecision` הנכון (אחרי התיקון הנוכחי). ובכל זאת
+`narrativeSummaryText` חזר ל-"$500 entry" — בזמן שממד `exit_conditions`
+**באותה תגובה בדיוק** תיקן נכון. כלומר אין להניח ש"treat later contexts
+as authoritative" (הנחיית ה-SYSTEM_PROMPT הקיימת) נותן אמינות מספקת —
+המודל יכול ליישם תיקון נכון בשדה פלט אחד ולהחטיא אותו בשדה אחר, **באותה
+תגובה**.
+
+**כיוון אפשרי לעתיד (לא סוכם, לא לבנות עכשיו):** פתרון מבני, לא רק
+prompt tuning נוסף — כולל אפשרות לקשר Later Context ל-Prediction/שדה
+ספציפי (סכימה חדשה: `later_contexts` היום הוא decision-level בלבד, לא
+מקושר ל-prediction id ספציפי) כך שתיקון יוכל להיות מוצמד inline ל-
+claim_text הרלוונטי בפרומפט, ולא רק לשבת בפסקה נפרדת. **נבדק ונדחה
+במפורש לעכשיו:** schema change, קריאת AI שנייה ל-validation עצמי,
+substitution heuristic (regex-style), post-generation validator — אף
+אחד מאלה לא ממומש כרגע; זו החלטת Product/Architecture אמיתית, לא תיקון
+קטן.
+
+### Engineering Principles — "כמה implementations יש לזה?" כשאלה סטנדרטית לפני תיקון מידע פיננסי
+**נמצא:** 2026-09-06, מתוך אותה חקירה. CANONICAL_FIELDS (ר' git
+history), `computePositions()` (ר' Engineering Principles ב-AGENTS.md),
+ועכשיו Outcome formatting (size/price) — כולם אותה תבנית חוזרת: אותו
+מושג עסקי מיוצג ביותר ממקום אחד בקוד, ותיקון מגיע רק לעותק אחד. **הצעה
+לעתיד, לא שינוי עכשיו:** לשקול להוסיף עיקרון מפורש ל-Engineering
+Principles ב-`AGENTS.md` — כשמתגלה תיקון במידע פיננסי/עובדתי בסיסי,
+השאלה הראשונה צריכה להיות "כמה implementations של הדבר הזה קיימים?"
+לפני שמתקנים את המופע המקומי. לא לערוך את `AGENTS.md` כחלק מהמשימה
+הזו — רק לתעד את ההצעה כאן.
+
 ### Decision Review — expose per-dimension evidence citations in UI
 **נמצא:** 2026-09-06, תוך כדי בדיקת enforcement על ה-Review האמיתי של
 SNDK (וידאתי חי מול DB + קוד, לפני מעבר ל-LLY) — התייעצנו ותיעדנו
@@ -254,3 +295,13 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
   פורמלי בטבלה שמקשר תנאים חלופיים כמבנה נתונים מפורש; ה-AI מסיק את
   יחס ה-OR מהטקסט המקורי בכל Review מחדש, לא ממבנה מובטח. תיעוד מלא
   של הבחירה ב-`docs/data-model.md` §5.
+
+- **formatSizeDollarsLine — הבחנת size/price משותפת בין decision.ts
+  ל-review.ts** (2026-09-06): `src/lib/ai/format-price-size.ts` חדש —
+  מקור אמת יחיד להבהרה "זה size, לא price", בשימוש גם ב-`decision.ts`
+  (שכבר הוכיח את התיקון בעבר) וגם ב-`review.ts`'s `formatOutcome()`
+  (שמעולם לא קיבל אותו). פלט `decision.ts` נשמר זהה-בית (regression
+  test). 6 טסטים חדשים על נתוני LLY האמיתיים (`priceAtDecision=1278.83`,
+  `sizeDollars=500`) מוכיחים שהפורמט לא מציג את השניים בצורה שניתנת
+  לבלבול. **סוגר רק את המנגנון הקונקרטי הזה** — לא את בעיית ה-precedence
+  הרחבה יותר, ר' "פתוח" מעל.

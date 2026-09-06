@@ -1,5 +1,6 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
 import { CITABLE_SNAPSHOT_FIELDS } from "@/lib/review/validate-review-dimensions";
+import { formatSizeDollarsLine } from "./format-price-size";
 import type { DecisionOutcome } from "@/lib/review/decision-outcome";
 
 // Decision Review's two layers (docs/architecture.md §2.7): a short
@@ -154,13 +155,17 @@ const TOOL = {
   },
 };
 
-function formatOutcome(o: DecisionOutcome): string {
+// Exported for direct unit testing — see tests/unit/format-price-size.test.ts,
+// which proves priceAtDecision and sizeDollars are never presented in a
+// way that could be misread as the same number (the real LLY bug this
+// was extracted to fix: see format-price-size.ts).
+export function formatOutcome(o: DecisionOutcome): string {
   const parts = [
     `Price at decision: $${o.priceAtDecision} — current price: ${o.currentPrice !== null ? `$${o.currentPrice}` : "unavailable"}`,
     o.priceChangePercent !== null ? `Price change since decision: ${o.priceChangePercent >= 0 ? "+" : ""}${o.priceChangePercent.toFixed(1)}%` : "Price change: unavailable",
   ];
   if (o.sizeDollars !== null) {
-    parts.push(`Size at decision: $${o.sizeDollars.toFixed(2)}`);
+    parts.push(formatSizeDollarsLine("Size at decision", o.sizeDollars, "above"));
     if (o.pnlUsd !== null) parts.push(`P&L: $${o.pnlUsd.toFixed(2)} (${o.pnlPercent?.toFixed(1)}%)`);
   } else {
     parts.push("No size was recorded (nothing was actually bought/sold).");
