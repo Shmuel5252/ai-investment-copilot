@@ -44,6 +44,31 @@ presence-check מקביל, זה סוגר רק את הפער המבני (שדה �
 
 ## פתוח
 
+### Decision Review — expose per-dimension evidence citations in UI
+**נמצא:** 2026-09-06, תוך כדי בדיקת enforcement על ה-Review האמיתי של
+SNDK (וידאתי חי מול DB + קוד, לפני מעבר ל-LLY) — התייעצנו ותיעדנו
+בניסוח הבא, בדיוק כפי שסוכם:
+
+The review engine already persists and validates citedSnapshotFields
+for every dimension, with forced downgrade to insufficient_evidence
+when no valid citable field remains.
+
+Current gap: the Decision Review drill-down renders only verdict +
+rationaleText; citedSnapshotFields are returned by the API but not
+shown to the user.
+
+Product impact: judgments are traceable internally but not visibly
+traceable in the UI, despite "Traceable Judgments" being a product
+principle / Done-bar expectation.
+
+Suggested future UX: a compact "View evidence" affordance per
+dimension (same pattern already used on the DNA page) that opens
+readable evidence, not raw field names like caseMarketIntelligence —
+those stay debug/admin-only if ever shown directly.
+
+Priority: non-blocking UI/product gap; engine correctness already
+verified on real SNDK review data.
+
 ### Dashboard — תווית "Learning Insights" בניווט צריכה עדכון כש-Learning Insight יתורגם
 **נמצא:** 2026-08-23, תוך כדי redesign ה-Dashboard. `src/app/page.tsx`
 משאיר את תווית הניווט ל-`/learning` באנגלית במפורש (`{ href:
