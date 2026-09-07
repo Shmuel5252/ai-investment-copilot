@@ -200,6 +200,31 @@ export function formatContext(input: DecisionContextInput): string {
   return parts.filter(Boolean).join("\n");
 }
 
+// Same trust boundary as case.ts (assertNonEmptyStrings, docs/backlog.md
+// "עדיפות גבוהה") — a required tool-response field silently disappearing
+// is exactly what No Fake Certainty exists to catch, not just a
+// validation nicety. The two flat fields reuse the check directly;
+// predictions[].claimText needs one call per array element so the
+// error can name which prediction failed (an empty predictions array
+// is a normal result and is never checked here — nothing to validate).
+//
+// Exported as its own named function (not inlined in
+// synthesizeDecisionContext below) so tests/unit/decision-synthesis-
+// validation.test.ts imports and calls this exact function, rather than
+// a local copy of its logic. Those tests prove this function's own
+// behavior is correct across valid, missing, null, empty, and
+// whitespace-only inputs. They do NOT prove synthesizeDecisionContext
+// keeps calling it below — that one small, stable call site relies on
+// manual code-review diff-verification for any future change here, not
+// on an automated wiring test.
+export function validateDecisionSynthesis(result: DecisionContextSynthesis): DecisionContextSynthesis {
+  assertNonEmptyStrings(result, ["thesisInterpretationText", "realtimeAssessmentText"], "synthesize_decision_context");
+  result.predictions.forEach((prediction, index) => {
+    assertNonEmptyStrings(prediction, ["claimText"], `synthesize_decision_context predictions[${index}]`);
+  });
+  return result;
+}
+
 export async function synthesizeDecisionContext(
   input: DecisionContextInput
 ): Promise<DecisionContextSynthesis> {
@@ -217,18 +242,5 @@ export async function synthesizeDecisionContext(
     throw new Error("AI did not return a decision-context synthesis via the expected tool call.");
   }
 
-  // Same trust boundary as case.ts (assertNonEmptyStrings, docs/backlog.md
-  // "עדיפות גבוהה") — a required tool-response field silently disappearing
-  // is exactly what No Fake Certainty exists to catch, not just a
-  // validation nicety. The two flat fields reuse the check directly;
-  // predictions[].claimText needs one call per array element so the
-  // error can name which prediction failed (an empty predictions array
-  // is a normal result and is never checked here — nothing to validate).
-  const result = toolUse.input as DecisionContextSynthesis;
-  assertNonEmptyStrings(result, ["thesisInterpretationText", "realtimeAssessmentText"], "synthesize_decision_context");
-  result.predictions.forEach((prediction, index) => {
-    assertNonEmptyStrings(prediction, ["claimText"], `synthesize_decision_context predictions[${index}]`);
-  });
-
-  return result;
+  return validateDecisionSynthesis(toolUse.input as DecisionContextSynthesis);
 }

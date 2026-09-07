@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { assertNonEmptyStrings } from "@/lib/ai/case";
+import { validateDecisionSynthesis } from "@/lib/ai/decision";
 import type { DecisionContextSynthesis, ProposedPrediction } from "@/lib/ai/decision";
 
 // synthesizeDecisionContext() itself makes a real Anthropic call, so it
 // isn't unit-tested directly (same reason case.ts's synthesize* functions
-// aren't) — this exercises the exact validation calls it makes
-// (assertNonEmptyStrings on the two flat fields, then per-prediction on
-// claimText) against realistic DecisionContextSynthesis-shaped fixtures,
-// the same way tests/unit/case-assert-non-empty-strings.test.ts covers
-// case.ts's use of the same function. docs/backlog.md, "עדיפות גבוהה".
+// aren't) — this calls the real, exported validateDecisionSynthesis()
+// (not a local re-implementation of its logic) against realistic
+// DecisionContextSynthesis-shaped fixtures, the same way
+// tests/unit/case-assert-non-empty-strings.test.ts covers case.ts's use
+// of the underlying assertNonEmptyStrings(). docs/backlog.md, "עדיפות
+// גבוהה". These tests prove validateDecisionSynthesis()'s own behavior;
+// see the comment on it in decision.ts for what they do NOT prove.
 
 function validPrediction(overrides: Partial<ProposedPrediction> = {}): ProposedPrediction {
   return { claimText: "Revenue growth stays above 20% next quarter.", kind: "forecast", timeframeDays: 90, ...overrides };
@@ -23,22 +25,13 @@ function validSynthesis(overrides: Partial<DecisionContextSynthesis> = {}): Deci
   };
 }
 
-// Mirrors the exact two calls synthesizeDecisionContext() makes after the
-// cast, so this test fails exactly when that real code path would.
-function runValidation(result: DecisionContextSynthesis): void {
-  assertNonEmptyStrings(result, ["thesisInterpretationText", "realtimeAssessmentText"], "synthesize_decision_context");
-  result.predictions.forEach((prediction, index) => {
-    assertNonEmptyStrings(prediction, ["claimText"], `synthesize_decision_context predictions[${index}]`);
-  });
-}
-
 describe("decision.ts's synthesizeDecisionContext validation", () => {
   it("does not throw when every field is a valid non-empty string", () => {
-    expect(() => runValidation(validSynthesis())).not.toThrow();
+    expect(() => validateDecisionSynthesis(validSynthesis())).not.toThrow();
   });
 
   it("does not throw on an empty predictions array — zero predictions is a normal result", () => {
-    expect(() => runValidation(validSynthesis({ predictions: [] }))).not.toThrow();
+    expect(() => validateDecisionSynthesis(validSynthesis({ predictions: [] }))).not.toThrow();
   });
 
   it.each([
@@ -52,7 +45,7 @@ describe("decision.ts's synthesizeDecisionContext validation", () => {
     ["realtimeAssessmentText", "   "],
   ] as const)("throws when %s is %p", (field, value) => {
     const broken = validSynthesis({ [field]: value } as unknown as Partial<DecisionContextSynthesis>);
-    expect(() => runValidation(broken)).toThrow(new RegExp(field));
+    expect(() => validateDecisionSynthesis(broken)).toThrow(new RegExp(field));
   });
 
   it.each([undefined, null, "", "   "] as const)(
@@ -65,8 +58,8 @@ describe("decision.ts's synthesizeDecisionContext validation", () => {
           validPrediction({ claimText: "Third prediction, fine." }),
         ],
       });
-      expect(() => runValidation(broken)).toThrow(/predictions\[1\]/);
-      expect(() => runValidation(broken)).toThrow(/claimText/);
+      expect(() => validateDecisionSynthesis(broken)).toThrow(/predictions\[1\]/);
+      expect(() => validateDecisionSynthesis(broken)).toThrow(/claimText/);
     }
   );
 
@@ -74,6 +67,6 @@ describe("decision.ts's synthesizeDecisionContext validation", () => {
     const broken = validSynthesis({
       predictions: [validPrediction({ claimText: "" }), validPrediction({ claimText: "" })],
     });
-    expect(() => runValidation(broken)).toThrow(/predictions\[0\]/);
+    expect(() => validateDecisionSynthesis(broken)).toThrow(/predictions\[0\]/);
   });
 });
