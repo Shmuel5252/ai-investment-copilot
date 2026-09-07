@@ -11,38 +11,50 @@
 
 ## עדיפות גבוהה
 
-### decision.ts — אותו cast-בלי-validation שתוקן ב-case.ts, על קובץ שכבר הוכיח רגישות אמיתית בשדה
-**נמצא:** 2026-08-23, תוך כדי סגירת הפריט המקביל ב-`case.ts`
-(`assertNonEmptyStrings`, ר' "נבנה" למטה) — אותו pattern בדיוק עדיין
-קיים ב-`synthesizeDecisionContext` (`src/lib/ai/decision.ts`):
-`toolUse.input as DecisionContextSynthesis` הוא type assertion בזמן
-קומפילציה בלבד, בלי שום runtime check ש-`thesisInterpretationText`,
-`realtimeAssessmentText`, ו-`predictions[].claimText` (כולם `required`
-ב-`TOOL`'s schema) באמת הגיעו מה-AI.
-
-**עדיפות גבוהה, לא "עוד אפשרות" בסוגריים** — `decision.ts` הוא בדיוק
-הקובץ שכבר הוכיח בעבר שהשדות האלה פגיעים: באג בלבול size/price
-ב-`thesisInterpretationText`/תחזית שחולצה (ר' git history — התיקון
-שהוסיף את הבהרת "Investment size... NOT a price" ל-`formatContext`
-ול-SYSTEM_PROMPT). זו לא סתם השערה שאותו pattern *עלול* להיות רגיש
-כאן כמו בכל קובץ AI אחר — זה שדה שכבר *הוכח* רגיש על הקובץ הזה
-בפועל.
-
-**הבחנה חשובה שלא לטשטש:** `assertNonEmptyStrings` (התיקון שנבנה
-ב-case.ts) תופס רק שדה *חסר/ריק לגמרי* — לא תופס שדה *נוכח אך תוכנו
-שגוי מהותית* (בדיוק סוג הבאג ההיסטורי כאן, שכבר תוקן בנפרד ברמת
-ה-prompt, לא ברמת validation). כלומר גם אחרי שמוסיפים כאן runtime
-presence-check מקביל, זה סוגר רק את הפער המבני (שדה נעלם בשקט) — לא
-טוען לפתור מחדש את סוג-הבאג התוכני ההיסטורי, שכבר טופל בדרך אחרת.
-
-**כיוון אפשרי (לא סוכם):** אותו `assertNonEmptyStrings`-style check
-(אפשר לייבא ישירות מ-`src/lib/ai/case.ts` אם מייצאים אותו משם, או
-לשכפל מקומית) על שלושת השדות הנ"ל, מיד אחרי ה-cast ב-
-`synthesizeDecisionContext`. לא תוקן עדיין.
+(ריק כרגע — הפריט היחיד שהיה כאן נבנה, ר' "נבנה" למטה.)
 
 ---
 
 ## פתוח
+
+### Decision creation — insertThesis/insertDecision/predictions/insertDecisionSnapshot אינם עטופים ב-transaction אחד
+**נמצא:** 2026-09-07, תוך כדי חקירת פער ה-validation ב-`decision.ts`
+(ר' "נבנה" למטה). `src/server/routers/decisions.ts`'s `create` mutation
+מבצע רצף כתיבות נפרדות — `insertThesis` → `insertDecision` → לולאת
+`insertPrediction` → `insertDecisionSnapshot` (+`updateInvestmentCase`
+בסוף) — **בלי transaction עוטף אחד**. רק ה-snapshot ו-DNA references
+שלו עטופים יחד (`insertDecisionSnapshot`, `src/db/repositories/decisions.ts:81-92`).
+כשל באמצע הרצף (לא משנה מה הגורם) יכול להשאיר `Decision` אמיתי,
+immutable, בלי `decision_snapshot` תואם — ואין נתיב FK לשחזר את
+ה-thesis/predictions שכן נכתבו, כי הקישור אליהם עובר רק דרך ה-snapshot
+החסר.
+
+**ראיה אמפירית אמיתית, לא רק תיאורטית — נבדקה חי מול Postgres:**
+נמצאו 31 decisions ללא snapshot: 30 בחשבונות `decisions-race-test-*`
+ו-1 בחשבון `race-check-*`; 0 ב-`dev@example.com`. אין לייחס את הרשומות
+לסיבה מסוימת ללא ראיה.
+
+**כיוון אפשרי (לא סוכם, לא לבנות):** לעטוף את כל רצף הכתיבה
+ב-`db.transaction` יחיד ברמת ה-router. דורש מחשבה על מה שקורה לפני
+הרצף (קריאות FMP/AI אמיתיות שכבר בוצעו ולא צריכות/יכולות rollback) —
+ה-transaction רלוונטי רק לכתיבות ה-DB עצמן, לא לכל ה-side effects של
+ה-mutation. לא Product decision — decision טכנית, אבל דורשת תשומת לב
+לפרטים, לא רק "לעטוף בתחביר transaction".
+
+### הערה לא-מדויקת ב-`decision.ts` — טוענת ל-regression test על `formatContext` שלא קיים בפועל
+**נמצא:** 2026-09-07, תוך כדי אותה חקירה. ההערה ב-`decision.ts` (ליד
+`formatContext`) אומרת: "see tests/unit/format-price-size.test.ts,
+which regression-tests this exact output stayed byte-identical". בפועל
+`tests/unit/format-price-size.test.ts` **לא מייבא ולא קורא ל-`formatContext`
+מ-`decision.ts` בכלל** — הוא בודק רק את `formatSizeDollarsLine` בנפרד,
+עם אותם ארגומנטים ש-`formatContext` *אמור* להעביר לו. שינוי עתידי
+בתוך `formatContext` עצמו (למשל כיוון "above"/"below" שגוי) **לא היה
+נתפס** ע"י הטסט הזה, בניגוד למה שההערה מבטיחה.
+
+**כיוון אפשרי (לא סוכם):** להוסיף טסט שבאמת מייבא ומפעיל `formatContext`
+עם fixture מלא ובודק את הפלט המחרוזתי המלא, או לתקן את ניסוח ההערה כך
+שלא תטען לכיסוי שלא קיים. לא תוקן — מחוץ ל-scope של המשימה שסגרה את
+פריט ה-validation.
 
 ### Decision Review — Later Context factual precedence אינו אכוף מבנית, רק prompt instruction
 **נמצא:** 2026-09-06, תוך כדי בדיקת ה-Review האמיתי של LLY (וידוא חי
@@ -252,6 +264,16 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
 ---
 
 ## נבנה
+- **decision.ts — runtime validation מקביל ל-case.ts** (2026-09-07):
+  `assertNonEmptyStrings` (מיובא ישירות מ-`src/lib/ai/case.ts`, לא
+  שוכפל) מופעל ב-`synthesizeDecisionContext` על `thesisInterpretationText`
+  ו-`realtimeAssessmentText`, ובנוסף בלולאה על כל `predictions[].claimText`
+  בנפרד (שגיאה כוללת את האינדקס, למשל `predictions[2]`, throw-on-first).
+  מערך `predictions` ריק (`[]`) נשאר תקין ולא נבדק — תוצאה נורמלית.
+  Tests: `tests/unit/decision-synthesis-validation.test.ts` (15 טסטים).
+  **נכלל בכוונה בתיקון הזה בלבד:** שני השדות השטוחים + מערך ה-predictions.
+  **לא נכלל, פער נפרד:** transaction wrapping סביב רצף הכתיבה כולו
+  (thesis/decision/predictions/snapshot) — ר' "פתוח" מעל.
 - **Systematic double-submit fix** (2026-08-17, commit `4c91bd6`
   ואילך): `useSubmitGuard` בכל כפתורי ה-mutation + 5 constraints
   ברמת ה-DB. `decisions` ו-`strategy_versions` גם מטפלים בהתנגשות

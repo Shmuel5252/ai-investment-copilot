@@ -2,6 +2,7 @@ import { anthropic, CLAUDE_MODEL } from "./client";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
 import { formatSizeDollarsLine } from "./format-price-size";
+import { assertNonEmptyStrings } from "./case";
 
 // Three things happen together at the moment a Decision is recorded
 // (docs/architecture.md §2.6): the user's free-form reasoning gets
@@ -216,5 +217,18 @@ export async function synthesizeDecisionContext(
     throw new Error("AI did not return a decision-context synthesis via the expected tool call.");
   }
 
-  return toolUse.input as DecisionContextSynthesis;
+  // Same trust boundary as case.ts (assertNonEmptyStrings, docs/backlog.md
+  // "עדיפות גבוהה") — a required tool-response field silently disappearing
+  // is exactly what No Fake Certainty exists to catch, not just a
+  // validation nicety. The two flat fields reuse the check directly;
+  // predictions[].claimText needs one call per array element so the
+  // error can name which prediction failed (an empty predictions array
+  // is a normal result and is never checked here — nothing to validate).
+  const result = toolUse.input as DecisionContextSynthesis;
+  assertNonEmptyStrings(result, ["thesisInterpretationText", "realtimeAssessmentText"], "synthesize_decision_context");
+  result.predictions.forEach((prediction, index) => {
+    assertNonEmptyStrings(prediction, ["claimText"], `synthesize_decision_context predictions[${index}]`);
+  });
+
+  return result;
 }
