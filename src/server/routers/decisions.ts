@@ -156,80 +156,101 @@ export const decisionsRouter = router({
         strategyPrinciples: strategyPrinciplesForAi,
       });
 
-      const thesis = await insertThesis(db, {
-        thesisText: input.reasoningText,
-        aiInterpretationText: synthesis.thesisInterpretationText,
-      });
-
-      // The status check above already blocks the normal case; this
-      // catches the genuine race variant (two concurrent requests both
-      // passing that check before either commits — two tabs, a retried
-      // request) that UNIQUE(investment_case_id) exists specifically to
-      // prevent at the DB level. Same message either way, since it's the
-      // same real-world situation from the user's point of view — a
-      // raw 500 with an internal SQL message here would be the one table
-      // in the whole app where that's worst, since what it's guarding is
-      // a duplicate immutable DecisionSnapshot.
-      let decision;
-      try {
-        decision = await insertDecision(db, {
-          investorId: ctx.investorId,
-          investmentCaseId: investmentCase.id,
-          ticker: investmentCase.ticker,
-          decisionType: input.decisionType,
-          decisionDate: input.decisionDate ? new Date(input.decisionDate) : new Date(),
+      // Everything above this point is either a read or an external
+      // side effect (FMP fetch + its own cache write, the Anthropic call
+      // above) that must NOT sit inside a DB transaction — holding one
+      // open across a slow external round-trip is bad practice on its
+      // own, and these specific writes (market data cache, market
+      // context capture) are independent TTL/reuse caches that should
+      // survive even if the Decision write below fails (docs/backlog.md,
+      // Decision creation atomicity). Everything from here down is the
+      // one all-or-nothing unit: a half-written Decision would be a
+      // real, unrecoverable orphan (immutable, no path back to its own
+      // thesis/predictions except through the snapshot it's missing).
+      const { decision, snapshot } = await db.transaction(async (tx) => {
+        const thesis = await insertThesis(tx, {
+          thesisText: input.reasoningText,
+          aiInterpretationText: synthesis.thesisInterpretationText,
         });
-      } catch (err) {
-        if (isUniqueViolation(err, "decisions_investment_case_id_unique")) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "This case already has a recorded decision — start a new Idea/Case to decide again.",
+
+        // The status check above already blocks the normal case; this
+        // catches the genuine race variant (two concurrent requests both
+        // passing that check before either commits — two tabs, a retried
+        // request) that UNIQUE(investment_case_id) exists specifically to
+        // prevent at the DB level. Same message either way, since it's the
+        // same real-world situation from the user's point of view — a
+        // raw 500 with an internal SQL message here would be the one table
+        // in the whole app where that's worst, since what it's guarding is
+        // a duplicate immutable DecisionSnapshot. Still throws either way
+        // (never swallows/returns) — required for the transaction above
+        // to actually roll back the thesis insert too, not just this one.
+        let decision;
+        try {
+          decision = await insertDecision(tx, {
+            investorId: ctx.investorId,
+            investmentCaseId: investmentCase.id,
+            ticker: investmentCase.ticker,
+            decisionType: input.decisionType,
+            decisionDate: input.decisionDate ? new Date(input.decisionDate) : new Date(),
+          });
+        } catch (err) {
+          if (isUniqueViolation(err, "decisions_investment_case_id_unique")) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "This case already has a recorded decision — start a new Idea/Case to decide again.",
+            });
+          }
+          throw err;
+        }
+
+        // "today + N days" is computed here, in code, never by the model
+        // (CLAUDE.md "AI vs Code": timestamps/time ranges are deterministic
+        // facts) — synthesizeDecisionContext only ever returns an estimated
+        // day-count, exactly so this arithmetic can't land on a wrong date.
+        for (const prediction of synthesis.predictions) {
+          await insertPrediction(tx, {
+            thesisId: thesis.id,
+            claimText: prediction.claimText,
+            kind: prediction.kind,
+            checkableByDate:
+              prediction.timeframeDays !== null
+                ? new Date(Date.now() + prediction.timeframeDays * 86_400_000)
+                : undefined,
           });
         }
-        throw err;
-      }
 
-      // "today + N days" is computed here, in code, never by the model
-      // (CLAUDE.md "AI vs Code": timestamps/time ranges are deterministic
-      // facts) — synthesizeDecisionContext only ever returns an estimated
-      // day-count, exactly so this arithmetic can't land on a wrong date.
-      for (const prediction of synthesis.predictions) {
-        await insertPrediction(db, {
-          thesisId: thesis.id,
-          claimText: prediction.claimText,
-          kind: prediction.kind,
-          checkableByDate:
-            prediction.timeframeDays !== null
-              ? new Date(Date.now() + prediction.timeframeDays * 86_400_000)
-              : undefined,
-        });
-      }
+        // insertDecisionSnapshot wraps itself in its own db.transaction —
+        // nested inside this outer one, that becomes a real Postgres
+        // SAVEPOINT automatically (drizzle-orm postgres-js driver), not
+        // an error and not a second independent transaction.
+        const snapshot = await insertDecisionSnapshot(
+          tx,
+          {
+            decisionId: decision.id,
+            priceAtDecision: String(intelligence.price),
+            size: input.sizeDollars !== undefined ? String(input.sizeDollars) : null,
+            userReasoningText: input.reasoningText,
+            aiRealtimeAssessmentText: synthesis.realtimeAssessmentText,
+            risksConsideredText: input.risksConsideredText,
+            exitConditionsText: input.exitConditionsText,
+            portfolioStateJson: portfolioState,
+            marketContextId: marketContext.id,
+            strategyVersionId: latestStrategyVersion.id,
+            thesisId: thesis.id,
+            investmentCaseSnapshotJson: investmentCase,
+          },
+          dnaHypothesisVersionIds
+        );
 
-      const snapshot = await insertDecisionSnapshot(
-        db,
-        {
-          decisionId: decision.id,
-          priceAtDecision: String(intelligence.price),
-          size: input.sizeDollars !== undefined ? String(input.sizeDollars) : null,
-          userReasoningText: input.reasoningText,
-          aiRealtimeAssessmentText: synthesis.realtimeAssessmentText,
-          risksConsideredText: input.risksConsideredText,
-          exitConditionsText: input.exitConditionsText,
-          portfolioStateJson: portfolioState,
-          marketContextId: marketContext.id,
-          strategyVersionId: latestStrategyVersion.id,
-          thesisId: thesis.id,
-          investmentCaseSnapshotJson: investmentCase,
-        },
-        dnaHypothesisVersionIds
-      );
+        // Slice 1 simplification: one Decision concludes a Case's research
+        // phase, whichever decisionType it is (including PASS) — a later
+        // reconsideration of the same ticker starts a new Idea/Case rather
+        // than reopening this one (docs/data-model.md §10: InvestmentCase
+        // is Mutable only "while researching").
+        await updateInvestmentCase(tx, investmentCase.id, { status: "decided" });
 
-      // Slice 1 simplification: one Decision concludes a Case's research
-      // phase, whichever decisionType it is (including PASS) — a later
-      // reconsideration of the same ticker starts a new Idea/Case rather
-      // than reopening this one (docs/data-model.md §10: InvestmentCase
-      // is Mutable only "while researching").
-      await updateInvestmentCase(db, investmentCase.id, { status: "decided" });
+        return { decision, snapshot };
+      });
 
       return { decision, snapshot };
     }),

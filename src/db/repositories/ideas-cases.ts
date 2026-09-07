@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
-import type { db as Db } from "@/db/client";
+import type { db as Db, DbOrTx } from "@/db/client";
 import { ideas, investmentCases } from "@/db/schema";
 
 export type NewIdea = InferInsertModel<typeof ideas>;
@@ -48,7 +48,7 @@ export async function listInvestmentCasesForInvestor(db: typeof Db, investorId: 
 }
 
 export async function updateInvestmentCase(
-  db: typeof Db,
+  db: DbOrTx,
   id: string,
   values: Partial<NewInvestmentCase>
 ) {

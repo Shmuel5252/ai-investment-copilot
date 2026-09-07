@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
-import type { db as Db } from "@/db/client";
+import type { db as Db, DbOrTx } from "@/db/client";
 import {
   theses,
   decisions,
@@ -20,12 +20,12 @@ export type NewDecisionReview = InferInsertModel<typeof decisionReviews>;
 export type NewReviewDimension = InferInsertModel<typeof reviewDimensions>;
 export type NewPrediction = InferInsertModel<typeof predictions>;
 
-export async function insertThesis(db: typeof Db, values: NewThesis) {
+export async function insertThesis(db: DbOrTx, values: NewThesis) {
   const [row] = await db.insert(theses).values(values).returning();
   return row!;
 }
 
-export async function insertDecision(db: typeof Db, values: NewDecision) {
+export async function insertDecision(db: DbOrTx, values: NewDecision) {
   const [row] = await db.insert(decisions).values(values).returning();
   return row!;
 }
@@ -74,7 +74,7 @@ export async function getDecisionByCaseId(db: typeof Db, investmentCaseId: strin
 // (docs/data-model.md §5, §10). Bundles the snapshot row with its DNA
 // version references in one transaction.
 export async function insertDecisionSnapshot(
-  db: typeof Db,
+  db: DbOrTx,
   values: NewDecisionSnapshot,
   dnaHypothesisVersionIds: string[]
 ) {
@@ -138,7 +138,7 @@ export async function getDecisionReviewsForDecision(db: typeof Db, decisionId: s
   });
 }
 
-export async function insertPrediction(db: typeof Db, values: NewPrediction) {
+export async function insertPrediction(db: DbOrTx, values: NewPrediction) {
   const [row] = await db.insert(predictions).values(values).returning();
   return row!;
 }

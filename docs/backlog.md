@@ -17,30 +17,6 @@
 
 ## פתוח
 
-### Decision creation — insertThesis/insertDecision/predictions/insertDecisionSnapshot אינם עטופים ב-transaction אחד
-**נמצא:** 2026-09-07, תוך כדי חקירת פער ה-validation ב-`decision.ts`
-(ר' "נבנה" למטה). `src/server/routers/decisions.ts`'s `create` mutation
-מבצע רצף כתיבות נפרדות — `insertThesis` → `insertDecision` → לולאת
-`insertPrediction` → `insertDecisionSnapshot` (+`updateInvestmentCase`
-בסוף) — **בלי transaction עוטף אחד**. רק ה-snapshot ו-DNA references
-שלו עטופים יחד (`insertDecisionSnapshot`, `src/db/repositories/decisions.ts:81-92`).
-כשל באמצע הרצף (לא משנה מה הגורם) יכול להשאיר `Decision` אמיתי,
-immutable, בלי `decision_snapshot` תואם — ואין נתיב FK לשחזר את
-ה-thesis/predictions שכן נכתבו, כי הקישור אליהם עובר רק דרך ה-snapshot
-החסר.
-
-**ראיה אמפירית אמיתית, לא רק תיאורטית — נבדקה חי מול Postgres:**
-נמצאו 31 decisions ללא snapshot: 30 בחשבונות `decisions-race-test-*`
-ו-1 בחשבון `race-check-*`; 0 ב-`dev@example.com`. אין לייחס את הרשומות
-לסיבה מסוימת ללא ראיה.
-
-**כיוון אפשרי (לא סוכם, לא לבנות):** לעטוף את כל רצף הכתיבה
-ב-`db.transaction` יחיד ברמת ה-router. דורש מחשבה על מה שקורה לפני
-הרצף (קריאות FMP/AI אמיתיות שכבר בוצעו ולא צריכות/יכולות rollback) —
-ה-transaction רלוונטי רק לכתיבות ה-DB עצמן, לא לכל ה-side effects של
-ה-mutation. לא Product decision — decision טכנית, אבל דורשת תשומת לב
-לפרטים, לא רק "לעטוף בתחביר transaction".
-
 ### הערה לא-מדויקת ב-`decision.ts` — טוענת ל-regression test על `formatContext` שלא קיים בפועל
 **נמצא:** 2026-09-07, תוך כדי אותה חקירה. ההערה ב-`decision.ts` (ליד
 `formatContext`) אומרת: "see tests/unit/format-price-size.test.ts,
@@ -272,8 +248,59 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
   מערך `predictions` ריק (`[]`) נשאר תקין ולא נבדק — תוצאה נורמלית.
   Tests: `tests/unit/decision-synthesis-validation.test.ts` (15 טסטים).
   **נכלל בכוונה בתיקון הזה בלבד:** שני השדות השטוחים + מערך ה-predictions.
-  **לא נכלל, פער נפרד:** transaction wrapping סביב רצף הכתיבה כולו
-  (thesis/decision/predictions/snapshot) — ר' "פתוח" מעל.
+  **לא נכלל אז, נבנה בנפרד:** transaction wrapping סביב רצף הכתיבה כולו
+  (thesis/decision/predictions/snapshot) — ר' הפריט הבא למטה.
+- **Decision creation — insertThesis/insertDecision/predictions/
+  insertDecisionSnapshot עכשיו עטופים ב-transaction אחד** (2026-09-07):
+  `src/server/routers/decisions.ts`'s `create` mutation ביצע קודם רצף
+  כתיבות נפרדות — `insertThesis` → `insertDecision` → לולאת
+  `insertPrediction` → `insertDecisionSnapshot` (+`updateInvestmentCase`
+  בסוף) — **בלי transaction עוטף אחד** (רק ה-snapshot ו-DNA references
+  שלו היו עטופים יחד, `src/db/repositories/decisions.ts:81-92`). כשל
+  באמצע הרצף היה יכול להשאיר `Decision` אמיתי, immutable, בלי
+  `decision_snapshot` תואם, בלי נתיב FK לשחזר thesis/predictions שכן
+  נכתבו.
+
+  **תיקון לניסוח קודם של הפריט הזה — חשוב:** גרסה קודמת כאן טענה "ראיה
+  אמפירית אמיתית... נמצאו 31 decisions ללא snapshot" כהדגמה של הפער. זה
+  **לא מדויק**, ותוקן: 30 מתוך 31 מוסברים במלואם ע"י
+  `tests/integration/decisions-race.test.ts`, שקורא ל-`insertDecision`
+  בבידוד (לא דרך ה-`create` mutation), אף פעם לא מגיע ל-thesis/snapshot,
+  ולא מנקה אחריו — תוצר-לוואי ידוע של טסט צר, לא הדגמה של הפער הזה. ה-1
+  הנוסף (בחשבון `race-check-*`) תואם אותה תבנית שמית אך לא אומת ישירות
+  (סקריפט המקור נמחק לפי המוסכמה הקיימת). **לא נמצא עד כה מקרה אמפירי
+  מוכח** של הכשל הזה בזרימת ה-`create` mutation האמיתית — הגילוי
+  והתיקון נעשו מניתוח קוד (חקירת הרצף, nested transaction support,
+  תאימות טיפוסים — ר' git history), לא מתקרית שקרתה בפועל.
+
+  **התיקון שנבנה:** הרצף כולו עטוף עכשיו ב-`db.transaction(async (tx) =>
+  {...})` — `insertThesis(tx,...)` → `insertDecision(tx,...)` (ה-
+  try/catch הקיים שממיר unique violation להודעה ידידותית ממשיך לזרוק
+  מתוך ה-callback, כנדרש כדי שה-rollback יקרה) → לולאת
+  `insertPrediction(tx,...)` → `insertDecisionSnapshot(tx,...)`
+  (ה-transaction הפנימי שלו הופך אוטומטית ל-SAVEPOINT, לא שגיאה) →
+  `updateInvestmentCase(tx,...)`. חמש פונקציות repository
+  (`insertThesis`, `insertDecision`, `insertPrediction`,
+  `insertDecisionSnapshot`, `updateInvestmentCase`) שונו מ-`db: typeof
+  Db` ל-`db: DbOrTx` (type alias חדש ב-`src/db/client.ts`,
+  `PgDatabase<PostgresJsQueryResultHKT, typeof schema>` — טיפוס בסיס
+  משותף שגם ה-instance העליון וגם `tx` assignable אליו; אומת עם ניסיון
+  קומפילציה אמיתי, לא רק הונח). נשארים בכוונה מחוץ ל-transaction:
+  `getMarketIntelligence`/`getOrCaptureMarketContext` (כולל כתיבות cache
+  עצמאיות משלהם) ו-`synthesizeDecisionContext` (קריאת Anthropic) — I/O
+  חיצוני איטי שאסור להחזיק transaction DB פתוח מולו, ו-caches עצמאיים
+  שרצוי שישרדו גם כשל בהחלטה עצמה.
+
+  **נבדק ואומת:** `tests/integration/decisions-create-atomicity.test.ts`
+  חדש — מריץ את אותו רצף בדיוק (אותן חמש פונקציות repository אמיתיות,
+  לא mock) פעמיים במקביל על אותו case, ומאשר: הזוכה מקבל בדיוק שורה
+  אחת בכל טבלה (theses/decisions/decision_snapshots/predictions),
+  והמפסיד מקבל **rollback מלא כולל ה-thesis** (לא רק "אין decision") —
+  בדיוק ההגנה שהייתה חסרה. **לא מוכיח** שה-`create` mutation עצמו
+  ממשיך לקרוא ל-`db.transaction` באותה נקודה — זה נשען על code-review
+  ידני ב-diff, לא test אוטומטי (mocking ל-Anthropic/FMP נבדק ונדחה
+  כבלתי מוצדק לנקודת-קריאה אחת קטנה ויציבה, אותה מסקנה כמו
+  ב-`validateDecisionSynthesis`).
 - **Systematic double-submit fix** (2026-08-17, commit `4c91bd6`
   ואילך): `useSubmitGuard` בכל כפתורי ה-mutation + 5 constraints
   ברמת ה-DB. `decisions` ו-`strategy_versions` גם מטפלים בהתנגשות
