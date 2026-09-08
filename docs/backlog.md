@@ -17,21 +17,6 @@
 
 ## פתוח
 
-### הערה לא-מדויקת ב-`decision.ts` — טוענת ל-regression test על `formatContext` שלא קיים בפועל
-**נמצא:** 2026-09-07, תוך כדי אותה חקירה. ההערה ב-`decision.ts` (ליד
-`formatContext`) אומרת: "see tests/unit/format-price-size.test.ts,
-which regression-tests this exact output stayed byte-identical". בפועל
-`tests/unit/format-price-size.test.ts` **לא מייבא ולא קורא ל-`formatContext`
-מ-`decision.ts` בכלל** — הוא בודק רק את `formatSizeDollarsLine` בנפרד,
-עם אותם ארגומנטים ש-`formatContext` *אמור* להעביר לו. שינוי עתידי
-בתוך `formatContext` עצמו (למשל כיוון "above"/"below" שגוי) **לא היה
-נתפס** ע"י הטסט הזה, בניגוד למה שההערה מבטיחה.
-
-**כיוון אפשרי (לא סוכם):** להוסיף טסט שבאמת מייבא ומפעיל `formatContext`
-עם fixture מלא ובודק את הפלט המחרוזתי המלא, או לתקן את ניסוח ההערה כך
-שלא תטען לכיסוי שלא קיים. לא תוקן — מחוץ ל-scope של המשימה שסגרה את
-פריט ה-validation.
-
 ### Decision Review — Later Context factual precedence אינו אכוף מבנית, רק prompt instruction
 **נמצא:** 2026-09-06, תוך כדי בדיקת ה-Review האמיתי של LLY (וידוא חי
 מול DB + קוד, ר' git history). `narrativeSummaryText` כתב "the $500
@@ -301,6 +286,25 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
   ידני ב-diff, לא test אוטומטי (mocking ל-Anthropic/FMP נבדק ונדחה
   כבלתי מוצדק לנקודת-קריאה אחת קטנה ויציבה, אותה מסקנה כמו
   ב-`validateDecisionSynthesis`).
+- **הערה לא-מדויקת ב-`decision.ts` — תוקנה, ונוסף regression test אמיתי
+  ל-`formatContext`** (2026-09-08): ההערה ליד `formatContext` טענה
+  לכיסוי מ-`tests/unit/format-price-size.test.ts` — בפועל אותו טסט
+  מעולם לא ייבא/קרא ל-`formatContext` עצמה, רק בדק את
+  `formatSizeDollarsLine` בבידוד; שינוי עתידי בתוך `formatContext` עצמו
+  (למשל היפוך "above"/"below") לא היה נתפס, בניגוד למה שההערה טענה.
+
+  **התיקון:** `tests/unit/decision-format-context.test.ts` חדש קורא
+  ל-`formatContext` **האמיתית** (לא helper/reimplementation), עם
+  fixture מלא, ובודק את הפלט **המלא** ב-`toBe()` — לא `toContain()`
+  חלקי — כך ששינוי סדר סעיפים או היפוך "above"/"below" בקריאה
+  ל-`formatSizeDollarsLine` ייתפס, לא רק היעדרות ביטוי ספציפי. מכסה
+  במפורש גם ענפים מותנים: `sizeDollars` חסר (נופל ל-"not specified"),
+  שדות אופציונליים ב-`portfolioFit`
+  (`projectedWeightPercent`/`largestCurrentPositionTicker`/
+  `largestCurrentPositionWeightPercent`=`null`, `warnings=[]` — נעלמים
+  לגמרי מהפלט, לא משאירים שורה ריקה), ומערכי DNA/Strategy ריקים
+  (נופלים ל-"none yet"). ההערה ב-`decision.ts` עודכנה להצביע לטסט
+  החדש ולתעד במפורש שהניסוח הקודם היה שגוי.
 - **Systematic double-submit fix** (2026-08-17, commit `4c91bd6`
   ואילך): `useSubmitGuard` בכל כפתורי ה-mutation + 5 constraints
   ברמת ה-DB. `decisions` ו-`strategy_versions` גם מטפלים בהתנגשות

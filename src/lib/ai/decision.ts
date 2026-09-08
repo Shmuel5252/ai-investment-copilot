@@ -133,9 +133,15 @@ const TOOL = {
   },
 };
 
-// Exported for direct unit testing — see tests/unit/format-price-size.test.ts,
-// which regression-tests this exact output stayed byte-identical after
-// the shared formatSizeDollarsLine() extraction.
+// Exported for direct unit testing — see
+// tests/unit/decision-format-context.test.ts, which calls this exact
+// function (not a re-implementation of it) against a fully-populated
+// fixture and asserts on the complete output string with toBe(), so a
+// reordered section or a flipped above/below in formatSizeDollarsLine's
+// call below would fail it. (A previous version of this comment pointed
+// to tests/unit/format-price-size.test.ts — that file only checks
+// formatSizeDollarsLine in isolation and never imports or calls
+// formatContext at all; docs/backlog.md.)
 export function formatContext(input: DecisionContextInput): string {
   const m = input.marketIntelligence;
   const mc = input.marketContext;
