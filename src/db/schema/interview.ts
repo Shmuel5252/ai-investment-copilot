@@ -1,7 +1,7 @@
 import { pgTable, uuid, text, timestamp, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { investors } from "./identity";
 import { transactions } from "./portfolio";
-import { interviewSessionStatusEnum } from "./enums";
+import { interviewSessionStatusEnum, interviewSessionOriginEnum } from "./enums";
 
 export const interviewSessions = pgTable("interview_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -11,6 +11,12 @@ export const interviewSessions = pgTable("interview_sessions", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp("completed_at", { withTimezone: true }),
   status: interviewSessionStatusEnum("status").notNull().default("in_progress"),
+  // Backfill default covers every session that already existed before
+  // this column — all of them really were guided_interview sessions,
+  // since user_initiated ("Tell me why") didn't exist as a code path
+  // yet. New writes always pass this explicitly (both call sites in
+  // src/server/routers/interview.ts) rather than relying on the default.
+  origin: interviewSessionOriginEnum("origin").notNull().default("guided_interview"),
 });
 
 // Append-only + supersedes pointer (docs/data-model.md §0) — simpler than

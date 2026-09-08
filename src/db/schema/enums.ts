@@ -135,4 +135,17 @@ export const interviewSessionStatusEnum = pgEnum("interview_session_status", [
   "completed",
 ]);
 
+// guided_interview: the algorithmic onboarding interview
+// (select-transactions.ts picks the sample, questions are AI-generated
+// over it). user_initiated: the investor chose, on their own, to record
+// a rationale for a specific transaction ("Tell me why") — the question
+// is deterministic code (src/lib/interview/tell-me-why-question.ts), not
+// AI-generated. Traceability only (Manual Historical Entry task,
+// docs/backlog.md) — does not change Evidence Strength/weighting by
+// itself; that would be a separate Product decision.
+export const interviewSessionOriginEnum = pgEnum("interview_session_origin", [
+  "guided_interview",
+  "user_initiated",
+]);
+
 export const ideaSourceEnum = pgEnum("idea_source", ["user_manual"]);

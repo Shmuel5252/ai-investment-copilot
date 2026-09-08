@@ -292,11 +292,20 @@ thesis_accuracy_pattern_json (אגרגציה דטרמיניסטית), evidence_s
 ## 9. Onboarding Interview
 
 **InterviewSession** — `id, investor_id, started_at, completed_at?,
-status`.
+status, origin(guided_interview|user_initiated)`. `origin` נוסף
+ב-Manual Historical Entry task (2026-09-08, ר' `docs/backlog.md`):
+`guided_interview` = הראיון האלגוריתמי הרגיל (`selectInterestingTransactions`
++ AI question); `user_initiated` = "Tell me why" — המשקיע יזם תיעוד
+רציונל על עסקה ספציפית (בפועל: רק על עסקה שהוזנה ידנית, נאכף ב-router).
+Traceability בלבד — לא משפיע על Evidence Strength/weighting.
 
 **InterviewAnswer** — `id, interview_session_id, transaction_id?,
-question_text(AI), answer_text(משתמש), supersedes_answer_id?, created_at`.
-Append-only.
+question_text(AI עבור guided_interview, דטרמיניסטי-בקוד עבור
+user_initiated), answer_text(משתמש), supersedes_answer_id?, created_at`.
+Append-only. `transaction_id` נשאר עמודה יחידה (לא junction/מערך) גם
+אחרי Manual Historical Entry — `answer_text` הוא טקסט חופשי לא-מוגבל,
+יכול לתאר lifecycle שלם שחוצה כמה transactions (למשל BUY+SELL+SELL)
+תחת anchor transaction יחיד, בלי אכיפה מבנית שהתוכן מוגבל אליו.
 
 ---
 

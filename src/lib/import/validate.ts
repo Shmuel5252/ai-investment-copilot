@@ -21,8 +21,12 @@ const TYPE_SYNONYMS: Record<CanonicalTransactionType, string[]> = {
 // Cash effect direction per type: negative = cash left the account.
 // Whatever sign the source CSV used, we normalize to this convention
 // (docs/data-model.md's transactions.amount contract) rather than
-// trusting raw imported data to have gotten it right.
-const CASH_DIRECTION: Record<CanonicalTransactionType, 1 | -1> = {
+// trusting raw imported data to have gotten it right. Exported so
+// Manual Historical Entry (src/lib/import/manual-entry.ts) reuses this
+// exact table instead of a second copy — CLAUDE.md's Engineering
+// Principles item on this exact class of bug (same business concept
+// implemented more than once, docs/backlog.md).
+export const CASH_DIRECTION: Record<CanonicalTransactionType, 1 | -1> = {
   buy: -1,
   sell: 1,
   dividend: 1,
@@ -30,6 +34,21 @@ const CASH_DIRECTION: Record<CanonicalTransactionType, 1 | -1> = {
   withdrawal: -1,
   fee: -1,
 };
+
+// The one canonical rule for "quantity + price -> signed cash amount"
+// (CLAUDE.md "AI vs Code": deterministic facts are computed in code, and
+// this is the one place that computation lives — see CASH_DIRECTION
+// above for why it's exported, not just this function). Used by CSV
+// import below (normalizeRow's quantity/price branch) and by Manual
+// Historical Entry (manual-entry.ts) — the client never sends `amount`
+// directly for either path.
+export function computeAmountFromQuantityPrice(
+  type: CanonicalTransactionType,
+  quantity: number,
+  price: number
+): number {
+  return Math.abs(quantity * price) * CASH_DIRECTION[type];
+}
 
 function normalizeType(raw: string): CanonicalTransactionType | null {
   const normalized = raw.trim().toLowerCase();
@@ -105,7 +124,7 @@ function normalizeRow(
   if (amountRaw !== null) {
     amount = Math.abs(amountRaw) * CASH_DIRECTION[transactionType!];
   } else if (quantity !== null && price !== null) {
-    amount = Math.abs(quantity * price) * CASH_DIRECTION[transactionType!];
+    amount = computeAmountFromQuantityPrice(transactionType!, quantity, price);
   } else {
     // Only reachable for dividend/deposit/withdrawal/fee with no amount
     // column mapped at all.

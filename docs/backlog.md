@@ -17,6 +17,39 @@
 
 ## פתוח
 
+### Transactions — אין שום מנגנון deduplication, לא cross-source ולא בכלל
+**נמצא:** 2026-09-08, תוך כדי חקירת Manual Historical Entry — נבדק
+במפורש כי המשתמש מתכנן לייבא בעתיד CSV אמיתי מהברוקר שעשוי לכלול
+עסקאות שכבר הוזנו ידנית (או ייבוא חוזר). נבדק בקוד, לא הונח מהתיעוד:
+
+- **אין UNIQUE constraint על `transactions`** בשום migration
+  (`src/db/migrations/*.sql`) — רק שני FK (`investor_id`,
+  `import_batch_id`), שום אילוץ ייחודיות על ticker/date/quantity/price
+  או כל שילוב שלהם.
+- **אין לוגיקת dedup באפליקציה** — `grep` מקיף על `duplicate|dedup`
+  בכל `src/lib/import/` ו-`src/server/routers/import.ts` העלה רק
+  שימושי `Set()` לתצוגת רשימת טיקרים ב-UI (לא לדה-דופליקציה של
+  עסקאות). `confirmImport`/`confirmManualEntry` שניהם כותבים ישירות,
+  בלי לבדוק מול שורות `transactions` קיימות.
+
+**תיקון תיעוד נלווה (Docs Sync Rule) — לא רק ממצא, גם סטייה מתועדת
+שתוקנה:** `docs/architecture.md` §2.1 טען במפורש "פרסור/ולידציה/
+**דה-דופליקציה** דטרמיניסטיים" — זה **לא נכון** ביחס לקוד הקיים; תוקן
+באותו commit שמתעד את הממצא הזה (הוסר "דה-דופליקציה" מהמשפט).
+
+**הסיכון האמיתי:** ייבוא CSV עתידי שמכיל עסקת MP שכבר הוזנה ידנית
+(או כל עסקה אחרת שהוזנה ידנית ואז מיובאת מהברוקר) ייצור **שורה
+כפולה** ב-`transactions` — position מנופחת, cost-basis שגוי,
+`sellTrace`/P&L כפולים. לא מטופל.
+
+**לא נבנה במסגרת המשימה הזו — במפורש מחוץ ל-scope:** שום מנגנון
+dedup חדש (cross-source או בכלל). כיוונים אפשריים לעתיד (לא סוכם, לא
+לבנות): אזהרת "עסקה דומה כבר קיימת" בזמן `import.validate`/
+`confirmManualEntry` (heuristic על ticker+date+quantity+price קרובים,
+לא UNIQUE constraint קשיח — עסקאות אמיתיות זהות-לגמרי יכולות לקרות
+בלגיטימיות, למשל שתי קניות נפרדות באותו יום/מחיר), או flow ידני
+"סמן כפילות וסגור" בזמן ייבוא. דורש החלטת Product/UX אמיתית.
+
 ### Decision Review — Later Context factual precedence אינו אכוף מבנית, רק prompt instruction
 **נמצא:** 2026-09-06, תוך כדי בדיקת ה-Review האמיתי של LLY (וידוא חי
 מול DB + קוד, ר' git history). `narrativeSummaryText` כתב "the $500
@@ -225,6 +258,113 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
 ---
 
 ## נבנה
+- **Manual Historical Entry + "Tell me why"** (2026-09-08): מאפשר להזין
+  ידנית עסקאות היסטוריות **אמיתיות** (Actual בלבד — Hypothetical מפורשות
+  מחוץ ל-scope) בלי לחכות לקובץ broker, ולתעד רציונל של עסקה דרך flow
+  נפרד ביוזמת המשתמש.
+
+  **Manual entry עצמה:** `import.confirmManualEntry` mutation חדש
+  (`src/server/routers/import.ts`) — batch של שורות (ticker/type buy-sell
+  בלבד/quantity/price/date/notes אופציונלי), נכתב לאותה טבלת
+  `transactions` שה-CSV import כותב אליה, עם `source: "manual_entry"`
+  (ערך enum שכבר היה קיים בסכימה, לא היה בשימוש) ו-`importBatchId: null`
+  (nullable כבר בסכימה — תואם בדיוק את מה שאומת בחקירה). `amount` אף
+  פעם לא מתקבל מה-client — מחושב server-side דרך
+  `computeAmountFromQuantityPrice` (`src/lib/import/validate.ts`, מיוצא
+  ומשומש-מחדש **גם** ע"י ה-CSV import path עצמו אחרי refactor — אותה
+  נוסחה קנונית אחת, לא שני מימושים). כל ה-batch עטוף ב-`db.transaction`
+  יחיד (`insertTransactions` שונה מ-`db: typeof Db` ל-`db: DbOrTx`, אותה
+  תבנית שכבר נבנתה ב-decision creation atomicity) — כשל באמצע ה-batch
+  משאיר אפס שורות, לא batch חלקי (מאומת ב-integration test עם FK
+  violation אמיתי, לא simulated).
+
+  **`/import` UI:** טאב "הזנה ידנית" לצד "ייבוא מקובץ" הקיים
+  (`src/app/import/page.tsx`) — טופס multi-row (הוסף/הסר שורה, submit
+  אחד ל-batch שלם, `useSubmitGuard` עם key נפרד מ-CSV path). Provenance
+  מוצג ניטרלית ("הוזן ידנית" + הסבר) — **לא** "פחות אמין/מדויק", לפי
+  החלטת Product מפורשת. שדה `notes` (אם ממולא) מנוסח בבירור בטופס
+  שהוא הערה כללית, לא רציונל — `transactions.notes` עדיין לא נקרא בשום
+  מקום בצינור ה-Evidence.
+
+  **"Tell me why" — flow נפרד לגמרי מהראיון האלגוריתמי:** **Contract
+  (עודכן 2026-09-08 — מחליף במפורש החלטה קודמת שהגבילה את ה-flow
+  ל-"אותו batch בלבד"):** זמין על **כל** transaction בבעלות המשקיע עם
+  `source="manual_entry"` — בלי הגבלת זמן, בלי batch identifier, בלי
+  entity/token חדשים. נאכף ב-server בלבד (`interview.startTellMeWhy`,
+  `src/server/routers/interview.ts`): שני תנאים — בעלות (`investorId`)
+  ו-`source === "manual_entry"`. **לא נדרש שינוי לוגי במוטציה עצמה** —
+  היא כבר תאמה לחוזה הרחב הזה מלכתחילה; רק ניסוח ההערות/התיעוד/הודעת
+  השגיאה תוקן כדי לא לטעון ל-"אותו batch"/"just entered" יותר. **ה-UI
+  עדיין חושף את הכפתור רק ישירות אחרי submit של הזנה ידנית** — סיבה
+  נפרדת ונקייה מה-contract: אין עדיין מסך "כל העסקאות הידניות שלי"
+  שיציג את הכפתור במקום אחר, לא מגבלה בחוזה עצמו. בניית מסך כזה היא
+  future work, לא נדרש כאן. אינו נוגע ב-`selectInterestingTransactions`,
+  ב-`maxCount=6`, ואינו slot נוסף בתוך `interview.start` — session חדש
+  משלו, `origin: "user_initiated"`. השאלה נבנית **בקוד, לא AI**:
+  `buildTellMeWhyQuestion` (`src/lib/interview/tell-me-why-question.ts`)
+  — פונקציה סינכרונית, ללא import של Anthropic client בקובץ כלל,
+  מייצאת string ישירות; ה-Hebrew template עצמו ב-`src/lib/i18n/strings.ts`
+  (`tellMeWhy.questionTemplate`). התשובה נשמרת דרך `insertInterviewAnswer`
+  ו-`interview.answer`/`interview.complete` הקיימים **ללא כל שינוי** —
+  reuse מלא, לא entity חדשה.
+
+  **Provenance של InterviewAnswer — migration מינימלית אחת:** נבדק
+  לפני edit: לא היה שום field/concept קיים (`interview_answers` ו-
+  `interview_sessions` — שניהם ללא עמודת source/origin/type). נוסף
+  `interview_sessions.origin` (עמודה יחידה ברמת ה-session, לא ברמת
+  התשובה — "Tell me why" תמיד יוצר session חדש עם תשובה אחת, אז זה
+  מספיק) — enum חדש `interview_session_origin(guided_interview|
+  user_initiated)`, migration `0006_cooing_rawhide_kid.sql`. `getAllAnswersForInvestor`
+  (`src/db/repositories/interview.ts`) עודכן להחזיר גם `origin`, כדי
+  שזה ייבדק בפועל דרך אותה פונקציה ש-`dna.generate`/`strategy.ts`'s
+  observed-principles מפעילים — לא רק theoretically joinable. **Traceability
+  בלבד, כפי שסוכם:** provenance **לא** משנה Evidence Strength/weighting;
+  `answerCaseKeys`/`countIndependentCases` לא נגעו כלל.
+
+  **InterviewAnswer — יחס ל-transaction:** נשאר עמודה יחידה (`transaction_id`),
+  לא junction table/מערך — מאומת בחקירה נפרדת שאין בעיה אמיתית: `answerText`
+  הוא טקסט חופשי לחלוטין, לא נאכף מבנית שהוא "מדבר רק על" ה-anchor
+  transaction. MP מקושר ל-BUY כ-anchor; הסיפור המלא (buy→partial
+  sell→full sell→capital rotation) נכתב כטקסט חופשי אחד, מאומת
+  ב-integration test שהוא מגיע במלואו ל-`getAllAnswersForInvestor`.
+
+  **מפורשות לא נבנה, לפי scope מאושר:** forced-include ב-`interview.start`,
+  שינוי `maxCount`, שינוי ל-`selectInterestingTransactions`, confidence
+  scale חדש לעסקה ידנית (`source="manual_entry"` הבינארי מספיק כרגע),
+  Evidence weighting לפי provenance, DNA ingestion ישירות מ-`transaction.notes`,
+  שינוי ל-`computePositions()` (נבדק כ-black box בלבד), sector exposure,
+  Later Context, שינויי Strategy, ו-**מנגנון deduplication חוצה-source**
+  (ר' "פתוח" מעל — נמצא: **אין שום מנגנון dedup כרגע, לא רק cross-source**,
+  כולל תיקון סטייה מתועדת ב-`docs/architecture.md` §2.1 שטענה אחרת).
+
+  **נבדק ואומת:** typecheck ✓, lint ✓, 247/247 טסטים (34/34 קבצים, 33
+  טסטים חדשים — **אושר בפועל עם `vitest run --reporter=verbose`, לא
+  רק חושב**: 24 unit ב-`tests/unit/manual-entry.test.ts`
+  (`computeAmountFromQuantityPrice`/`manualTransactionRowSchema`/
+  `manualEntryBatchSchema`/`buildManualTransactionValues`, כולל
+  הרחבות `it.each`), 5 unit ב-`tests/unit/tell-me-why-question.test.ts`,
+  4 integration ב-`tests/integration/manual-entry.test.ts` — MP
+  acceptance מקצה-לקצה דרך `computePositions` האמיתי (position סגורה
+  ל-0, שני `sellTrace` עם P&L חיובי), atomicity עם FK violation אמיתי,
+  provenance + reader function, `getTransaction`).
+
+  **דיוק חשוב על "provenance + reader function" — לא לתאר כ-"DNA
+  pipeline end-to-end":** ה-integration test מוכיח ש-InterviewAnswer
+  ה-user-initiated נשמר, וחוזר נכון (עם `answerText`/`transactionId`/
+  `origin` תקינים) דרך `getAllAnswersForInvestor` — **אותה פונקציית
+  reader** ש-`dna.generate`/`strategy.ts`'s observed-principles קוראים
+  לה בפועל. **הטסט אינו מריץ את `dna.generate` עצמו** (זה ידרוש קריאת
+  Anthropic אמיתית). נבדק במפורש אם קיים helper/consumer מתחת ל-
+  `dna.generate` שניתן היה לבדוק בלי AI call/mocking/שכפול/ארכיטקטורת
+  טסטים חדשה — התשובה: לא בלי לגעת גם ב-`dna.ts` וגם ב-`strategy.ts`
+  (שני הראוטרים בונים `answerCaseKeys`/את קלט ה-AI inline, לא דרך
+  helper מיוצא משותף) — חריגה מ-scope המשימה הזו, לא "מינימלי ונקי".
+  לכן לא נוסף test infrastructure חדש; התיעוד דויק במקום זאת.
+
+  **לא מוכח (נשען על code-review ידני, כמו בכל הסבבים הקודמים):**
+  ש-`confirmManualEntry`/`startTellMeWhy` עצמם (שכבת ה-router — Zod
+  validation, ownership checks) מחוברים נכון ל-production — אין תקדים
+  ל-tRPC caller בטסטים בפרויקט הזה כולו, לא נוסף כאן.
 - **decision.ts — runtime validation מקביל ל-case.ts** (2026-09-07):
   `assertNonEmptyStrings` (מיובא ישירות מ-`src/lib/ai/case.ts`, לא
   שוכפל) מופעל ב-`synthesizeDecisionContext` על `thesisInterpretationText`

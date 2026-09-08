@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/db/client";
 import { parseCsv, suggestColumnMapping, validateImportRows, CANONICAL_FIELDS } from "@/lib/import";
+import { manualEntryBatchSchema, buildManualTransactionValues } from "@/lib/import/manual-entry";
 import { computePositions } from "@/lib/portfolio/positions";
 import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
 import {
@@ -127,5 +128,32 @@ export const importRouter = router({
       const positions = await computePositionsForInvestor(db, ctx.investorId);
 
       return { batchId: batch.id, importedCount: result.validRows.length, positions };
+    }),
+
+  // Manual Historical Entry (docs/backlog.md) — Actual trades only, one
+  // batch at a time, no CSV file. Writes to the same `transactions`
+  // table CSV import uses, with source="manual_entry" and no
+  // importBatchId (there's no ImportBatch row for a manual entry — the
+  // "batch" is only the client's in-memory form state for this one
+  // submit, matching the nullable importBatchId contract CSV import
+  // already relies on). `amount` is never accepted from the client —
+  // buildManualTransactionValues computes it server-side via the same
+  // canonical rule CSV import uses (validate.ts's
+  // computeAmountFromQuantityPrice), not a second implementation of it.
+  //
+  // The whole batch is one all-or-nothing DB write: wrapped in
+  // db.transaction so a mid-batch failure leaves zero rows, not a
+  // partial batch — the one DB write unit here, nothing external before
+  // it needs covering (no FMP/Anthropic calls, unlike decisions.create).
+  confirmManualEntry: protectedProcedure
+    .input(manualEntryBatchSchema)
+    .mutation(async ({ ctx, input }) => {
+      const values = buildManualTransactionValues(ctx.investorId, input.rows);
+
+      const inserted = await db.transaction(async (tx) => insertTransactions(tx, values));
+
+      const positions = await computePositionsForInvestor(db, ctx.investorId);
+
+      return { transactions: inserted, positions };
     }),
 });

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
-import type { db as Db } from "@/db/client";
+import type { db as Db, DbOrTx } from "@/db/client";
 import { transactions, portfolioOpeningStates, importBatches } from "@/db/schema";
 
 export type NewTransaction = InferInsertModel<typeof transactions>;
@@ -27,9 +27,16 @@ export async function deleteImportBatch(db: typeof Db, id: string) {
   await db.delete(importBatches).where(eq(importBatches.id, id));
 }
 
-export async function insertTransactions(db: typeof Db, values: NewTransaction[]) {
+// DbOrTx (not typeof Db) so this can run inside an outer db.transaction —
+// Manual Historical Entry's batch submit wraps this call so a mid-batch
+// failure leaves zero rows, not a partial batch (docs/backlog.md).
+export async function insertTransactions(db: DbOrTx, values: NewTransaction[]) {
   if (values.length === 0) return [];
   return db.insert(transactions).values(values).returning();
+}
+
+export async function getTransaction(db: typeof Db, id: string) {
+  return db.query.transactions.findFirst({ where: (t, { eq }) => eq(t.id, id) });
 }
 
 export async function updateTransaction(

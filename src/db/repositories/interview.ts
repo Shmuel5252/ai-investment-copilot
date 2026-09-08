@@ -46,6 +46,13 @@ export async function getAllAnswersForInvestor(db: typeof Db, investorId: string
       answerText: interviewAnswers.answerText,
       supersedesAnswerId: interviewAnswers.supersedesAnswerId,
       createdAt: interviewAnswers.createdAt,
+      // Traceability only (Manual Historical Entry task, docs/backlog.md)
+      // — guided_interview vs. user_initiated ("Tell me why"). Does not
+      // affect evidenceStrength/weighting in dna.ts or strategy.ts, which
+      // only read id/transactionId/questionText/answerText from this
+      // return shape; the extra field is available to any future
+      // consumer that wants it without changing either of those.
+      origin: interviewSessions.origin,
     })
     .from(interviewAnswers)
     .innerJoin(interviewSessions, eq(interviewAnswers.interviewSessionId, interviewSessions.id))

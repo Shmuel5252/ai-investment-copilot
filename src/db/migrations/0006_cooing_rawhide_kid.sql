@@ -1,0 +1,2 @@
+CREATE TYPE "public"."interview_session_origin" AS ENUM('guided_interview', 'user_initiated');--> statement-breakpoint
+ALTER TABLE "interview_sessions" ADD COLUMN "origin" "interview_session_origin" DEFAULT 'guided_interview' NOT NULL;

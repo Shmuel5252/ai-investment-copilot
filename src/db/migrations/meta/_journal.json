@@ -43,6 +43,13 @@
       "when": 1787492552961,
       "tag": "0005_confused_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788862132161,
+      "tag": "0006_cooing_rawhide_kid",
+      "breakpoints": true
     }
   ]
 }

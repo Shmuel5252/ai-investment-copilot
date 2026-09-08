@@ -5,6 +5,7 @@ import { db } from "@/db/client";
 import {
   listTransactionsForInvestor,
   listPortfolioOpeningStatesForInvestor,
+  getTransaction,
 } from "@/db/repositories/portfolio";
 import {
   insertInterviewSession,
@@ -13,6 +14,7 @@ import {
   getAnswersForSession,
 } from "@/db/repositories/interview";
 import { selectInterestingTransactions } from "@/lib/interview/select-transactions";
+import { buildTellMeWhyQuestion } from "@/lib/interview/tell-me-why-question";
 import { describeTransactionFacts, generateInterviewQuestion } from "@/lib/ai/interview";
 
 export const interviewRouter = router({
@@ -53,7 +55,10 @@ export const interviewRouter = router({
       });
     }
 
-    const session = await insertInterviewSession(db, { investorId: ctx.investorId });
+    const session = await insertInterviewSession(db, {
+      investorId: ctx.investorId,
+      origin: "guided_interview",
+    });
 
     const questions = await Promise.all(
       candidates.map(async (candidate) => ({
@@ -91,6 +96,57 @@ export const interviewRouter = router({
     .mutation(async ({ input }) => {
       await completeInterviewSession(db, input.sessionId);
       return { ok: true };
+    }),
+
+  // "Tell me why" (docs/backlog.md) — user-initiated, separate from the
+  // guided/algorithmic flow above. Contract (Product decision,
+  // 2026-09-08 — explicitly replaces an earlier same-batch-only
+  // decision): available for ANY transaction the investor owns with
+  // source="manual_entry" — no time limit, no batch identifier, checked
+  // by the two guards right below (ownership, then source). The client
+  // does not enforce any scope here anymore: src/app/import/page.tsx
+  // currently only renders the "Tell me why" button right after a
+  // manual-entry submit because there's no "all my manual transactions"
+  // history screen yet to surface it from elsewhere — that's a UI gap,
+  // not a limit on this endpoint's actual contract. The question is
+  // deterministic code, not AI (buildTellMeWhyQuestion — no Anthropic
+  // import in that file at all). Deliberately does NOT reuse `start`
+  // above: that mutation always re-selects from the investor's *entire*
+  // transaction history via selectInterestingTransactions with
+  // maxCount=6 — wrong shape entirely for "ask about this one specific
+  // transaction the investor chose." Saving the answer reuses the
+  // existing `answer` mutation above unchanged; so does `complete`.
+  startTellMeWhy: protectedProcedure
+    .input(z.object({ transactionId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const transaction = await getTransaction(db, input.transactionId);
+      if (!transaction || transaction.investorId !== ctx.investorId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found." });
+      }
+      if (transaction.source !== "manual_entry") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "\"Tell me why\" is only available for a transaction you entered manually (not one imported from a file).",
+        });
+      }
+      if (!transaction.ticker) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This transaction has no ticker to ask about.",
+        });
+      }
+
+      const session = await insertInterviewSession(db, {
+        investorId: ctx.investorId,
+        origin: "user_initiated",
+      });
+
+      return {
+        sessionId: session.id,
+        transactionId: transaction.id,
+        ticker: transaction.ticker,
+        questionText: buildTellMeWhyQuestion(transaction.ticker),
+      };
     }),
 
   answersForSession: protectedProcedure

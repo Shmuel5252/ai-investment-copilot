@@ -19,9 +19,17 @@ Architecture). `CLAUDE.md` מצביע לכאן לפרטים; המקור הרעי
 ### 2.1 Trade History Upload
 - **משתמש:** מעלה CSV של עסקאות בחלון חלקי (למשל 6–12 חודשים, לא נדרשת
   היסטוריה מלאה), ממפה עמודות (מיפוי גנרי, לא broker-specific), סוקר
-  ומאשר.
-- **מערכת:** פרסור/ולידציה/דה-דופליקציה דטרמיניסטיים. שחזור Position
-  ו-cost basis מתוך מה שיובא בלבד, דרך `computePositions()`.
+  ומאשר. **או:** מזין ידנית batch של עסקאות היסטוריות **אמיתיות**
+  (Manual Historical Entry, 2026-09-08, ר' `docs/backlog.md`) — אותה
+  טבלת `transactions`, `source="manual_entry"` — כשאין עדיין קובץ
+  broker עדכני. Actual בלבד; hypothetical/"מה הייתי עושה" מפורשות מחוץ
+  ל-scope.
+- **מערכת:** פרסור/ולידציה דטרמיניסטיים. שחזור Position ו-cost basis
+  מתוך מה שיובא/הוזן בלבד, דרך `computePositions()` — זהה לחלוטין בין
+  שני המקורות, `computePositions()` עצמו עיוור-source. **תיקון דיוק
+  (נמצא 2026-09-08, ר' Docs Sync Rule):** "דה-דופליקציה" הוסר מהמשפט
+  הקודם כאן — לא קיים בפועל שום מנגנון dedup, לא cross-source ולא
+  בכלל (ר' `docs/backlog.md` "פתוח" לממצא המלא ולסיכון).
 - **הפער הקריטי (פוזיציות פתוחות לפני החלון):** נפתר ע"י ישות נפרדת
   `PortfolioOpeningState` — אחזקות + cost basis + תאריך, נכון לתחילת
   החלון, מוזנת ידנית, מסומנת UI כ-**self-reported** (לא נגזרת מהיסטוריית
@@ -47,6 +55,19 @@ Architecture). `CLAUDE.md` מצביע לכאן לפרטים; המקור הרעי
   ה-InterviewAnswer הגולמי ויוצר גם את ההשערה וגם את ה-Evidence יחד.
 - **Done:** ראיון הושלם על מדגם אמיתי, `InterviewAnswer` נשמר ומקושר
   לעסקה שנדונה.
+- **"Tell me why" (2026-09-08, ר' `docs/backlog.md`) — flow נפרד, לא
+  חלק מהראיון האלגוריתמי הזה:** המשקיע יוזם בעצמו תיעוד רציונל על
+  עסקה ספציפית. **Contract (עודכן 2026-09-08, מחליף החלטה קודמת
+  שהגבילה ל-"אותו batch"):** כל transaction בבעלות המשקיע עם
+  `source="manual_entry"` (Manual Historical Entry, §2.1) — בלי הגבלת
+  זמן ובלי תלות בזה שהיא מ-batch מסוים — לא נבחר ע"י
+  `selectInterestingTransactions`, לא slot נוסף בתוך אותו ראיון.
+  **ה-UI כרגע חושף את הכפתור רק ישירות אחרי submit של הזנה ידנית**
+  (אין עדיין מסך "כל העסקאות הידניות שלי" שיציג אותו במקום אחר) — זו
+  מגבלת UI זמנית, לא מגבלת ה-contract עצמו. השאלה דטרמיניסטית-בקוד
+  (לא AI). נשמר כ-`InterviewAnswer` רגיל, מסומן
+  `InterviewSession.origin=user_initiated` (traceability בלבד, לא
+  משנה Evidence Strength) לעומת `guided_interview` של הראיון הזה.
 
 ### 2.3 Investor DNA ראשוני
 - **משתמש:** רואה השערות, View Evidence, מסכים/חולק/מוסיף הקשר.

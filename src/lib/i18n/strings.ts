@@ -185,6 +185,8 @@ export const importPage = {
   title: "ייבוא היסטוריית מסחר",
   description:
     "העלה היסטוריית מסחר חלקית (למשל 6–12 החודשים האחרונים). אם פוזיציה נפתחה לפני החלון שאתה מעלה, תתבקש להזין את יתרת הפתיחה שלה בנפרד — לעולם לא מניחים שהקובץ הוא כל התיק שלך.",
+  fileModeTab: "ייבוא מקובץ",
+  manualModeTab: "הזנה ידנית",
   rowsDetectedLabel: "שורות זוהו. מפה את העמודות שלך למטה (ניחוש ראשוני כבר מולא):",
   validatingLabel: "מאמת...",
   notMappedOption: "— לא ממופה —",
@@ -202,6 +204,49 @@ export const importPage = {
   importingButton: "מייבא...",
   importedLabel: "עסקאות יובאו.",
   currentPositions: "פוזיציות נוכחיות:",
+};
+
+// --- Manual Historical Entry (src/app/import/page.tsx, manual mode) —
+// Actual trades only, never hypothetical/what-if scenarios
+// (docs/backlog.md). ---
+
+export const manualEntryPage = {
+  description:
+    "הזן עסקאות היסטוריות אמיתיות שביצעת בפועל — לא תרחישים היפותטיים. כל שורה נשמרת בדיוק כמו עסקה שיובאה מקובץ, ומשפיעה על חישובי התיק באותו אופן.",
+  tickerLabel: "טיקר",
+  typeLabel: "סוג",
+  quantityLabel: "כמות",
+  priceLabel: "מחיר למניה",
+  dateLabel: "תאריך",
+  notesLabel: "הערה כללית (אופציונלי)",
+  notesPlaceholder:
+    "הערה כללית על הרשומה — לא כאן מספרים את הסיפור/הרציונל של ההשקעה. לכך משמש \"ספר לי למה\" אחרי השמירה.",
+  buyOption: "קנייה",
+  sellOption: "מכירה",
+  addRowButton: "הוסף שורה",
+  removeRowButton: "הסר שורה",
+  submitButton: "שמור עסקאות",
+  savingButton: "שומר...",
+  provenanceBadge: "הוזן ידנית",
+  provenanceExplanation: "הנתונים הוזנו ידנית ולא יובאו מקובץ מסחר.",
+  savedCountLabel: "עסקאות נשמרו.",
+  enterMoreButton: "הזן עוד עסקאות",
+};
+
+// --- "Tell me why" — user-initiated historical rationale
+// (docs/backlog.md). Deterministic, not AI-generated — {ticker} is
+// interpolated in code (src/lib/interview/tell-me-why-question.ts), not
+// by a model call. ---
+
+export const tellMeWhy = {
+  buttonLabel: "אני רוצה לספר למה ביצעתי את העסקה הזו",
+  questionTemplate:
+    "ספר לי על ההשקעה שלך ב-{ticker} — למה נכנסת, איך התנהלת במהלך הפוזיציה, ולמה החלטת לממש חלק ממנה או לצאת ממנה?",
+  answerPlaceholder:
+    "התשובה שלך — הסיפור המלא, כולל אם רלוונטי: למה נכנסת, מה קרה במהלך ההחזקה, ולמה יצאת (בבת אחת או בכמה שלבים)...",
+  saveButton: "שמור",
+  savingButton: "שומר...",
+  savedConfirmation: "נשמר — התשובה תילקח בחשבון בפעם הבאה שתיצור השערות DNA.",
 };
 
 // --- Onboarding Interview (src/app/interview/page.tsx) ---
