@@ -258,6 +258,61 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
 ---
 
 ## נבנה
+- **`computePortfolioFit` — candidate price precedence כשה-candidate
+  כבר מוחזק** (2026-09-08, נמצא תוך כדי חקירת Sector/Industry Exposure
+  — תוקן כתיקון מבודד, לפני עבודת ה-sector עצמה): `PortfolioFitCandidate.price`
+  הוא `required` ושני ה-production callers (`portfolio-fit-for-investor.ts`,
+  `decisions.ts`) כבר מעבירים אותו — אבל **לפני** התיקון, כשה-candidate
+  ticker כבר היה מוחזק, שני ה-callers האלה גם מסננים אותו החוצה מ-
+  `currentPricesByTicker` (ההערה הקיימת ב-`portfolio-fit-for-investor.ts`
+  מנמקת זאת במפורש: "כבר נשלף פעם אחת בשביל ה-candidate עצמו, אין סיבה
+  לשלוף פעמיים"). **`computePortfolioFit` לא השתמש ב-`candidate.price`
+  בכלל** — אז ה-valuation של הפוזיציה הקיימת נפל ל-`costBasisPerShare`
+  במקום למחיר החי שכבר היה בזיכרון.
+
+  **ההשפעה** הייתה על שדות שכבר מוצגים בפרודקשן, לא רק תיאורטית:
+  `existingPositionValueUsd`, `existingWeightPercent`,
+  `totalPortfolioValueUsd`, `totalPortfolioValueApproximate`,
+  `warnings` (אזהרת "no live price" שקרית), `largestCurrentPositionTicker`/
+  `largestCurrentPositionWeightPercent`, ו-`projectedPositionValueUsd`/
+  `projectedWeightPercent` (יורש את אותה שגיאה — מאומת מספרית: תיק עם
+  cash=$1,000, holding קיים 10 מניות @ cost-basis $100, candidate.price
+  אמיתי $150 — לפני התיקון `existingPositionValueUsd=$1,000`/50%,
+  אחרי התיקון $1,500/60%, פער של $500 ו-10 נקודות אחוז; עם `sizeDollars=$500`
+  נוסף — `projectedWeightPercent` יצא 75% במקום 80% הנכון). רלוונטי לכל
+  תרחיש ADD/REDUCE/HOLD/SELL על טיקר שכבר מוחזק, לא רק BUY על טיקר חדש.
+
+  **התיקון** (`src/lib/portfolio/portfolio-fit.ts`): עבור
+  `position.ticker === candidate.ticker`, `candidate.price` הוא מקור
+  ה-live-price — לא `currentPricesByTicker[position.ticker]`. לכל טיקר
+  אחר, precedence זהה-בית לקודם (`currentPricesByTicker` → `costBasisPerShare`
+  → 0). שינוי שורה אחת (עם הערה), אין שינוי ל-source-of-funds semantics
+  (`sizeDollars`), אין שינוי ל-`portfolio-fit-for-investor.ts`/
+  `decisions.ts`/`cases.ts` (כבר מעבירים `candidate.price` נכון —
+  הבעיה הייתה רק בפונקציה המקבלת).
+
+  **Regression coverage חדש, מדמה תנאי production אמיתיים — לא רק
+  שהפונקציה רצה:** `tests/unit/portfolio-fit.test.ts` — 7 טסטים חדשים
+  (18/18 בקובץ), כולל תרחיש שבו `candidate.ticker` **נעדר** מ-
+  `currentPricesByTicker` (תואם את שני ה-callers האמיתיים) וכולל
+  תרחיש-קונפליקט מפורש (`candidate.price=150` מול
+  `currentPricesByTicker.AAPL=120` — ערכים שונים בכוונה, ההוכחה
+  היחידה למי-מנצח). **ההערה נוספה גם לטסטים הקיימים** שמזל-בלבד
+  השתמשו באותו ערך בשני המקורות — מתועד שהם לא הוכיחו precedence,
+  לא נמחקו (עדיין תקפים לתרחישים שהם כן בודקים).
+
+  **נבדק ואומת:** typecheck ✓, lint ✓, 254/254 טסטים (34/34 קבצים).
+  **בדיקת snapshot אמיתית, read-only, על שתי ההחלטות הקיימות** — LLY
+  (`00501224-a28b-4b6c-855c-ad72f76946b4`) ו-SNDK
+  (`3fd5b614-daa0-493e-bd3a-1bb8d82f86f3`): ב-`portfolio_state_json`
+  הקפוא של שתיהן, ה-ticker הנחקר **לא** מופיע ב-`positions[]` —
+  **אף אחת מהן לא הושפעה** מהבאג (שתיהן היו candidate-לא-מוחזק בזמן
+  ההחלטה: LLY היה BUY ראשון, SNDK היה PASS על טיקר שלא הוחזק). ראיה
+  מהנתון הקפוא עצמו, לא ממצב התיק היום.
+
+  **אין קשר ל-Sector/Industry Exposure** — נמצא תוך כדי אותה חקירה, אבל
+  זה תיקון עצמאי לגמרי ל-`computePortfolioFit` הקיימת; sector/industry
+  עדיין לא נבנה, ר' "פתוח" למעלה.
 - **Manual Historical Entry + "Tell me why"** (2026-09-08): מאפשר להזין
   ידנית עסקאות היסטוריות **אמיתיות** (Actual בלבד — Hypothetical מפורשות
   מחוץ ל-scope) בלי לחכות לקובץ broker, ולתעד רציונל של עסקה דרך flow

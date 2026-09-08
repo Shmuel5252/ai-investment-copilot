@@ -123,4 +123,107 @@ describe("computePortfolioFit", () => {
     expect(fit.largestCurrentPositionWeightPercent).toBeNull();
     expect(fit.holdingsCount).toBe(0);
   });
+
+  // Note on the tests above that pass a held candidate ticker through
+  // `currentPricesByTicker` (e.g. `{ AAPL: 200 }` alongside
+  // `candidate: { ticker: "AAPL", price: 200 }`): the value there always
+  // happened to match `candidate.price`, so none of them could actually
+  // prove which source wins for the candidate's own ticker — and neither
+  // does it matter for what they're testing. They're left as-is (still
+  // valid for the scenarios they cover). The tests below are the ones
+  // that actually prove candidate-price precedence: real call sites
+  // (portfolio-fit-for-investor.ts, decisions.ts) always exclude the
+  // candidate from currentPricesByTicker — "already fetched once for the
+  // candidate itself, no reason to fetch it twice" — so
+  // currentPricesByTicker[candidate.ticker] is undefined in production;
+  // a real gap existed where that made an already-held candidate's own
+  // valuation silently fall back to cost basis despite a live price
+  // already in memory (docs/backlog.md).
+  describe("candidate price precedence — real call-site conditions", () => {
+    it("uses candidate.price when the candidate ticker is absent from currentPricesByTicker, matching both real call sites", () => {
+      const p = portfolio({
+        cash: 1000,
+        positions: [{ ticker: "AAPL", quantity: 10, costBasisPerShare: 100, costBasisConfidence: "known" }],
+      });
+      const fit = computePortfolioFit(p, {}, { ticker: "AAPL", price: 150 });
+      expect(fit.existingPositionValueUsd).toBe(1500);
+      expect(fit.totalPortfolioValueUsd).toBe(2500);
+      expect(fit.existingWeightPercent).toBeCloseTo(60);
+    });
+
+    it("candidate.price wins over a conflicting currentPricesByTicker entry for the same ticker", () => {
+      const p = portfolio({
+        cash: 1000,
+        positions: [{ ticker: "AAPL", quantity: 10, costBasisPerShare: 100, costBasisConfidence: "known" }],
+      });
+      // Deliberately different values (150 vs 120) — the only way to
+      // actually prove which source wins, not just that the function runs.
+      const fit = computePortfolioFit(p, { AAPL: 120 }, { ticker: "AAPL", price: 150 });
+      expect(fit.existingPositionValueUsd).toBe(1500); // 10*150, not 10*120=1200
+      expect(fit.totalPortfolioValueUsd).toBe(2500); // not 2200
+    });
+
+    it("projected valuation is built from the corrected existing valuation, not cost basis", () => {
+      const p = portfolio({
+        cash: 1000,
+        positions: [{ ticker: "AAPL", quantity: 10, costBasisPerShare: 100, costBasisConfidence: "known" }],
+      });
+      const fit = computePortfolioFit(p, {}, { ticker: "AAPL", price: 150, sizeDollars: 500 });
+      expect(fit.existingPositionValueUsd).toBe(1500);
+      expect(fit.totalPortfolioValueUsd).toBe(2500);
+      expect(fit.projectedPositionValueUsd).toBe(2000); // 1500 + 500, not 1000(cost-basis) + 500
+      expect(fit.projectedWeightPercent).toBeCloseTo(80);
+    });
+
+    it("does not mark the portfolio approximate or warn about the candidate's own ticker when candidate.price is available", () => {
+      const p = portfolio({
+        cash: 1000,
+        positions: [{ ticker: "AAPL", quantity: 10, costBasisPerShare: 100, costBasisConfidence: "known" }],
+      });
+      const fit = computePortfolioFit(p, {}, { ticker: "AAPL", price: 150 });
+      expect(fit.totalPortfolioValueApproximate).toBe(false);
+      expect(fit.warnings.some((w) => w.includes("AAPL"))).toBe(false);
+    });
+
+    it("other holdings without a live price still warn and mark the portfolio approximate, unaffected by the candidate fix", () => {
+      const p = portfolio({
+        cash: 0,
+        positions: [
+          { ticker: "AAPL", quantity: 10, costBasisPerShare: 100, costBasisConfidence: "known" }, // candidate
+          { ticker: "MSFT", quantity: 5, costBasisPerShare: 300, costBasisConfidence: "known" }, // no live price given
+        ],
+      });
+      const fit = computePortfolioFit(p, {}, { ticker: "AAPL", price: 150 });
+      expect(fit.totalPortfolioValueApproximate).toBe(true);
+      expect(fit.warnings.some((w) => w.includes("MSFT"))).toBe(true);
+      expect(fit.warnings.some((w) => w.includes("AAPL"))).toBe(false);
+    });
+
+    it("the corrected candidate valuation can flip which position is currently largest", () => {
+      const p = portfolio({
+        cash: 0,
+        positions: [
+          { ticker: "AAPL", quantity: 10, costBasisPerShare: 100, costBasisConfidence: "known" }, // candidate: cost-basis value 1000, corrected value 1500
+          { ticker: "MSFT", quantity: 5, costBasisPerShare: 250, costBasisConfidence: "known" }, // value 1250, currently the largest by cost basis
+        ],
+      });
+      // Without the fix: AAPL=1000 (cost basis) < MSFT=1250 -> MSFT largest.
+      // With the fix: AAPL=1500 (candidate.price) > MSFT=1250 -> AAPL largest.
+      const fit = computePortfolioFit(p, { MSFT: 250 }, { ticker: "AAPL", price: 150 });
+      expect(fit.largestCurrentPositionTicker).toBe("AAPL");
+      expect(fit.largestCurrentPositionWeightPercent).toBeCloseTo((1500 / 2750) * 100);
+    });
+
+    it("does not force the candidate to become largest when it genuinely isn't, even after correction", () => {
+      const p = portfolio({
+        cash: 0,
+        positions: [
+          { ticker: "AAPL", quantity: 10, costBasisPerShare: 100, costBasisConfidence: "known" }, // candidate: corrected value 1500
+          { ticker: "MSFT", quantity: 100, costBasisPerShare: 300, costBasisConfidence: "known" }, // value 30000, still far larger
+        ],
+      });
+      const fit = computePortfolioFit(p, { MSFT: 300 }, { ticker: "AAPL", price: 150 });
+      expect(fit.largestCurrentPositionTicker).toBe("MSFT");
+    });
+  });
 });

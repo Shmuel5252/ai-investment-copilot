@@ -57,7 +57,21 @@ export function computePortfolioFit(
   let largestValue = -Infinity;
 
   for (const position of portfolio.positions) {
-    const livePrice = currentPricesByTicker[position.ticker];
+    // The candidate's own live price always wins for its own ticker,
+    // never currentPricesByTicker — both real callers
+    // (portfolio-fit-for-investor.ts, decisions.ts) deliberately exclude
+    // the candidate from that map (it's already been fetched once for
+    // the candidate itself; "no reason to fetch it twice", see the
+    // comment on computePortfolioFitForInvestor) — so
+    // currentPricesByTicker[candidate.ticker] is always undefined in
+    // production, and without this, an already-held candidate silently
+    // fell back to cost basis despite a real live price sitting in
+    // memory (docs/backlog.md — real gap, confirmed against real
+    // production call sites, not just this function in isolation).
+    const livePrice =
+      position.ticker === candidate.ticker
+        ? candidate.price
+        : currentPricesByTicker[position.ticker];
     const priceUsed = livePrice ?? position.costBasisPerShare ?? 0;
     if (livePrice === undefined) {
       totalPortfolioValueApproximate = true;
