@@ -377,6 +377,17 @@ export const caseDetailPage = {
   projectedLabel: "צפוי",
   currentHoldingsLabel: "החזקות נוכחיות",
   largestLabel: "הגדולה ביותר",
+  cashLabel: "מזומן",
+  sectorExposureTitle: "חשיפה לפי סקטור",
+  industryExposureTitle: "חשיפה לפי ענף",
+  currentLabel: "נוכחי",
+  // Distinct on purpose from unknownSector/unknownIndustry above — those
+  // describe the candidate ticker under research itself; this describes
+  // a real *held* position with no sector/industry data on file (the
+  // computePortfolioFit() null bucket, docs/backlog.md — Sector +
+  // Industry Exposure). Different concepts, so a different term, not a
+  // reuse of "לא ידוע".
+  unclassifiedLabel: "לא מסווג",
   personalFitTitle: "Personal Fit — לעומת ה-DNA וה-Strategy שלך",
   generatePersonalFitButton: "צור Personal Fit",
   assessingButton: "מעריך...",

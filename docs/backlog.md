@@ -17,6 +17,37 @@
 
 ## פתוח
 
+### Decision page — Sector/Industry Exposure עדיין לא מוצג
+**נמצא:** 2026-09-09, תוך כדי implementation של Sector/Industry Exposure
+ב-UI (עמוד Case בלבד, ר' "נבנה" למטה). Product **אישרו במפורש** להשאיר
+את עמוד ה-Decision (`src/app/decisions/[id]/page.tsx`) מחוץ ל-scope
+של אותה משימה — זה לא נשכח, זו החלטה מתועדת. הפריט הזה **נפרד** מהפריט
+"Sector + Industry Exposure" תחת "נבנה" למטה — אותו לא צריך "לתקן",
+הוא נבנה נכון למה שאושר בו (AI context + UI בעמוד Case). זה פריט חדש
+לגמרי, לא המשך שלו.
+
+**למה זה לא "רק עוד UI"** — א-סימטריה אמיתית מול עמוד Case, נמצאה
+תוך כדי אותה בדיקה:
+- ב-Case, `trpc.cases.computePortfolioFit` (mutation קיים) כבר מחזיר
+  `PortfolioFit` מלא ל-client (כולל `sectorExposure`/`industryExposure`)
+  — הרחבת ה-UI לא דרשה שום שינוי server, רק רינדור.
+- ב-Decision, `decisions.get` (`src/server/routers/decisions.ts`)
+  מחזיר `snapshot.portfolioStateJson` — זו **רק** תוצאת
+  `computePositions()` הקפואה (positions+cash גולמיים), **לא**
+  `PortfolioFit` מחושב. ה-`portfolioFit` שכן מחושב בזמן `create`
+  (`decisions.ts`, קורא ל-`computePortfolioFit`) משמש **רק** להזנת
+  ה-AI narrative (`synthesizeDecisionContext`) — אף פעם לא נשמר, אף
+  פעם לא מוחזר ל-client.
+
+**מה יידרש בפועל (לא סוכם, לא לבנות בלי דיון Product נפרד):** query/
+endpoint חדש שמריץ מחדש `computePortfolioFit` על `portfolioStateJson`
+הקפוא של ה-snapshot + classification (`sector`/`industry`) שנשלף מחדש
+בזמן אמת per ticker (לא נשמר ב-snapshot) — זה מערבב semantics: המחיר/
+positions קפואים לתאריך ההחלטה, אבל sector/industry classification
+יהיה live/עדכני. האם זה תקין (sector/industry כמעט אף פעם לא משתנים
+לטיקר נתון, בניגוד למחיר), או שנדרשת החלטה מפורשת על "מה בדיוק
+נשמר/מוקפא ב-Decision Snapshot לצורך התצוגה הזו" — שאלת Product פתוחה.
+
 ### Transactions — אין שום מנגנון deduplication, לא cross-source ולא בכלל
 **נמצא:** 2026-09-08, תוך כדי חקירת Manual Historical Entry — נבדק
 במפורש כי המשתמש מתכנן לייבא בעתיד CSV אמיתי מהברוקר שעשוי לכלול

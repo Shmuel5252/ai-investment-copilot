@@ -165,7 +165,12 @@ export default function CaseDetailPage() {
         </div>
         {!intelligence && <p className="text-xs text-journal-muted">{t.fetchMarketDataFirst}</p>}
         {computeFit.isError && <p className="text-sm text-red-600">{computeFit.error.message}</p>}
-        {computeFit.data && <PortfolioFitView fit={computeFit.data} />}
+        {computeFit.data && (
+          <>
+            <PortfolioFitView fit={computeFit.data} />
+            <SectorIndustryExposureView fit={computeFit.data} />
+          </>
+        )}
       </section>
 
       {/* Personal Fit */}
@@ -438,6 +443,80 @@ function PortfolioFitView({ fit }: { fit: PortfolioFit }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+// Sector/Industry Exposure — deliberately a separate, visually-distinct
+// card from PortfolioFitView above, not nested inline in it (Product
+// decision). Cash always shown first, on its own line — never inside
+// the sector/industry lists themselves (docs/backlog.md, Sector +
+// Industry Exposure: cash is never a classification bucket). Current is
+// always rendered; projected only when the hypothetical-size mutation
+// actually returned it (same null-means-no-hypothetical-size pattern
+// PortfolioFitView already follows for projectedWeightPercent above) —
+// and when it is, current and projected render side by side, neither
+// replacing the other.
+function SectorIndustryExposureView({ fit }: { fit: PortfolioFit }) {
+  return (
+    <div className="rounded border border-journal-rule bg-journal-surface p-4 text-sm">
+      <p>
+        {t.cashLabel}: <Num>${fit.cashValueUsd.toFixed(2)}</Num> (
+        <Num>{fit.cashWeightPercent.toFixed(1)}%</Num> {t.ofPortfolioLabel})
+      </p>
+
+      <ExposureBreakdown title={`${t.sectorExposureTitle} (${t.currentLabel})`} entries={fit.sectorExposure} labelOf={(e) => e.sector} />
+      {fit.projectedSectorExposure !== null && (
+        <ExposureBreakdown
+          title={`${t.sectorExposureTitle} (${t.projectedLabel})`}
+          entries={fit.projectedSectorExposure}
+          labelOf={(e) => e.sector}
+        />
+      )}
+
+      <ExposureBreakdown title={`${t.industryExposureTitle} (${t.currentLabel})`} entries={fit.industryExposure} labelOf={(e) => e.industry} />
+      {fit.projectedIndustryExposure !== null && (
+        <ExposureBreakdown
+          title={`${t.industryExposureTitle} (${t.projectedLabel})`}
+          entries={fit.projectedIndustryExposure}
+          labelOf={(e) => e.industry}
+        />
+      )}
+    </div>
+  );
+}
+
+// Sorted by weightPercent descending — the Map-derived arrays computePortfolioFit()
+// returns have no meaningful order of their own (insertion order into an
+// internal Map, an implementation detail), so an explicit sort here is
+// required, not cosmetic.
+function ExposureBreakdown<E extends { weightPercent: number }>({
+  title,
+  entries,
+  labelOf,
+}: {
+  title: string;
+  entries: E[];
+  labelOf: (entry: E) => string | null;
+}) {
+  const sorted = [...entries].sort((a, b) => b.weightPercent - a.weightPercent);
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-semibold tracking-wide text-journal-muted">{title}</p>
+      <ul className="mt-1 flex flex-col gap-0.5 text-xs">
+        {sorted.map((entry, i) => {
+          const label = labelOf(entry);
+          return (
+            <li key={i}>
+              {/* Every numeric/percent value in RTL uses <Num>, no
+                  exception — even when the label itself is Latin
+                  (approved contract, docs/backlog.md). */}
+              {label === null ? t.unclassifiedLabel : label}:{" "}
+              <Num>{entry.weightPercent.toFixed(1)}%</Num>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
