@@ -77,6 +77,8 @@ export const casesRouter = router({
       return computePortfolioFitForInvestor(db, ctx.investorId, {
         ticker: investmentCase.ticker,
         price: intelligence.price,
+        sector: intelligence.sector,
+        industry: intelligence.industry,
         sizeDollars: input.sizeDollars,
       });
     }),
@@ -101,6 +103,8 @@ export const casesRouter = router({
       const portfolioFit = await computePortfolioFitForInvestor(db, ctx.investorId, {
         ticker: investmentCase.ticker,
         price: intelligence.price,
+        sector: intelligence.sector,
+        industry: intelligence.industry,
         sizeDollars: input.sizeDollars,
       });
 
@@ -124,9 +128,34 @@ export const casesRouter = router({
       const investmentCase = await requireOwnedCase(ctx.investorId, input.caseId);
       const idea = investmentCase.ideaId ? await getIdea(db, investmentCase.ideaId) : undefined;
 
-      const [dnaHypotheses, strategyPrinciples] = await Promise.all([
+      // New precondition (docs/backlog.md, Sector/Industry Exposure) —
+      // Personal Fit previously ran with no Market Intelligence
+      // dependency at all; it now needs the candidate's own price/
+      // sector/industry to compute real sector/industry exposure, the
+      // same way computePortfolioFit/generateSynthesis above already
+      // require it. investmentCase is already in memory from
+      // requireOwnedCase above — no extra DB read to check this.
+      const intelligence = investmentCase.marketIntelligenceJson as MarketIntelligence | null;
+      if (!intelligence) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Fetch market data for this case first — Personal Fit needs sector/industry exposure numbers.",
+        });
+      }
+
+      const [dnaHypotheses, strategyPrinciples, portfolioFit] = await Promise.all([
         listActiveDnaHypothesesForInvestor(db, ctx.investorId),
         listStrategyPrinciplesForInvestor(db, ctx.investorId),
+        // No sizeDollars — Personal Fit isn't about a hypothetical size,
+        // only current exposure (docs/backlog.md). Reuses the same
+        // shared computePortfolioFitForInvestor the two mutations above
+        // already call — not a parallel fetch-loop implementation.
+        computePortfolioFitForInvestor(db, ctx.investorId, {
+          ticker: investmentCase.ticker,
+          price: intelligence.price,
+          sector: intelligence.sector,
+          industry: intelligence.industry,
+        }),
       ]);
 
       // insufficient_evidence hypotheses/principles are excluded here,
@@ -165,6 +194,15 @@ export const casesRouter = router({
         ideaNoteText: idea?.noteText,
         dnaHypotheses: dnaForAi,
         strategyPrinciples: strategyForAi,
+        // The candidate's own classification — same `intelligence`
+        // object already in memory above for the precondition check and
+        // for computePortfolioFitForInvestor's candidate arg; no new
+        // fetch (docs/backlog.md, Sector + Industry Exposure — Personal
+        // Fit blocker, external review before commit).
+        candidateSector: intelligence.sector,
+        candidateIndustry: intelligence.industry,
+        sectorExposure: portfolioFit.sectorExposure,
+        industryExposure: portfolioFit.industryExposure,
       });
 
       const validated = validatePersonalFit(

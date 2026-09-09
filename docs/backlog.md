@@ -142,60 +142,14 @@ Evidence שמקורו הערה חופשית, לא ציטוט תשובת ראיו
 אמיתית (האם זה סוג עיקרון נפרד? האם נדרש נימוק?) — לא להתחיל לבנות
 בלי לסכם קודם.
 
-### Personal Fit / Portfolio Fit — אין חישוב חשיפה מצטברת לפי sector/industry, למרות עיקרון Strategy שמפנה אליה
-**נמצא:** 2026-08-20, בעקבות בקשת המשתמש לבדוק (לא לתקן) למה Personal
-Fit על SNDK הזכיר ריכוזיות. בדיקה עובדתית בשלושה שלבים, בלי הנחה
-מראש:
-
-1. **sector/industry נשלף בפועל?** כן — לכל holding, לא רק לטיקר
-   הנחקר. `computePortfolioFitForInvestor`
-   (`src/lib/portfolio/portfolio-fit-for-investor.ts`) קורא
-   ל-`getMarketIntelligence()` עבור כל טיקר מוחזק אחר כדי לתמחר אותו,
-   וזה אותו `fetchProfile` מ-FMP שמחזיר גם `sector`/`industry`
-   (`src/lib/market/fmp.ts`) ונשמר במלואו ב-cache
-   (`market_data_cache.payload_json`, ר' `market-intelligence.ts`).
-   הנתון האמיתי קיים ונשלף — הבעיה אינה בשליפה.
-2. **מחושבת חשיפה מצטברת לפי sector/industry?** לא. מיד אחרי
-   ה-fetch, `computePortfolioFitForInvestor` שולף רק `.price` מהתוצאה
-   (`prices[ticker] = intelligence.price`) וזורק את שאר האובייקט.
-   `computePortfolioFit()` (`src/lib/portfolio/portfolio-fit.ts`) עוקב
-   רק אחרי משקל טיקר בודד ואחרי הפוזיציה הגדולה ביותר — אין בכלל שדה
-   sector/industry ב-`PortfolioFit`, לא כל שכן צבירה לפי sector.
-3. **מוזן כ-context מובנה ל-AI?** לא, בשני המקומות שבהם AI מתייחס
-   לריכוזיות: (א) `generatePersonalFit`
-   (`src/server/routers/cases.ts` → `synthesizePersonalFit` ב-
-   `src/lib/ai/case.ts`) מקבל **רק** ticker + הערת הרעיון + DNA
-   hypotheses + Strategy principles — לא holdings, לא sector, לא
-   `PortfolioFit` בכלל. (ב) גם `portfolioFitText` של Case Synthesis
-   (`formatPortfolioFit` באותו קובץ) מקבל רק מספרי משקל ברמת טיקר, לא
-   שדה sector.
-
-**שורש מה שהמשתמש ראה בפועל:** אחד מארבעת עקרונות ה-Strategy הקבועים
-(`avoid-correlated-concentration`,
-`src/lib/strategy/default-risk-principles.ts`) מנוסח במפורש: "Watch
-for concentration across positions that would all move together on
-the same underlying risk (sector, theme, or macro driver)". העיקרון
-הזה validated מברירת המחדל ולכן כן מגיע ל-prompt של Personal Fit. אבל
-כשה-AI מיישם אותו על SNDK אין לו שום מספר חשיפה אמיתי שחושב מהנתונים
-של המשקיע הזה להיבנות עליו — הוא יכול רק "לדעת" מהידע הכללי שלו לאיזה
-sector שייך SNDK ולנחש קורלציה, לא מנתון שחושב בפועל. זו בדיוק הפרה
-עדינה של "AI לא ממציא facts": הנתון הגולמי (sector/industry) כן אמיתי
-וכן קיים ב-DB, אבל לא מוזן כ-context מובנה, אז ה-AI ממלא את החוסר
-מהידע הפנימי שלו במקום.
-
-**כיוון אפשרי (לא סוכם):** לחשב חשיפה מצטברת לפי sector/industry
-בתוך/לצד `computePortfolioFit` (הנתון כבר נשלף היום ונזרק — צריך רק
-"לצנרר" אותו הלאה במקום לזרוק), ולהזין את התוצאה כ-context מובנה גם
-ל-Portfolio Fit וגם ל-Personal Fit, באותו אופן שכבר עובד ל-DNA/Strategy
-citations. דורש גם החלטה אם/איך זה מוצג למשתמש (מספר %? אזהרה בלבד
-כמו `warnings` הקיים?) — לא להתחיל לבנות בלי לסכם קודם.
-
 ### Concentration מעבר ל-sector — theme/risk-driver משותף (SNDK/NVDA כדוגמה)
-**נמצא:** 2026-08-20, באותה בדיקה כמו הפער למעלה, אך **רעיון נפרד
-ומורכב יותר במכוון** — לא לערבב את השניים.
+**נמצא:** 2026-08-20, באותה בדיקה שהובילה ל-Sector/Industry Exposure
+(ר' "נבנה" למטה), אך **רעיון נפרד ומורכב יותר במכוון** — לא לערבב את
+השניים; לא נסגר, לא נבנה כאן.
 
-גם אם הפער למעלה ייבנה (צבירת חשיפה לפי sector/industry קטגוריים כפי
-שמגיעים מ-FMP), זה עדיין לא תופס את כל הריכוזיות האמיתית: שתי מניות
+גם אחרי ש-Sector/Industry Exposure הבסיסי נבנה (צבירת חשיפה לפי
+sector/industry קטגוריים כפי שמגיעים מ-FMP), זה עדיין לא תופס את כל
+הריכוזיות האמיתית: שתי מניות
 יכולות לחלוק risk-driver כלכלי אמיתי (למשל מחזור AI/capex) גם כש-
 sector/industry הרשמיים שלהן שונים — וגם ההפך, לשתף sector רשמי בלי
 להיות קורלטיביות כלכלית בפועל. `sector`/`industry` מ-FMP הוא שדה
@@ -206,8 +160,8 @@ AI vs Code + Traceable Judgments) — לא רק שדה DB נוסף שאפשר "�
 מ-FMP". דורש החלטת Product/UX אמיתית לפני בנייה: זו ממדיות חדשה על
 MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
 בכלל "Evidence" אומר לגבי סיווג מבני-שוק (לא התנהגות המשקיע עצמו)?
-לא לעצב את זה יותר כאן — רק לתעד כרעיון נפרד לדיון עתידי, לא כתיקון
-לפער הראשון.
+לא לעצב את זה יותר כאן — רק לתעד כרעיון נפרד לדיון עתידי, לא כהרחבה
+של Sector/Industry Exposure הבסיסי.
 
 ### 3 מתוך 5 ה-UNIQUE constraints החדשים (double-submit fix) — עדיין נכשלים כ-500 גולמי בהתנגשות אמיתית
 **נמצא:** 2026-08-17, תוך כדי בירור שאלת המשתמש "האם constraint שנתקל
@@ -258,6 +212,101 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
 ---
 
 ## נבנה
+- **Sector + Industry Exposure — Portfolio Fit / Case / Personal Fit / Decision** (2026-09-08): חישוב
+  deterministic של חשיפה מצטברת לפי sector+industry, current+projected, ב-`computePortfolioFit`, מוזן כ-structured
+  context ל-Case Synthesis, Personal Fit, ו-Decision. Option A מצומצם, כפי שאושר — לא theme/risk-driver (נשאר פתוח
+  ונפרד, ר' למטה), לא AI classification, לא persistence/schema change.
+
+  **Contract:**
+  - Percentages תמיד מול `totalPortfolioValueUsd` **כולל cash** — "כמה מהתיק חשוף לסקטור X". **אין** דרישה
+    ש-`Σ(sectorExposure.weightPercent)=100%` — cash לא נכנס לשום bucket. במקום זאת:
+    `cashWeightPercent + Σ(sectorExposure.weightPercent) ≈ 100%` (ובנפרד לאותו דבר על industry) — invariant
+    שנבדק ישירות בטסטים ברמת דיוק גבוהה (`toBeCloseTo(100, 8)`), לא display-rounded.
+  - `cashValueUsd`/`cashWeightPercent` נחשפים בנפרד על `PortfolioFit`. Cash **לעולם לא** sector/industry, **לעולם
+    לא** נכנס ל-null bucket.
+  - `sector: null`/`industry: null` = **Unclassified Holding בלבד** — holding אמיתי בלי נתון סיווג (מ-FMP או חסר
+    ב-classification map), לא cash, לא "נזרק" מה-breakdown.
+  - Projected ממשיך את הסמנטיקה הקיימת ("`sizeDollars` = הקצאה מתוך cash קיים, total קבוע") — לא סמנטיקה מקבילה
+    חדשה: `projectedCashValueUsd = cash − sizeDollars` (**בלי clamp** — יכול לצאת שלילי כש-`sizeDollars > cash`,
+    עקבי עם ה-warning הקיים), `projectedSectorExposure`/`projectedIndustryExposure` = current buckets + sizeDollars
+    ל-bucket של ה-candidate. כל בדיקת `sizeDollars` חדשה משתמשת ב-`!== undefined`, לא truthiness —
+    **`sizeDollars=0` הוא projected state מוגדר** (שווה סמנטית ל-current), לא `null`; מכוסה בטסט ייעודי.
+  - `null` כש-`sizeDollars` לא הוגדר בכלל (אותו pattern כמו `projectedPositionValueUsd` הקיים).
+
+  **Data shapes** (`src/lib/portfolio/portfolio-fit.ts`): `PortfolioFitCandidate` מקבל `sector: string | null`,
+  `industry: string | null` **חובה**, לא optional. `TickerClassification { sector, industry }` — מפה משותפת אחת
+  (לא שתי מפות נפרדות), כי שני הנתונים תמיד מגיעים מאותו `MarketIntelligence`. `SectorExposureEntry`/
+  `IndustryExposureEntry` — `{ sector/industry, valueUsd, weightPercent }`. `computePortfolioFit` מקבל ארגומנט
+  רביעי חדש, `classificationByTicker`.
+
+  **Candidate classification precedence** (נפרד מ-candidate **price** precedence שנסגר קודם ב-`fb7e48f`): כש-
+  `position.ticker === candidate.ticker`, `candidate.sector`/`candidate.industry` גוברים תמיד על
+  `classificationByTicker[ticker]` — invariant דטרמיניסטי על הפונקציה הטהורה עצמה, לא הסתמכות על משמעת caller
+  (שני ה-callers האמיתיים כבר מסננים את ה-candidate מהמפה, בדיוק כמו ב-price). נבדק גם עם קונפליקט מכוון
+  (`classificationByTicker` עם sector שונה מ-`candidate.sector`) וגם ב-projected (אותו classification משמש גם
+  ל-holding קיים וגם לתוספת `sizeDollars` — לא מתפצל לשני buckets).
+
+  **Reuse, אין fetch נוסף:** classification נאסף **תמיד** מאותו `MarketIntelligence` שכבר נשלף לצורך price —
+  `portfolio-fit-for-investor.ts`'s לולאת `otherTickers` (שולפת `intelligence.sector`/`.industry` לצד `.price`),
+  `decisions.ts`'s לולאה מקבילה (אותו דבר, שינוי צר — הכפילות בין השתיים **לא** אוחדה, נשארת follow-up נפרד),
+  ו-`cases.ts`'s שני ה-call sites הקיימים (`intelligence` כבר בזיכרון מ-`marketIntelligenceJson`).
+
+  **Personal Fit — precondition חדש:** `generatePersonalFit` (`cases.ts`) לא היה תלוי ב-Market Intelligence
+  בכלל; עכשיו דורש אותו (`BAD_REQUEST` אם חסר), עקבי עם שתי המוטציות האחיות. קורא ל-`computePortfolioFitForInvestor`
+  **בלי** `sizeDollars` (Personal Fit הוא current-only, אין projected, אין sizeDollars חדש) ומעביר ל-
+  `synthesizePersonalFit` גם `candidateSector`/`candidateIndustry` (ה-classification של המניה הנבדקת עצמה, מאותו
+  `intelligence` שכבר בזיכרון — לא רק חשיפת התיק) וגם `sectorExposure`/`industryExposure` (לא cash) — שני סוגי
+  הנתונים ביחד, לא רק חשיפת התיק לבדה (ר' "תוקן בפועל" למטה: זה נמצא כ-blocker נפרד ב-review לפני commit).
+  `PERSONAL_FIT_SYSTEM_PROMPT` הורחב: מותר לחבר בין ה-classification של ה-candidate לבין חשיפת התיק — **אסור**
+  ל-AI לסווג candidate בעצמו, **אסור** threshold מומצא.
+
+  **Formatting — מקור אמת אחד:** `src/lib/ai/format-portfolio-fit.ts` חדש (`formatCashLine`/
+  `formatSectorExposureLine`/`formatIndustryExposureLine`) — בשימוש ב-`case.ts`'s `formatPortfolioFit` **וגם**
+  `formatPersonalFitContext`, **וגם** `decision.ts`'s `formatContext` — לא שלושה מימושי-רינדור נפרדים לאותו
+  concept.
+
+  **תוקן בפועל (2026-09-09, לפני commit, external review על ה-raw diff):** ה-projected sector/industry
+  aggregation יצר "phantom bucket" בעל `valueUsd=0` (למשל "Unclassified 0.0%") כש-candidate **חדש (לא מוחזק)**
+  קיבל `sizeDollars=0` — `addToBucket()` מוסיף unconditionally גם `amount=0` למפתח שלא היה קיים ב-map עדיין. הטסט
+  היחיד שכיסה `sizeDollars=0` נבחר במכוון עם candidate **שכבר מוחזק** (כדי "לא ליצור bucket חדש-ריק") — כלומר
+  המקרה הבעייתי היה סיכון ידוע שלא נבדק, לא רק התגלה בהפתעה. **תיקון:** הפרדה בין שתי שאלות שהיו ממוזגות לאחת —
+  "האם קיים projected state בכלל" נשאר `sizeDollars !== undefined` (ללא שינוי, עדיין לא truthiness), אבל "האם יש
+  ערך אמיתי להוסיף ל-bucket" הוא `sizeDollars !== 0` — guard חדש סביב שתי קריאות ה-`addToBucket` בלבד (לא סביב
+  ה-`if` הראשי). `sizeDollars=0` עדיין מייצר projected state **לא-null**, פשוט זהה ל-current — לא "absent". נוספו 3
+  regression tests ב-`portfolio-fit.test.ts` (candidate חדש לא-מסווג עם `sizeDollars=0`; candidate חדש מסווג עם
+  `sizeDollars=0`; holding קיים בלי entry כלל ב-`classificationByTicker` → null bucket, פער coverage נוסף שה-review
+  ציין) וקובץ טסט חדש `tests/unit/format-portfolio-fit.test.ts` (5 טסטים, אותו pattern כמו
+  `format-price-size.test.ts` — פונקציית פורמט טהורה בלי Anthropic/DB) שמוכיח **גם ברמת הטקסט ה-AI-facing בפועל**
+  (לא רק ה-array הגולמי) שלא מוצגת שורת "Unclassified 0.0%" פנטומית.
+
+  **תוקן בפועל #2 (2026-09-09, לפני commit, אותו external review, blocker נוסף):** Personal Fit קיבל את חשיפת
+  ה-**תיק** (`sectorExposure`/`industryExposure`) אבל לא את ה-classification של ה-**candidate עצמו** — כדי לחבר
+  "הרעיון הזה נמצא בסקטור שהתיק כבר חשוף אליו ב-45%" ה-AI היה צריך לסווג את הטיקר בעצמו מידע כללי, בדיוק ה-
+  AI-classification non-goal שהפיצ'ר הזה קיים כדי למנוע (`case.ts`/`decision.ts` לא נפגעו — שניהם כבר מקבלים את
+  `intelligence` המלא של ה-candidate, כולל sector/industry, כחלק מה-context שלהם). **תיקון:** `PersonalFitInput`
+  קיבל `candidateSector: string | null` / `candidateIndustry: string | null` חדשים (חובה, לא optional);
+  `generatePersonalFit` (`cases.ts`) מעביר אותם מאותו `intelligence` שכבר בזיכרון (אין fetch נוסף);
+  `formatPersonalFitContext` **הפכה ל-exported** (אותו pattern כמו `decision.ts`'s `formatContext`) ומרנדרת
+  `Candidate sector: X` / `Candidate industry: Y` במפורש, `Unclassified` כש-null (לא מוסתר). נוסף
+  `tests/unit/case-format-personal-fit-context.test.ts` חדש (6 טסטים) שבודק את ה-formatter האמיתי ישירות.
+
+  **נבדק ואומת (אחרי שני התיקונים):** typecheck ✓, lint ✓, 293/293 טסטים (36/36 קבצים) — 39 חדשים לכל הפיצ'ר: 27
+  ב-`tests/unit/portfolio-fit.test.ts` (24 מהבנייה המקורית + 3 מתיקון #1), 1 ב-`tests/unit/decision-format-context.test.ts`
+  (Unclassified מוצג, לא נעלם), 5 ב-`tests/unit/format-portfolio-fit.test.ts` (חדש, מתיקון #1), 6 ב-
+  `tests/unit/case-format-personal-fit-context.test.ts` (חדש, מתיקון #2). 18 הטסטים הקיימים ב-`portfolio-fit.test.ts`
+  (כולל 7 candidate-price-precedence מ-`fb7e48f`) עודכנו בעיקר להתאמת החתימה החדשה (sector/industry/classification
+  map); assertions קיימים לא שוכתבו, ובמקומות רלוונטיים נוספו assertions לשדות ה-exposure/projected החדשים (למשל
+  "leaves projected fields null when no hypothetical size is given" קיבל assertions נוספים לארבעת שדות ה-projected
+  החדשים, לצד ה-assertions המקוריים שנשארו כפי שהיו).
+
+  **`case.ts`'s `formatPortfolioFit` — עדיין לא נוסף לו טסט ייעודי:** לא exported, אין pattern קיים לבדיקת
+  פונקציות פרטיות בקובץ הזה — עקבי עם ההנחיה לא לבנות test infrastructure חדשה רק לצורך זה; מדווח כאן במפורש, לא
+  הוחלט בשקט. **שונה מ-`formatPersonalFitContext`:** זו כבר exported ונבדקת (ר' תיקון #2 למעלה) — אותו pattern
+  כמו `decision.ts`'s `formatContext`.
+
+  **מפורשות לא נבנה כאן:** theme/risk-driver (ר' "Concentration מעבר ל-sector" למטה — נשאר פתוח ונפרד, לא סגור),
+  AI classification, threshold ריכוזיות שרירותי, איחוד הכפילות `decisions.ts`/`computePortfolioFitForInvestor`
+  (follow-up נפרד), שינוי `computePositions`, migration/persistence.
 - **`computePortfolioFit` — candidate price precedence כשה-candidate
   כבר מוחזק** (2026-09-08, נמצא תוך כדי חקירת Sector/Industry Exposure
   — תוקן כתיקון מבודד, לפני עבודת ה-sector עצמה): `PortfolioFitCandidate.price`

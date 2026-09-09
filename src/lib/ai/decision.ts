@@ -2,6 +2,7 @@ import { anthropic, CLAUDE_MODEL } from "./client";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
 import { formatSizeDollarsLine } from "./format-price-size";
+import { formatCashLine, formatSectorExposureLine, formatIndustryExposureLine } from "./format-portfolio-fit";
 import { assertNonEmptyStrings } from "./case";
 
 // Three things happen together at the moment a Decision is recorded
@@ -177,8 +178,16 @@ export function formatContext(input: DecisionContextInput): string {
 
     `\n=== Portfolio fit ===`,
     `Total portfolio value: $${f.totalPortfolioValueUsd.toFixed(2)}${f.totalPortfolioValueApproximate ? " (approximate)" : ""}`,
+    formatCashLine("Current", f.cashValueUsd, f.cashWeightPercent),
+    formatSectorExposureLine("Current", f.sectorExposure),
+    formatIndustryExposureLine("Current", f.industryExposure),
     `Existing exposure to ${input.ticker}: ${f.existingWeightPercent.toFixed(1)}% of portfolio`,
     f.projectedWeightPercent !== null ? `Projected exposure after this decision: ${f.projectedWeightPercent.toFixed(1)}%` : "",
+    f.projectedCashValueUsd !== null && f.projectedCashWeightPercent !== null
+      ? formatCashLine("Projected", f.projectedCashValueUsd, f.projectedCashWeightPercent)
+      : "",
+    f.projectedSectorExposure !== null ? formatSectorExposureLine("Projected", f.projectedSectorExposure) : "",
+    f.projectedIndustryExposure !== null ? formatIndustryExposureLine("Projected", f.projectedIndustryExposure) : "",
     f.largestCurrentPositionTicker ? `Current largest position: ${f.largestCurrentPositionTicker} at ${f.largestCurrentPositionWeightPercent?.toFixed(1)}%` : "",
     ...f.warnings.map((w) => `Warning: ${w}`),
   ];

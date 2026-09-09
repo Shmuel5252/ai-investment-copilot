@@ -22,7 +22,7 @@ import { getMarketIntelligence } from "@/lib/market/market-intelligence";
 import { getOrCaptureMarketContext } from "@/lib/market/market-context";
 import { getMarketContextById } from "@/db/repositories/market-context";
 import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
-import { computePortfolioFit } from "@/lib/portfolio/portfolio-fit";
+import { computePortfolioFit, type TickerClassification } from "@/lib/portfolio/portfolio-fit";
 import { synthesizeDecisionContext } from "@/lib/ai/decision";
 import { isUniqueViolation } from "@/db/errors";
 import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
@@ -90,6 +90,13 @@ export const decisionsRouter = router({
 
       const sizeDollarsForFit = ADDITIVE_DECISION_TYPES.has(input.decisionType) ? input.sizeDollars : undefined;
       const otherTickerPrices: Record<string, number> = {};
+      // Narrow addition, same loop, same already-fetched MarketIntelligence
+      // instance — no new fetch (docs/backlog.md, Sector/Industry
+      // Exposure). Deliberately still a separate loop from
+      // portfolio-fit-for-investor.ts's, not unified with it — that
+      // duplication is a pre-existing, separately-logged gap, out of
+      // scope here.
+      const otherTickerClassification: Record<string, TickerClassification> = {};
       await Promise.all(
         portfolioState.positions
           .filter((p) => p.ticker !== investmentCase.ticker)
@@ -97,6 +104,7 @@ export const decisionsRouter = router({
             try {
               const other = await getMarketIntelligence(db, p.ticker);
               otherTickerPrices[p.ticker] = other.price;
+              otherTickerClassification[p.ticker] = { sector: other.sector, industry: other.industry };
             } catch {
               // Same fallback as computePortfolioFitForInvestor: a
               // market-data hiccup for one other holding shouldn't block
@@ -104,11 +112,18 @@ export const decisionsRouter = router({
             }
           })
       );
-      const portfolioFit = computePortfolioFit(portfolioState, otherTickerPrices, {
-        ticker: investmentCase.ticker,
-        price: intelligence.price,
-        sizeDollars: sizeDollarsForFit,
-      });
+      const portfolioFit = computePortfolioFit(
+        portfolioState,
+        otherTickerPrices,
+        {
+          ticker: investmentCase.ticker,
+          price: intelligence.price,
+          sector: intelligence.sector,
+          industry: intelligence.industry,
+          sizeDollars: sizeDollarsForFit,
+        },
+        otherTickerClassification
+      );
 
       // insufficient_evidence hypotheses/principles are excluded from
       // what the AI reasons with (real gap found on real data — a hedge

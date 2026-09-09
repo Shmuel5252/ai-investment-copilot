@@ -1,6 +1,7 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
 import type { MarketIntelligence } from "@/lib/market/fmp";
-import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
+import type { PortfolioFit, SectorExposureEntry, IndustryExposureEntry } from "@/lib/portfolio/portfolio-fit";
+import { formatCashLine, formatSectorExposureLine, formatIndustryExposureLine } from "./format-portfolio-fit";
 
 // A required tool-response field silently disappearing (undefined/null/
 // empty) is exactly what No Fake Certainty exists to catch, not a mere
@@ -59,7 +60,7 @@ Ground rules:
 - Use ONLY the numbers and facts you are actually given (price, market cap, sector, industry, beta, valuation ratios if present, description, portfolio fit numbers). Never invent revenue, earnings, guidance, analyst price targets, news events, or any other fact not present in what you were handed.
 - If a valuation ratio (P/E, price/book, price/sales, dividend yield) is marked unavailable, say plainly that it wasn't available rather than guessing at it or working around it with an invented number.
 - marketBlindspotText should be an honest statement of what this data snapshot genuinely can't tell you (no cash-flow trend, no forward guidance, no news/sentiment, no financial-statement detail) — not a generic disclaimer, and not a fabricated additional risk dressed up as a blind spot.
-- portfolioFitText should narrate the portfolio-fit numbers you were given in plain language (current exposure, projected weight if a hypothetical size was given, how it compares to the largest current position, any cash-shortfall warning) — do not introduce new numbers or a concentration threshold that wasn't given to you.
+- portfolioFitText should narrate the portfolio-fit numbers you were given in plain language (current exposure, current cash/sector/industry exposure, projected weight and projected cash/sector/industry exposure if a hypothetical size was given, how it compares to the largest current position, any cash-shortfall warning) — do not introduce new numbers or a concentration threshold that wasn't given to you.
 - devilsAdvocateText should genuinely argue against taking this position, not restate the bear case in different words.
 - Keep each field to 2-4 sentences. Be specific to the actual data given, not generic boilerplate that could apply to any stock.`;
 
@@ -123,6 +124,9 @@ function formatMarketIntelligence(m: MarketIntelligence): string {
 function formatPortfolioFit(f: PortfolioFit): string {
   const lines = [
     `Total portfolio value: $${f.totalPortfolioValueUsd.toFixed(2)}${f.totalPortfolioValueApproximate ? " (approximate — some holdings priced at cost basis, not live)" : ""}`,
+    formatCashLine("Current", f.cashValueUsd, f.cashWeightPercent),
+    formatSectorExposureLine("Current", f.sectorExposure),
+    formatIndustryExposureLine("Current", f.industryExposure),
     `Existing holding in this ticker: ${f.existingHoldingQuantity} shares, $${f.existingPositionValueUsd.toFixed(2)}, ${f.existingWeightPercent.toFixed(1)}% of portfolio`,
     `Number of current holdings: ${f.holdingsCount}`,
   ];
@@ -135,6 +139,11 @@ function formatPortfolioFit(f: PortfolioFit): string {
     lines.push(
       `Projected position value if this hypothetical size is added: $${f.projectedPositionValueUsd.toFixed(2)} (${f.projectedWeightPercent.toFixed(1)}% of portfolio)`
     );
+    if (f.projectedCashValueUsd !== null && f.projectedCashWeightPercent !== null) {
+      lines.push(formatCashLine("Projected", f.projectedCashValueUsd, f.projectedCashWeightPercent));
+    }
+    if (f.projectedSectorExposure !== null) lines.push(formatSectorExposureLine("Projected", f.projectedSectorExposure));
+    if (f.projectedIndustryExposure !== null) lines.push(formatIndustryExposureLine("Projected", f.projectedIndustryExposure));
   }
   if (f.warnings.length > 0) lines.push(`Warnings: ${f.warnings.join(" ")}`);
   return lines.join("\n");
@@ -209,6 +218,31 @@ export interface PersonalFitInput {
   ideaNoteText?: string;
   dnaHypotheses: PersonalFitDnaInput[];
   strategyPrinciples: PersonalFitStrategyInput[];
+  /**
+   * The candidate ticker's OWN sector/industry — a deterministic
+   * MarketIntelligence fact (same source as candidate.sector/industry
+   * fed into computePortfolioFit elsewhere), not something to be
+   * inferred by the model from the ticker (docs/backlog.md, Sector +
+   * Industry Exposure — Personal Fit blocker, external review before
+   * commit). Explicit and separate from sectorExposure/industryExposure
+   * below: those describe the *portfolio's* current breakdown; these
+   * describe *this one candidate*. Without both together, connecting
+   * "this idea is in a sector the portfolio is already concentrated in"
+   * would require the model to classify SNDK et al. itself — exactly
+   * the AI-classification non-goal this feature exists to avoid.
+   */
+  candidateSector: string | null;
+  candidateIndustry: string | null;
+  /**
+   * Current-only (no projected, no sizeDollars) — Personal Fit isn't
+   * about a hypothetical size, it's "how does this idea fit you"
+   * (docs/backlog.md, Sector/Industry Exposure). This is Portfolio
+   * context handed to the model as structured input, same trust
+   * boundary as marketIntelligence elsewhere — never treated as a DNA
+   * hypothesis or Strategy principle itself.
+   */
+  sectorExposure: SectorExposureEntry[];
+  industryExposure: IndustryExposureEntry[];
 }
 
 export interface ProposedPersonalFit {
@@ -234,6 +268,7 @@ Ground rules:
 - Be honest about evidence strength — don't treat a "weak" hypothesis as if it were a confirmed pattern; you can still mention it, but say plainly how thin it is.
 - If you were given no DNA hypotheses and no Strategy principles at all, say plainly that there isn't enough personal history yet to assess fit — that is a completely normal, expected result, not a failure. Do not invent a personal-fit narrative from nothing.
 - Note both alignment AND conflict where relevant — a hypothesis or principle can just as easily argue against this idea as for it; report that honestly rather than only picking supportive ones.
+- You are also given this candidate's own sector/industry (a deterministic fact from real market data) and this investor's current sector and industry exposure (real numbers, computed from their actual holdings) — Portfolio context, not itself a DNA hypothesis or Strategy principle. You may connect the two (e.g. this candidate's sector is one the portfolio is already exposed to) — that connection is exactly what these facts are given to you for. Never classify the candidate yourself or invent a sector/industry if you were told it's Unclassified, and never invent a concentration threshold (e.g. "over 30% is too concentrated") that wasn't given to you — report the numbers, don't judge them against a rule you made up.
 - Keep it to 2-4 sentences.`;
 
 const PERSONAL_FIT_TOOL = {
@@ -258,8 +293,25 @@ const PERSONAL_FIT_TOOL = {
   },
 };
 
-function formatPersonalFitContext(input: PersonalFitInput): string {
-  const parts = [`Ticker under consideration: ${input.ticker}`];
+// Exported so it can be tested directly against realistic input, the
+// same pattern already used for decision.ts's formatContext
+// (tests/unit/decision-format-context.test.ts) — not new test
+// infrastructure, just the existing "export the real formatter, assert
+// on its output" pattern applied here too (docs/backlog.md, Sector +
+// Industry Exposure — Personal Fit blocker).
+export function formatPersonalFitContext(input: PersonalFitInput): string {
+  const parts = [
+    `Ticker under consideration: ${input.ticker}`,
+    // The candidate's own classification — a deterministic fact, stated
+    // plainly so the model never has to guess/classify it itself. Never
+    // omitted when null: "Unclassified" makes the absence of data an
+    // explicit fact too, same convention as formatSectorExposureLine/
+    // formatIndustryExposureLine's own null handling.
+    `Candidate sector: ${input.candidateSector ?? "Unclassified"}`,
+    `Candidate industry: ${input.candidateIndustry ?? "Unclassified"}`,
+    formatSectorExposureLine("Current", input.sectorExposure),
+    formatIndustryExposureLine("Current", input.industryExposure),
+  ];
   if (input.ideaNoteText) parts.push(`Investor's own note: ${input.ideaNoteText}`);
 
   if (input.dnaHypotheses.length > 0) {

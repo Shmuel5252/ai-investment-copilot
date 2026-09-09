@@ -61,6 +61,26 @@ const fixture: DecisionContextInput = {
     largestCurrentPositionTicker: "MSFT",
     largestCurrentPositionWeightPercent: 22.3,
     warnings: ["Adding ACME would push tech-sector exposure above 40%."],
+    cashValueUsd: 12345.67,
+    cashWeightPercent: 29.1,
+    sectorExposure: [
+      { sector: "Technology", valueUsd: 18000, weightPercent: 42.5 },
+      { sector: null, valueUsd: 3000, weightPercent: 7.1 },
+    ],
+    industryExposure: [
+      { industry: "Software", valueUsd: 15000, weightPercent: 35.4 },
+      { industry: null, valueUsd: 6000, weightPercent: 14.2 },
+    ],
+    projectedCashValueUsd: 9845.67,
+    projectedCashWeightPercent: 23.2,
+    projectedSectorExposure: [
+      { sector: "Technology", valueUsd: 20500, weightPercent: 48.4 },
+      { sector: null, valueUsd: 3000, weightPercent: 7.1 },
+    ],
+    projectedIndustryExposure: [
+      { industry: "Software", valueUsd: 17500, weightPercent: 41.3 },
+      { industry: null, valueUsd: 6000, weightPercent: 14.2 },
+    ],
   },
   dnaHypotheses: [
     { statementText: "Tends to buy after a pullback rather than at highs.", evidenceStrength: "moderate" },
@@ -92,8 +112,14 @@ VIX (volatility): 14.8
 
 === Portfolio fit ===
 Total portfolio value: $42350.75 (approximate)
+Current cash: $12345.67 (29.1% of portfolio)
+Current sector exposure: Technology 42.5%, Unclassified 7.1%
+Current industry exposure: Software 35.4%, Unclassified 14.2%
 Existing exposure to ACME: 0.0% of portfolio
 Projected exposure after this decision: 5.9%
+Projected cash: $9845.67 (23.2% of portfolio)
+Projected sector exposure: Technology 48.4%, Unclassified 7.1%
+Projected industry exposure: Software 41.3%, Unclassified 14.2%
 Current largest position: MSFT at 22.3%
 Warning: Adding ACME would push tech-sector exposure above 40%.
 
@@ -121,12 +147,16 @@ describe("formatContext", () => {
     expect(output).not.toContain("NOT a price");
   });
 
-  it("omits the projected-exposure and largest-position lines entirely when their values are null, rather than rendering an empty line", () => {
+  it("omits the projected-exposure, projected-cash/sector/industry, and largest-position lines entirely when their values are null, rather than rendering an empty line", () => {
     const noProjection: DecisionContextInput = {
       ...fixture,
       portfolioFit: {
         ...fixture.portfolioFit,
         projectedWeightPercent: null,
+        projectedCashValueUsd: null,
+        projectedCashWeightPercent: null,
+        projectedSectorExposure: null,
+        projectedIndustryExposure: null,
         largestCurrentPositionTicker: null,
         largestCurrentPositionWeightPercent: null,
         warnings: [],
@@ -134,8 +164,15 @@ describe("formatContext", () => {
     };
     const output = formatContext(noProjection);
     expect(output).not.toContain("Projected exposure");
+    expect(output).not.toContain("Projected cash");
+    expect(output).not.toContain("Projected sector exposure");
+    expect(output).not.toContain("Projected industry exposure");
     expect(output).not.toContain("Current largest position");
     expect(output).not.toContain("Warning:");
+    // Current cash/sector/industry lines still render — those are
+    // unconditional, not projected-only.
+    expect(output).toContain("Current cash: $12345.67");
+    expect(output).toContain("Current sector exposure:");
     // No blank line left behind where the filtered-out lines were.
     expect(output).not.toContain("\n\n\n");
   });
@@ -145,5 +182,10 @@ describe("formatContext", () => {
     const output = formatContext(noHistory);
     expect(output).toContain("=== This investor's DNA hypotheses === none yet.");
     expect(output).toContain("=== This investor's current Strategy principles === none yet.");
+  });
+
+  it("shows a holding with no sector/industry data as Unclassified, not silently dropped", () => {
+    expect(formatContext(fixture)).toContain("Unclassified 7.1%");
+    expect(formatContext(fixture)).toContain("Unclassified 14.2%");
   });
 });

@@ -10,9 +10,10 @@
 // any hardcoded percentage threshold — CLAUDE.md's No Fake Certainty
 // principle: a number like "20% is too concentrated" would be an
 // invented rule, not a fact about this investor. It surfaces the plain
-// numbers (existing/projected weight, largest position) and lets AI
-// synthesis reason about them against the investor's own *declared*
-// Strategy principles, if any — see src/lib/ai/case.ts.
+// numbers (existing/projected weight, largest position, sector/industry
+// exposure) and lets AI synthesis reason about them against the
+// investor's own *declared* Strategy principles, if any — see
+// src/lib/ai/case.ts.
 
 import type { Position, PortfolioState } from "./positions";
 
@@ -22,6 +23,40 @@ export interface PortfolioFitCandidate {
   price: number;
   /** Hypothetical dollar amount being considered for this position, if any. */
   sizeDollars?: number;
+  /**
+   * The candidate's own sector/industry, from the same MarketIntelligence
+   * the caller already fetched for its price — required, not optional
+   * (docs/backlog.md, Sector/Industry Exposure): every caller must
+   * decide explicitly what this candidate's classification is, the same
+   * way `price` is already required for the same reason. `null` means
+   * FMP genuinely has no sector/industry on file for this ticker — a
+   * real, distinct fact, not "caller forgot to pass it".
+   */
+  sector: string | null;
+  industry: string | null;
+}
+
+// A held ticker's sector+industry, both from the same MarketIntelligence
+// fetch — one combined shape, not two parallel maps, since the two
+// values always come from the same source per ticker (docs/backlog.md).
+export interface TickerClassification {
+  sector: string | null;
+  industry: string | null;
+}
+
+export interface SectorExposureEntry {
+  /** null = Unclassified Holding — no sector data available, never cash. */
+  sector: string | null;
+  valueUsd: number;
+  /** Against totalPortfolioValueUsd (includes cash) — same denominator as existingWeightPercent. Buckets do NOT sum to 100% when cash > 0; see cashWeightPercent. */
+  weightPercent: number;
+}
+
+export interface IndustryExposureEntry {
+  /** null = Unclassified Holding — no industry data available, never cash. */
+  industry: string | null;
+  valueUsd: number;
+  weightPercent: number;
 }
 
 export interface PortfolioFit {
@@ -37,16 +72,59 @@ export interface PortfolioFit {
   largestCurrentPositionTicker: string | null;
   largestCurrentPositionWeightPercent: number | null;
   warnings: string[];
+
+  /** Cash is never a sector/industry classification and never lands in a null (Unclassified) bucket — it's its own concept. */
+  cashValueUsd: number;
+  cashWeightPercent: number;
+
+  sectorExposure: SectorExposureEntry[];
+  industryExposure: IndustryExposureEntry[];
+
+  /**
+   * Completes the existing "reallocating existing cash into the
+   * position" model (see the sizeDollars block below) for cash/exposure:
+   * null when candidate.sizeDollars is undefined — same null-when-no-
+   * hypothetical-size pattern as projectedPositionValueUsd/
+   * projectedWeightPercent above. Deliberately NOT null just because
+   * sizeDollars is 0 — 0 is a defined hypothetical ("what if I add
+   * nothing"), and the projected fields then equal the current ones,
+   * not absent (docs/backlog.md).
+   */
+  projectedCashValueUsd: number | null;
+  projectedCashWeightPercent: number | null;
+  projectedSectorExposure: SectorExposureEntry[] | null;
+  projectedIndustryExposure: IndustryExposureEntry[] | null;
 }
 
 function valueOf(position: Position, priceUsed: number): number {
   return position.quantity * priceUsed;
 }
 
+function addToBucket(map: Map<string | null, number>, key: string | null, amount: number): void {
+  map.set(key, (map.get(key) ?? 0) + amount);
+}
+
+function toSectorEntries(map: ReadonlyMap<string | null, number>, totalPortfolioValueUsd: number): SectorExposureEntry[] {
+  return [...map.entries()].map(([sector, valueUsd]) => ({
+    sector,
+    valueUsd,
+    weightPercent: totalPortfolioValueUsd > 0 ? (valueUsd / totalPortfolioValueUsd) * 100 : 0,
+  }));
+}
+
+function toIndustryEntries(map: ReadonlyMap<string | null, number>, totalPortfolioValueUsd: number): IndustryExposureEntry[] {
+  return [...map.entries()].map(([industry, valueUsd]) => ({
+    industry,
+    valueUsd,
+    weightPercent: totalPortfolioValueUsd > 0 ? (valueUsd / totalPortfolioValueUsd) * 100 : 0,
+  }));
+}
+
 export function computePortfolioFit(
   portfolio: PortfolioState,
   currentPricesByTicker: Readonly<Record<string, number>>,
-  candidate: PortfolioFitCandidate
+  candidate: PortfolioFitCandidate,
+  classificationByTicker: Readonly<Record<string, TickerClassification>>
 ): PortfolioFit {
   const warnings: string[] = [];
   let totalPortfolioValueUsd = portfolio.cash;
@@ -55,6 +133,9 @@ export function computePortfolioFit(
   let existingHoldingQuantity = 0;
   let largestTicker: string | null = null;
   let largestValue = -Infinity;
+
+  const sectorValueByKey = new Map<string | null, number>();
+  const industryValueByKey = new Map<string | null, number>();
 
   for (const position of portfolio.positions) {
     // The candidate's own live price always wins for its own ticker,
@@ -88,13 +169,39 @@ export function computePortfolioFit(
       existingPositionValueUsd = value;
       existingHoldingQuantity = position.quantity;
     }
+
+    // Same precedence as price above, for the same reason: the
+    // candidate's own fresh classification always wins for its own
+    // ticker, never classificationByTicker — both real callers already
+    // exclude the candidate from that map. This is a defensive
+    // invariant on the pure function itself (docs/backlog.md), not
+    // reliance on caller discipline — so the same ticker can never show
+    // up under two different classifications within one breakdown.
+    // Missing/null classification (either source) falls into the
+    // Unclassified (null) bucket, never silently dropped.
+    const classification =
+      position.ticker === candidate.ticker
+        ? { sector: candidate.sector, industry: candidate.industry }
+        : (classificationByTicker[position.ticker] ?? { sector: null, industry: null });
+    addToBucket(sectorValueByKey, classification.sector, value);
+    addToBucket(industryValueByKey, classification.industry, value);
   }
 
   const existingWeightPercent =
     totalPortfolioValueUsd > 0 ? (existingPositionValueUsd / totalPortfolioValueUsd) * 100 : 0;
 
+  const cashValueUsd = portfolio.cash;
+  const cashWeightPercent = totalPortfolioValueUsd > 0 ? (cashValueUsd / totalPortfolioValueUsd) * 100 : 0;
+
+  const sectorExposure = toSectorEntries(sectorValueByKey, totalPortfolioValueUsd);
+  const industryExposure = toIndustryEntries(industryValueByKey, totalPortfolioValueUsd);
+
   let projectedPositionValueUsd: number | null = null;
   let projectedWeightPercent: number | null = null;
+  let projectedCashValueUsd: number | null = null;
+  let projectedCashWeightPercent: number | null = null;
+  let projectedSectorExposure: SectorExposureEntry[] | null = null;
+  let projectedIndustryExposure: IndustryExposureEntry[] | null = null;
 
   if (candidate.sizeDollars !== undefined) {
     // Modeled as reallocating existing cash into the position, not fresh
@@ -104,6 +211,46 @@ export function computePortfolioFit(
     projectedPositionValueUsd = existingPositionValueUsd + candidate.sizeDollars;
     projectedWeightPercent =
       totalPortfolioValueUsd > 0 ? (projectedPositionValueUsd / totalPortfolioValueUsd) * 100 : 0;
+
+    // Completes the same reallocation model above for cash and exposure:
+    // cash funds the hypothetical addition, so it drops by exactly
+    // sizeDollars — deliberately NOT clamped to 0 (docs/backlog.md): if
+    // sizeDollars exceeds available cash, this goes negative, an honest
+    // reflection of exactly what the warning below already says in
+    // words ("would require selling other holdings or adding funds"),
+    // not a bug to paper over with an invented floor.
+    projectedCashValueUsd = portfolio.cash - candidate.sizeDollars;
+    projectedCashWeightPercent =
+      totalPortfolioValueUsd > 0 ? (projectedCashValueUsd / totalPortfolioValueUsd) * 100 : 0;
+
+    // Two separate questions, not one (docs/backlog.md — external review
+    // caught this): "does a projected state exist" is
+    // `sizeDollars !== undefined` (the outer `if` above) — sizeDollars=0
+    // is a defined hypothetical and must still produce a non-null
+    // projected state. But "is there a real amount to add to a
+    // classification bucket" is `sizeDollars !== 0` — addToBucket()
+    // unconditionally does map.set(key, (map.get(key) ?? 0) + amount),
+    // so calling it with amount=0 for a candidate.sector/industry key
+    // that isn't already in the map (e.g. a brand-new unheld candidate,
+    // or one with sector=null) would silently materialize a spurious
+    // zero-value bucket (e.g. "Unclassified 0.0%") that current exposure
+    // never had — a real holding lacking classification data and a
+    // candidate that was allocated nothing are different facts and must
+    // not collapse into the same bucket. Guarding the addToBucket calls
+    // (not the sizeDollars!==undefined check above) keeps sizeDollars=0
+    // a defined, non-null projected state that's simply identical to
+    // current — not absent.
+    const projectedSectorMap = new Map(sectorValueByKey);
+    if (candidate.sizeDollars !== 0) {
+      addToBucket(projectedSectorMap, candidate.sector, candidate.sizeDollars);
+    }
+    projectedSectorExposure = toSectorEntries(projectedSectorMap, totalPortfolioValueUsd);
+
+    const projectedIndustryMap = new Map(industryValueByKey);
+    if (candidate.sizeDollars !== 0) {
+      addToBucket(projectedIndustryMap, candidate.industry, candidate.sizeDollars);
+    }
+    projectedIndustryExposure = toIndustryEntries(projectedIndustryMap, totalPortfolioValueUsd);
 
     if (candidate.sizeDollars > portfolio.cash) {
       warnings.push(
@@ -135,5 +282,13 @@ export function computePortfolioFit(
     largestCurrentPositionTicker: largestTicker,
     largestCurrentPositionWeightPercent,
     warnings,
+    cashValueUsd,
+    cashWeightPercent,
+    sectorExposure,
+    industryExposure,
+    projectedCashValueUsd,
+    projectedCashWeightPercent,
+    projectedSectorExposure,
+    projectedIndustryExposure,
   };
 }
