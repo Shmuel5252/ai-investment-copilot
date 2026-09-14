@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { computeAmountFromQuantityPrice } from "./validate";
-import type { NewTransaction } from "@/db/repositories/portfolio";
+import type { NewTransactionWithOrder } from "@/db/repositories/portfolio";
 
 // Manual Historical Entry (docs/backlog.md) — Actual trades only, entered
 // one batch at a time from the /import page's "manual" mode. Restricted
@@ -21,6 +21,15 @@ export const manualTransactionRowSchema = z.object({
   // write-only there today, docs/backlog.md) — only InterviewAnswer.
   // answerText is, via the separate "Tell me why" flow.
   notes: z.string().optional(),
+  // Same-day ordering (Investment Episode Independence design) — set only
+  // when the client detected a same-day collision (via
+  // import.checkManualEntryCollisions) and the user declared a relative
+  // order for it. Absent/undefined means "no declaration" — the atomic
+  // confirm-time contract (confirmTransactionsWithOrdering) then either
+  // finds there's no real collision after all (most rows, most of the
+  // time) or falls back to orderUnknownReason automatically; it never
+  // trusts this field alone to prove there's no ambiguity.
+  intraDayOrder: z.number().int().optional(),
 });
 
 export const manualEntryBatchSchema = z.object({
@@ -39,7 +48,7 @@ export type ManualTransactionRow = z.infer<typeof manualTransactionRowSchema>;
 export function buildManualTransactionValues(
   investorId: string,
   rows: ManualTransactionRow[]
-): NewTransaction[] {
+): NewTransactionWithOrder[] {
   return rows.map((row) => {
     const ticker = row.ticker.trim().toUpperCase();
     const amount = computeAmountFromQuantityPrice(row.transactionType, row.quantity, row.price);
@@ -54,6 +63,7 @@ export function buildManualTransactionValues(
       source: "manual_entry" as const,
       importBatchId: null,
       notes: row.notes?.trim() || null,
+      clientDeclaredOrder: row.intraDayOrder,
     };
   });
 }

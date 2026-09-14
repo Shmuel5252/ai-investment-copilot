@@ -13,6 +13,7 @@ function portfolio(overrides: Partial<PortfolioState> = {}): PortfolioState {
     positions: [],
     warnings: [],
     sellTrace: [],
+    episodeKeyByTransactionId: new Map(),
     ...overrides,
   };
 }

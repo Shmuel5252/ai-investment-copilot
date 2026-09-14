@@ -1,10 +1,12 @@
-import { pgTable, uuid, text, timestamp, numeric, integer } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, numeric, integer, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { investors } from "./identity";
 import {
   importBatchStatusEnum,
   transactionTypeEnum,
   transactionSourceEnum,
   costBasisConfidenceEnum,
+  orderUnknownReasonEnum,
 } from "./enums";
 
 // Traceability support for CSV imports (docs/data-model.md §6).
@@ -39,9 +41,39 @@ export const transactions = pgTable("transactions", {
   source: transactionSourceEnum("source").notNull(),
   importBatchId: uuid("import_batch_id").references(() => importBatches.id),
   notes: text("notes"),
+  // Same-day ordering (Investment Episode Independence design's "ordering
+  // contract") — both nullable, both null for the overwhelming majority
+  // of rows (no same-day ticker collision at all: docs/data-model.md's
+  // "no ambiguity" state). Never used by computePositions()'s existing
+  // accounting walk (still pure chronological-by-date, unaffected) — read
+  // only by the separate evidence-episode derivation
+  // (deriveEpisodeKeys(), src/lib/portfolio/positions.ts — invoked
+  // alongside the accounting walk, not merged into it). intraDayOrder: a
+  // user-declared relative position within one same-day
+  // (investor_id, ticker, transaction_date) group — enforced unique
+  // within the group by the partial index below, but NOT globally
+  // required (most rows never need one). orderUnknownReason: set instead
+  // of intraDayOrder when a same-day group's relative order is genuinely
+  // not known — see orderUnknownReasonEnum for the two reasons. A tied
+  // group must be either fully declared (every member has a distinct
+  // intraDayOrder) or fully unknown (every member has this set) — never
+  // mixed; enforced at confirm time by the import/manual-entry atomic
+  // contract, not by a DB constraint (a DB CHECK can't see sibling rows).
+  intraDayOrder: integer("intra_day_order"),
+  orderUnknownReason: orderUnknownReasonEnum("order_unknown_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  // Partial: only constrains rows that actually declare an order. Two
+  // transactions for the same investor+ticker+date both declaring
+  // intraDayOrder=1 is a genuine data error (or a lost concurrent-confirm
+  // race — see import.ts's advisory-lock contract) and must fail loudly,
+  // not silently coexist. Rows with intraDayOrder IS NULL (the
+  // overwhelming majority) never participate in this index at all.
+  uniqueIndex("transactions_investor_ticker_date_intraday_order_unique")
+    .on(table.investorId, table.ticker, table.transactionDate, table.intraDayOrder)
+    .where(sql`${table.intraDayOrder} IS NOT NULL`),
+]);
 
 // Holdings + cost basis as of the start of the imported window, entered
 // manually. Self-reported — surfaced in the UI as lower-traceability than

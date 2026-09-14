@@ -243,6 +243,54 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
 ---
 
 ## נבנה
+- **Investment Episode Independence — Evidence Strength ל-DNA/Strategy**
+  (2026-09-14): תוקן gap אמיתי שנמצא תוך כדי חקירה חיה על נתוני MP
+  אמיתיים — לא נבנה כ-backlog item נפרד קודם (investigation→design→
+  implementation ברצף אחד, ר' "עודכן" למעלה תחת Manual Historical
+  Entry לאיפה שהפער תועד בפועל בזמנו).
+
+  **הבעיה:** `answerCaseKeys` (ב-`dna.ts`/`strategy.ts`, זהה בשני
+  הקבצים) מיפה case key לפי `transactionId ?? answerId` גולמי — פוזיציה
+  אחת רציפה עם כמה transactions (BUY + partial SELL + final SELL, כמו
+  MP האמיתי) הייתה יכולה להיספר כ-2-3 independent cases נפרדים ב-
+  Evidence Strength, במקום case אחד — סיכון ממשי לחצות סף
+  Insufficient→Moderate על בסיס פוזיציה בודדת.
+
+  **הפתרון:** `deriveEpisodeKeys()` (בתוך `computePositions()`,
+  `src/lib/portfolio/positions.ts`) — חישוב נפרד, in-memory, לא
+  persisted, שמזהה אילו transactions שייכים לאותו "investment episode"
+  רציף (פתוח→שטוח). מודל של שני מספרים בלבד לכל טיקר: `ceiling` (חסם
+  עליון מוכח, אף פעם לא מוכיח פתיחה) ו-`exactKnown` (הערך המדויק,
+  כשאין אי-ודאות). episode חדש מוכח **רק** מ-exact crossing מעל epsilon
+  — לעולם לא מ-`ceiling` בלבד. שיוך מפתח הוא retrospective/run-based:
+  transactions אחרי סגירה מצטברים ב-buffer עד שמוכחת פתיחה (כל ה-buffer
+  מקבל מפתח חדש אחד) או סגירה נוספת/סוף הכרונולוגיה (הכל ממוזג אחורה).
+  `buildAnswerCaseKeys` (`src/lib/evidence/build-answer-case-keys.ts`)
+  הוא ה-helper המשותף היחיד ש-`dna.ts`/`strategy.ts` קוראים לו — לא
+  מימוש כפול. `transactionId===null` ממשיך ל-`answer.id`, ומיפוי חסר
+  קורס ל-sentinel קבוע אחד (`__unmapped__`), אף פעם לא ל-transactionId
+  הגולמי. כולל migration תוסף (`0007_wild_unus.sql`): `intra_day_order`/
+  `order_unknown_reason` על `transactions` (ordering contract ליום
+  התנגשות) + backfill ממוקד + partial unique index, ו-contract אטומי
+  ב-`confirmTransactionsWithOrdering` (advisory lock per investor+ticker+
+  date) עבור Import/Manual Entry.
+
+  **Scope boundary, נאכף בקוד:** ה-derivation החדש חולק עם ה-accumulator
+  הקיים אך ורק את `applyTransactionToQuantity()` — לא נוגע ולא נקרא
+  ע"י quantity/totalCostBasis/avg cost/sellTrace/warnings/positions
+  המוצגים. אומת ב-raw-diff review נפרד לפני commit.
+
+  **מאומת חי, read-only, על MP האמיתי (לא סינתטי):** שלוש ה-
+  InterviewAnswer המקושרות לשלוש עסקאות ה-MP (BUY, partial SELL, final
+  SELL) — כולן resolve ל-case key אחד, `MP#1`, דרך `buildAnswerCaseKeys`
+  האמיתי. `dna.generate` **לא** הורץ במהלך העבודה הזו.
+
+  **נבדק ואומת:** typecheck ✓, lint ✓, build ✓, 338/338 טסטים (40/40
+  קבצים) — כולל property/oracle suite (N=2..6 permutations דרך אותו
+  `applyTransactionToQuantity` production, לא re-implementation),
+  integration test אמיתי על concurrent confirms (advisory lock מול
+  Postgres אמיתי).
+
 - **Sector + Industry Exposure — Portfolio Fit / Case / Personal Fit / Decision** (2026-09-08): חישוב
   deterministic של חשיפה מצטברת לפי sector+industry, current+projected, ב-`computePortfolioFit`, מוזן כ-structured
   context ל-Case Synthesis, Personal Fit, ו-Decision. Option A מצומצם, כפי שאושר — לא theme/risk-driver (נשאר פתוח
@@ -456,6 +504,11 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
   בלבד, כפי שסוכם:** provenance **לא** משנה Evidence Strength/weighting;
   `answerCaseKeys`/`countIndependentCases` לא נגעו כלל.
 
+  **עודכן (2026-09-14) — הטענה למעלה נכונה נכון לזמנה, לא יותר:**
+  `answerCaseKeys` עצמו **כן** נגע מאז — ר' "Investment Episode
+  Independence" למטה. `countIndependentCases` עצמו עדיין לא נגע (השינוי
+  היה ב-case **key** שמוזן אליו, לא בפונקציה עצמה).
+
   **InterviewAnswer — יחס ל-transaction:** נשאר עמודה יחידה (`transaction_id`),
   לא junction table/מערך — מאומת בחקירה נפרדת שאין בעיה אמיתית: `answerText`
   הוא טקסט חופשי לחלוטין, לא נאכף מבנית שהוא "מדבר רק על" ה-anchor
@@ -495,6 +548,12 @@ MarketIntelligence? judgment עם citations כמו DNA/Strategy? מה
   (שני הראוטרים בונים `answerCaseKeys`/את קלט ה-AI inline, לא דרך
   helper מיוצא משותף) — חריגה מ-scope המשימה הזו, לא "מינימלי ונקי".
   לכן לא נוסף test infrastructure חדש; התיעוד דויק במקום זאת.
+
+  **עודכן (2026-09-14) — הפער הזה נסגר:** `buildAnswerCaseKeys`
+  (`src/lib/evidence/build-answer-case-keys.ts`) הוא עכשיו בדיוק ה-helper
+  המיוצא-המשותף שחסר כאן — שני הראוטרים קוראים לו, לא בונים
+  `answerCaseKeys` inline יותר. ר' "Investment Episode Independence"
+  למטה.
 
   **לא מוכח (נשען על code-review ידני, כמו בכל הסבבים הקודמים):**
   ש-`confirmManualEntry`/`startTellMeWhy` עצמם (שכבת ה-router — Zod

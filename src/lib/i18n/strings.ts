@@ -206,6 +206,19 @@ export const importPage = {
   currentPositions: "פוזיציות נוכחיות:",
 };
 
+// --- Same-day ordering collision resolution (Investment Episode
+// Independence design) — shared between file-mode (import.validate's
+// collisionGroups) and manual mode (import.checkManualEntryCollisions) in
+// src/app/import/page.tsx, one set of strings for both since it's the
+// same UI concept in both places. ---
+export const collisionResolution = {
+  heading: "יותר מעסקה אחת באותו טיקר באותו תאריך",
+  explanation:
+    "לשורות האלה אין למערכת דרך לדעת איזו התרחשה קודם. אפשר להזין מספר סדר (1, 2, ...) לכל שורה חדשה אם ידוע — כל השורות בקבוצה צריכות מספר שונה. אם לא כולן יקבלו מספר, כל הקבוצה תישמר כ\"סדר לא ידוע\", וזה תקין לגמרי.",
+  existingRowLabel: "עסקה קיימת כבר במערכת:",
+  orderPlaceholder: "סדר",
+};
+
 // --- Manual Historical Entry (src/app/import/page.tsx, manual mode) —
 // Actual trades only, never hypothetical/what-if scenarios
 // (docs/backlog.md). ---

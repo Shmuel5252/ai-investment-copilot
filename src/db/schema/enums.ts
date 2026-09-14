@@ -149,3 +149,18 @@ export const interviewSessionOriginEnum = pgEnum("interview_session_origin", [
 ]);
 
 export const ideaSourceEnum = pgEnum("idea_source", ["user_manual"]);
+
+// Same-day transaction ordering (docs — Investment Episode Independence
+// design, "Ordering contract"). Only meaningful when a transaction
+// shares (investor_id, ticker, transaction_date) with at least one other
+// transaction — see transactions.intraDayOrder's own comment for the
+// three-state contract this participates in. 'user_declared': a tied
+// group was detected and a human said the relative order is genuinely
+// unknown. 'never_recorded': ambiguity discovered after the fact (e.g.
+// backfilled over pre-existing rows) — no human was ever asked. Episode
+// derivation (deriveEpisodeKeys(), src/lib/portfolio/positions.ts) treats
+// both identically; the distinction is audit-only.
+export const orderUnknownReasonEnum = pgEnum("order_unknown_reason", [
+  "user_declared",
+  "never_recorded",
+]);

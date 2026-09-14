@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { validateProposedHypotheses } from "@/lib/dna/validate-hypotheses";
 import type { ProposedHypothesis } from "@/lib/ai/dna";
+import { computePositions, type TransactionInput } from "@/lib/portfolio/positions";
+import { buildAnswerCaseKeys } from "@/lib/evidence/build-answer-case-keys";
 
 // Helper: each answer id is its own independent case (id -> id) unless a
 // test explicitly wants two answer ids to resolve to the *same*
@@ -140,6 +142,71 @@ describe("validateProposedHypotheses", () => {
     expect(result[0]?.evidence).toHaveLength(3);
     // ...but the strength-driving count reflects only 2 independent cases.
     expect(result[0]?.supportingCount).toBe(2);
+    expect(result[0]?.evidenceStrength).toBe("insufficient_evidence");
+  });
+
+  // The full Investment Episode Independence pipeline, end to end, with
+  // no DB and no AI call: real computePositions() -> real
+  // buildAnswerCaseKeys() -> real validateProposedHypotheses(). Proves
+  // the ORIGINAL bug this whole design fixes is actually fixed at the
+  // point DNA/Strategy consume it, not just inside the episode-derivation
+  // module in isolation — the real MP shape (BUY, partial SELL, final
+  // SELL, three InterviewAnswers, one anchored per transaction) must
+  // collapse to exactly one independent case.
+  it("MP shape end-to-end: three InterviewAnswers on three transactions of one continuous position count as one independent case", () => {
+    const buy: TransactionInput = {
+      id: "txn-buy",
+      ticker: "MP",
+      transactionType: "buy",
+      quantity: 20.6521,
+      price: 48.42,
+      amount: -999.98,
+      transactionDate: new Date("2026-08-05"),
+    };
+    const sell1: TransactionInput = {
+      id: "txn-sell-1",
+      ticker: "MP",
+      transactionType: "sell",
+      quantity: 12.1317,
+      price: 57.62,
+      amount: 699.03,
+      transactionDate: new Date("2026-08-24"),
+    };
+    const sell2: TransactionInput = {
+      id: "txn-sell-2",
+      ticker: "MP",
+      transactionType: "sell",
+      quantity: 8.5204,
+      price: 59.4,
+      amount: 506.11,
+      transactionDate: new Date("2026-08-28"),
+    };
+    const { episodeKeyByTransactionId } = computePositions([buy, sell1, sell2], []);
+
+    const answers = [
+      { id: "answer-buy", transactionId: "txn-buy" },
+      { id: "answer-sell-1", transactionId: "txn-sell-1" },
+      { id: "answer-sell-2", transactionId: "txn-sell-2" },
+    ];
+    const caseKeys = buildAnswerCaseKeys(answers, episodeKeyByTransactionId);
+
+    const proposed: ProposedHypothesis[] = [
+      {
+        statement: "You take profits in stages rather than exiting all at once.",
+        evidence: [
+          { interviewAnswerId: "answer-buy", stance: "supporting", description: "Entered MP on the initial thesis." },
+          { interviewAnswerId: "answer-sell-1", stance: "supporting", description: "Took partial profit." },
+          { interviewAnswerId: "answer-sell-2", stance: "supporting", description: "Closed the remainder." },
+        ],
+      },
+    ];
+    const result = validateProposedHypotheses(proposed, caseKeys);
+
+    // All three raw citations are kept for traceability ("View Evidence")...
+    expect(result[0]?.evidence).toHaveLength(3);
+    // ...but this is ONE real position's lifecycle, not three independent
+    // cases — the exact bug this design fixes.
+    expect(result[0]?.supportingCount).toBe(1);
     expect(result[0]?.evidenceStrength).toBe("insufficient_evidence");
   });
 });

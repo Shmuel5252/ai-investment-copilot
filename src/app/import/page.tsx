@@ -11,6 +11,7 @@ import {
   importFieldLabel,
   importPage as t,
   manualEntryPage as m,
+  collisionResolution as cr,
   tellMeWhy as ttw,
   costBasisConfidenceLabel,
   common,
@@ -30,6 +31,8 @@ interface ManualRowDraft {
   price: string;
   transactionDate: string;
   notes: string;
+  /** Same-day ordering (Investment Episode Independence design) — only shown/used when this row is part of a detected collision group. Empty = no declaration. */
+  intraDayOrder: string;
 }
 
 function emptyManualRow(): ManualRowDraft {
@@ -40,6 +43,7 @@ function emptyManualRow(): ManualRowDraft {
     price: "",
     transactionDate: new Date().toISOString().slice(0, 10),
     notes: "",
+    intraDayOrder: "",
   };
 }
 
@@ -59,6 +63,10 @@ export default function ImportPage() {
   const [csvContent, setCsvContent] = useState("");
   const [mapping, setMapping] = useState<Partial<Record<CanonicalField, string>>>({});
   const [openingStates, setOpeningStates] = useState<Record<string, OpeningStateDraft>>({});
+  // Same-day ordering declarations for CSV import — keyed by rowIndex
+  // (string), matching collisionGroups' incoming[].clientRowKey exactly
+  // (both derive from NormalizedTransactionRow.rowIndex).
+  const [rowOrderDeclarations, setRowOrderDeclarations] = useState<Record<string, string>>({});
   const [manualRows, setManualRows] = useState<ManualRowDraft[]>([emptyManualRow()]);
 
   const preview = trpc.import.preview.useQuery({ csvContent }, { enabled: csvContent.length > 0 });
@@ -68,6 +76,28 @@ export default function ImportPage() {
   );
   const confirmImport = trpc.import.confirmImport.useMutation();
   const confirmManualEntry = trpc.import.confirmManualEntry.useMutation();
+
+  // Same-day collision preview for manual entry — only fires once every
+  // current row is complete enough to validate server-side (positional
+  // index correlation with manualRows must stay exact, so partial rows
+  // can't be filtered out before sending).
+  const manualRowsComplete =
+    manualRows.length > 0 &&
+    manualRows.every(
+      (r) => r.ticker.trim() !== "" && Number(r.quantity) > 0 && Number(r.price) > 0 && r.transactionDate !== ""
+    );
+  const manualCollisions = trpc.import.checkManualEntryCollisions.useQuery(
+    {
+      rows: manualRows.map((r) => ({
+        ticker: r.ticker.trim(),
+        transactionType: r.transactionType,
+        quantity: Number(r.quantity),
+        price: Number(r.price),
+        transactionDate: new Date(r.transactionDate),
+      })),
+    },
+    { enabled: manualRowsComplete && mode === "manual" }
+  );
 
   // Pre-fill the mapping form with the server's best guess, once, the
   // first time it arrives — never overwrites edits the user has already
@@ -89,6 +119,14 @@ export default function ImportPage() {
     const content = await file.text();
     setFilename(file.name);
     setCsvContent(content);
+    // A previous file's row-index-keyed order declarations must never
+    // survive into a new file — row 5 of file A and row 5 of file B are
+    // unrelated transactions, and a stale declaration here would be
+    // silently pre-filled into a new, unrelated collision group's input
+    // (pre-commit raw-diff review finding, this session). openingStates
+    // isn't touched here: same pre-existing pattern, out of this fix's
+    // narrow scope.
+    setRowOrderDeclarations({});
     setStep("mapping");
   }
 
@@ -122,12 +160,24 @@ export default function ImportPage() {
         asOfDate: new Date(os.asOfDate),
       }));
 
+    const rowOrderPayload = Object.fromEntries(
+      Object.entries(rowOrderDeclarations)
+        .filter(([, v]) => v.trim() !== "")
+        .map(([k, v]) => [k, Number(v)])
+    );
+
     // The exact button a real double-click duplicated a full import
     // through (see git history) — guarded now, not just disabled-on-
     // isPending (see src/lib/use-submit-guard.ts for why that alone
     // wasn't enough).
     const result = await guard(() =>
-      confirmImport.mutateAsync({ csvContent, mapping, filename, openingStates: openingStatesPayload })
+      confirmImport.mutateAsync({
+        csvContent,
+        mapping,
+        filename,
+        openingStates: openingStatesPayload,
+        rowOrderDeclarations: rowOrderPayload,
+      })
     );
     if (result) setStep("done");
   }
@@ -152,6 +202,7 @@ export default function ImportPage() {
       price: Number(r.price),
       transactionDate: new Date(r.transactionDate),
       notes: r.notes.trim() === "" ? undefined : r.notes.trim(),
+      intraDayOrder: r.intraDayOrder.trim() === "" ? undefined : Number(r.intraDayOrder),
     }));
 
     // Same double-submit guard as the CSV path above, keyed separately
@@ -330,6 +381,44 @@ export default function ImportPage() {
                 </div>
               )}
 
+              {validation.data.collisionGroups.length > 0 && (
+                <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+                  <p className="font-medium">{cr.heading}</p>
+                  <p className="mt-1 text-xs text-journal-muted">{cr.explanation}</p>
+                  <div className="mt-3 flex flex-col gap-3">
+                    {validation.data.collisionGroups.map((group) => (
+                      <div
+                        key={`${group.ticker}-${new Date(group.transactionDate).toISOString()}`}
+                        className="flex flex-col gap-1 rounded border border-journal-rule p-2"
+                      >
+                        <span className="font-medium">
+                          {group.ticker} — {new Date(group.transactionDate).toISOString().slice(0, 10)}
+                        </span>
+                        {group.existing.map((ex) => (
+                          <span key={ex.id} className="text-xs text-journal-muted">
+                            {cr.existingRowLabel}
+                          </span>
+                        ))}
+                        {group.incoming.map((inc) => (
+                          <label key={inc.clientRowKey} className="flex items-center gap-2 text-xs">
+                            {t.rowLabel} <Num>{Number(inc.clientRowKey) + 1}</Num>
+                            <input
+                              type="number"
+                              placeholder={cr.orderPlaceholder}
+                              className="w-16 rounded border border-journal-rule px-2 py-1"
+                              value={rowOrderDeclarations[inc.clientRowKey] ?? ""}
+                              onChange={(e) =>
+                                setRowOrderDeclarations((prev) => ({ ...prev, [inc.clientRowKey]: e.target.value }))
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={handleConfirm}
                 disabled={validation.data.invalidRows.length > 0 || confirmImport.isPending}
@@ -451,6 +540,45 @@ export default function ImportPage() {
               </div>
             ))}
           </div>
+
+          {manualCollisions.data && manualCollisions.data.length > 0 && (
+            <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+              <p className="font-medium">{cr.heading}</p>
+              <p className="mt-1 text-xs text-journal-muted">{cr.explanation}</p>
+              <div className="mt-3 flex flex-col gap-3">
+                {manualCollisions.data.map((group) => (
+                  <div
+                    key={`${group.ticker}-${new Date(group.transactionDate).toISOString()}`}
+                    className="flex flex-col gap-1 rounded border border-journal-rule p-2"
+                  >
+                    <span className="font-medium">
+                      {group.ticker} — {new Date(group.transactionDate).toISOString().slice(0, 10)}
+                    </span>
+                    {group.existing.map((ex) => (
+                      <span key={ex.id} className="text-xs text-journal-muted">
+                        {cr.existingRowLabel}
+                      </span>
+                    ))}
+                    {group.incoming.map((inc) => {
+                      const rowIndex = Number(inc.clientRowKey);
+                      return (
+                        <label key={inc.clientRowKey} className="flex items-center gap-2 text-xs">
+                          {t.rowLabel} <Num>{rowIndex + 1}</Num>
+                          <input
+                            type="number"
+                            placeholder={cr.orderPlaceholder}
+                            className="w-16 rounded border border-journal-rule px-2 py-1"
+                            value={manualRows[rowIndex]?.intraDayOrder ?? ""}
+                            onChange={(e) => updateManualRow(rowIndex, { intraDayOrder: e.target.value })}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <button

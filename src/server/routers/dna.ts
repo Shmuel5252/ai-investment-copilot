@@ -11,6 +11,8 @@ import {
 import { getEvidenceForDnaHypothesis } from "@/db/repositories/evidence";
 import { proposeDnaHypotheses } from "@/lib/ai/dna";
 import { validateProposedHypotheses } from "@/lib/dna/validate-hypotheses";
+import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
+import { buildAnswerCaseKeys } from "@/lib/evidence/build-answer-case-keys";
 
 export const dnaRouter = router({
   // AI proposes hypotheses + evidence citations from InterviewAnswers
@@ -30,14 +32,22 @@ export const dnaRouter = router({
       answers.map((a) => ({ id: a.id, questionText: a.questionText, answerText: a.answerText }))
     );
 
-    // Evidence Strength must count independent investment cases, not raw
-    // Evidence rows (real gap found on real data) — two different
-    // InterviewAnswers about the same transaction (reachable: the
+    // Evidence Strength must count independent investment EPISODES, not
+    // raw transactions or raw Evidence rows (Investment Episode
+    // Independence design, this session) — a real gap found on real data:
+    // two different InterviewAnswers about the same transaction (the
     // interview can be re-run in a later session and re-select a
-    // transaction already asked about before) map to the same case key
-    // here, so validateProposedHypotheses dedupes them to one piece of
-    // evidence. An answer not about a specific transaction is its own case.
-    const answerCaseKeys = new Map(answers.map((a) => [a.id, a.transactionId ?? a.id]));
+    // transaction already asked about before), AND several different
+    // transactions belonging to the same continuous position lifecycle
+    // (e.g. MP's BUY, partial SELL, final SELL), must all collapse to one
+    // independent case — never one-per-answer or one-per-transaction.
+    // buildAnswerCaseKeys is the exact same shared function
+    // strategy.ts's generateObserved uses, fed by the exact same
+    // deriveEpisodeKeys computation computePositionsForInvestor already
+    // exposes (src/lib/portfolio/positions.ts) — never a second,
+    // parallel implementation of either.
+    const positions = await computePositionsForInvestor(db, ctx.investorId);
+    const answerCaseKeys = buildAnswerCaseKeys(answers, positions.episodeKeyByTransactionId);
     const validated = validateProposedHypotheses(proposed, answerCaseKeys);
 
     const created = [];

@@ -18,6 +18,8 @@ import {
   validateProposedObservedPrinciples,
 } from "@/lib/strategy/validate-principles";
 import { isUniqueViolation } from "@/db/errors";
+import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
+import { buildAnswerCaseKeys } from "@/lib/evidence/build-answer-case-keys";
 
 export const strategyRouter = router({
   // Fixed baseline risk principles (docs/architecture.md §2.4) — code
@@ -95,9 +97,14 @@ export const strategyRouter = router({
     const proposed = await proposeObservedPrinciples(
       answers.map((a) => ({ id: a.id, questionText: a.questionText, answerText: a.answerText }))
     );
-    // Same real-gap fix as dna.ts: dedupe evidence by underlying
-    // transaction, not raw answer id, before it feeds evidenceStrength.
-    const answerCaseKeys = new Map(answers.map((a) => [a.id, a.transactionId ?? a.id]));
+    // Same shared fix as dna.ts's generate (Investment Episode
+    // Independence design, this session): dedupe evidence by underlying
+    // investment EPISODE, not raw answer id or raw transaction id, before
+    // it feeds evidenceStrength — the exact same shared function and the
+    // exact same episode derivation dna.ts uses, never a second
+    // implementation of either.
+    const positions = await computePositionsForInvestor(db, ctx.investorId);
+    const answerCaseKeys = buildAnswerCaseKeys(answers, positions.episodeKeyByTransactionId);
     const validated = validateProposedObservedPrinciples(proposed, answerCaseKeys);
 
     const created = [];

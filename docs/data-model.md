@@ -90,6 +90,29 @@ source_learning_insight_id}` + `manual_note_text?` (CHECK, מקור),
 | 3 | total ≥ 5 וגם S/total ≥ 0.8 | Strong |
 | 4 | אחרת (total∈[3,5) עם ratio≥0.6, או total≥5 עם ratio∈[0.6,0.8)) | Moderate |
 
+**"total"/S/C סופרים independent EPISODES, לא raw Evidence rows —
+Investment Episode Independence (תוקן בפועל, session זה).** `total`
+בטבלה למעלה הוא תמיד תוצאה של `calculateEvidenceStrength()`
+(`src/lib/dna/evidence-strength.ts`, לא נגע) על ספירה שכבר עברה
+`countIndependentCases()` (`src/lib/evidence/count-independent-cases.ts`,
+גם הוא לא נגע) — אבל ה-**case key** שמוזן לפונקציה הזו תוקן: לא עוד
+`transactionId ?? answerId` גולמי (שהיה סופר כל עסקה בנפרד — פוזיציה
+אחת עם BUY וכמה SELL הייתה יכולה לבד לחצות את סף "Insufficient →
+Moderate"), אלא `episodeKey` — כל העסקאות של אותו רצף פתוח-עד-שטוח
+("investment episode", למשל BUY+partial SELL+final SELL רציפים על
+טיקר אחד) חולקות מפתח אחד. נגזר טרי, in-memory, בכל קריאה, ע"י
+`computePositions()` (`src/lib/portfolio/positions.ts`, שדה נוסף
+`episodeKeyByTransactionId` על ה-return שלו — לא נשמר, לא זכרון קבוע,
+לא נכנס לשום snapshot), ומוזן ל-`dna.generate`/`strategy.generateObserved`
+דרך פונקציה משותפת אחת, `buildAnswerCaseKeys`
+(`src/lib/evidence/build-answer-case-keys.ts`) — שני הראוטרים קוראים
+לאותה פונקציה, לא מימוש כפול. `InterviewAnswer` עם `transaction_id=null`
+ממשיך להשתמש ב-`answer.id` כ-case key, בדיוק כמו קודם — לא נגע. תשתית
+מלאה (חוזה סדר תוך-יומי, מודל ceiling/exactKnown, retrospective
+run-based key assignment) בתיעוד התכנון של ה-session; אין טבלה חדשה
+(`investmentEpisode` **לא** נוסף לסכמה) — episode תמיד מחושב, לא
+מאוחסן, באותה רוח כמו `computePositions()` עצמו.
+
 ---
 
 ## 3. Strategy
@@ -242,10 +265,34 @@ resulting_review_id?, resulting_version_id?`. מנגנון ערעור גנרי �
 **Transaction** — `id, investor_id, ticker?,
 transaction_type(buy|sell|dividend|deposit|withdrawal|fee), quantity?,
 price?, amount, transaction_date, source(csv_import|manual_entry),
-import_batch_id?, notes?, created_at, updated_at`. **Mutable-לתיקון**
-(עובדה גולמית, לא שיפוט). שיטת cost-basis: **Average Cost** (לא FIFO) —
-פישוט מכוון: המוצר לא מיועד לדיווח מס; ניתן לשדרג בלי לשבור snapshots
-ישנים (כבר קפואים כ-JSON).
+import_batch_id?, notes?, intra_day_order?, order_unknown_reason?
+(user_declared|never_recorded), created_at, updated_at`.
+**Mutable-לתיקון** (עובדה גולמית, לא שיפוט). שיטת cost-basis: **Average
+Cost** (לא FIFO) — פישוט מכוון: המוצר לא מיועד לדיווח מס; ניתן לשדרג בלי
+לשבור snapshots ישנים (כבר קפואים כ-JSON).
+
+**Same-day ordering (`intra_day_order`/`order_unknown_reason`)** — שתי
+עמודות nullable נוספות, נוגעות ל-Investment Episode Independence (ר'
+מטה): כש-transactions של אותו `(investor_id, ticker, transaction_date)`
+מתנגשות (יותר מעסקה אחת בדיוק באותו timestamp), הסדר היחסי ביניהן או
+מוצהר (`intra_day_order`, ייחודי בתוך הקבוצה — `UNIQUE(investor_id,
+ticker, transaction_date, intra_day_order) WHERE intra_day_order IS NOT
+NULL`) או מסומן כלא-ידוע (`order_unknown_reason`: `user_declared` =
+המשתמש נשאל בזמן ה-confirm ואמר "לא ידוע"; `never_recorded` = התגלה
+בדיעבד, אף אחד לא נשאל — למשל backfill על נתונים ישנים, או התנגשות עם
+שורה קיימת ש-Manual Entry/Import לא תומכים ב"עריכה רטרואקטיבית" שלה).
+נכתב אך ורק ע"י ה-atomic confirm contract ב-`confirmTransactionsWithOrdering`
+(`src/db/repositories/portfolio.ts`) — נועל בעזרת
+`pg_advisory_xact_lock` per `(investor_id, ticker, transaction_date)` כדי
+שקונפירם מקבילי לא ייצור מצב לא-מסומן/מעורב. ההבחנה המדויקת (Scope
+Boundary): ה-accumulator הקיים של `computePositions()`
+(quantity/total_cost_basis/avg cost/sellTrace/warnings/positions
+המוצגים) **אף פעם לא קורא** את שתי העמודות האלה — ללא שינוי. גזירת
+ה-episode הנפרדת (`deriveEpisodeKeys()`, `src/lib/portfolio/positions.ts`)
+כן קוראת אותן, וכן — מבחינה טכנית — מופעלת **מתוך** `computePositions()`
+עצמו (קריאה אחת, לצד ה-accumulator, לא לתוכו), ומאכלסת שדה נוסף
+בלבד (`episodeKeyByTransactionId`) על ה-return שלו; שום ערך שה-accumulator
+כבר חישב לא נקרא/משתנה בחזרה. ר' מטה.
 
 **PortfolioOpeningState** — `id, investor_id, ticker, quantity,
 cost_basis_per_share?, cost_basis_confidence(known|approximate|unknown),
