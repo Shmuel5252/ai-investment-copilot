@@ -1,5 +1,5 @@
 import { eq, desc } from "drizzle-orm";
-import type { db as Db } from "@/db/client";
+import type { db as Db, DbOrTx } from "@/db/client";
 import { dnaHypotheses, dnaHypothesisVersions, evidence } from "@/db/schema";
 import type { InferInsertModel } from "drizzle-orm";
 import type { ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
@@ -19,7 +19,10 @@ export async function insertDnaHypothesisVersion(db: typeof Db, values: NewDnaHy
   return row!;
 }
 
-export async function getLatestDnaHypothesisVersion(db: typeof Db, dnaHypothesisId: string) {
+// DbOrTx (not typeof Db) so insertDnaHypothesisVersionWithEvidence below
+// can read-then-insert inside one outer transaction, the same reasoning
+// as insertTransactions in db/repositories/portfolio.ts.
+export async function getLatestDnaHypothesisVersion(db: DbOrTx, dnaHypothesisId: string) {
   const [row] = await db
     .select()
     .from(dnaHypothesisVersions)
@@ -117,6 +120,66 @@ export async function insertDnaHypothesisFromLearningInsight(
     });
 
     return { hypothesis: identity!, version: version! };
+  });
+}
+
+// Hypothesis Identity (Evidence Grounding + Hypothesis Identity Hardening
+// task) — the first real caller of insertDnaHypothesisVersion for an
+// EXISTING identity (previously dead code from dna.generate's point of
+// view: every generate() call always created a brand-new identity).
+// Appends exactly one new version to an existing DNAHypothesis identity,
+// plus the genuinely-new Evidence rows that justified it — never touches
+// the identity's earlier versions or earlier Evidence rows (both stay
+// exactly as persisted; this only ever adds). versionNumber is looked up
+// fresh, inside the same transaction as the insert, and the table's own
+// UNIQUE(dna_hypothesis_id, version_number) constraint is the real
+// backstop against a genuine concurrent-write race (the same pattern
+// strategy.ts's approveVersion already relies on for
+// strategy_versions_investor_id_version_number_unique) — the caller is
+// expected to catch that constraint name via isUniqueViolation() and
+// translate it to a clear, retryable error, not treat it as unexpected.
+export async function insertDnaHypothesisVersionWithEvidence(
+  db: typeof Db,
+  dnaHypothesisId: string,
+  version: {
+    statementText: string;
+    evidenceStrength: ValidatedHypothesis["evidenceStrength"];
+    supportingEvidenceCount: number;
+    contradictingEvidenceCount: number;
+    newEvidence: ValidatedHypothesis["evidence"];
+    changeReason: string;
+  }
+) {
+  return db.transaction(async (tx) => {
+    const latest = await getLatestDnaHypothesisVersion(tx, dnaHypothesisId);
+    const nextVersionNumber = (latest?.versionNumber ?? 0) + 1;
+
+    const [newVersion] = await tx
+      .insert(dnaHypothesisVersions)
+      .values({
+        dnaHypothesisId,
+        versionNumber: nextVersionNumber,
+        statementText: version.statementText,
+        evidenceStrength: version.evidenceStrength,
+        supportingEvidenceCount: version.supportingEvidenceCount,
+        contradictingEvidenceCount: version.contradictingEvidenceCount,
+        createdBy: "ai_generated",
+        changeReason: version.changeReason,
+      })
+      .returning();
+
+    if (version.newEvidence.length > 0) {
+      await tx.insert(evidence).values(
+        version.newEvidence.map((e) => ({
+          dnaHypothesisId,
+          stance: e.stance,
+          interviewAnswerId: e.interviewAnswerId,
+          description: e.description,
+        }))
+      );
+    }
+
+    return { version: newVersion! };
   });
 }
 

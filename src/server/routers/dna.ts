@@ -2,15 +2,24 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/db/client";
+import { isUniqueViolation } from "@/db/errors";
 import { getAllAnswersForInvestor } from "@/db/repositories/interview";
 import {
   listActiveDnaHypothesesForInvestor,
   insertDnaHypothesisWithEvidence,
+  insertDnaHypothesisVersionWithEvidence,
   setDnaHypothesisStatus,
 } from "@/db/repositories/dna";
 import { getEvidenceForDnaHypothesis } from "@/db/repositories/evidence";
 import { proposeDnaHypotheses } from "@/lib/ai/dna";
+import { checkEvidenceGrounding } from "@/lib/ai/dna-grounding";
+import { classifyHypothesisMatch } from "@/lib/ai/dna-identity";
 import { validateProposedHypotheses } from "@/lib/dna/validate-hypotheses";
+import { groundValidatedHypotheses } from "@/lib/dna/ground-evidence";
+import {
+  resolveHypothesisIdentities,
+  type ExistingHypothesisForMatching,
+} from "@/lib/dna/resolve-hypothesis-identity";
 import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
 import { buildAnswerCaseKeys } from "@/lib/evidence/build-answer-case-keys";
 
@@ -48,18 +57,114 @@ export const dnaRouter = router({
     // parallel implementation of either.
     const positions = await computePositionsForInvestor(db, ctx.investorId);
     const answerCaseKeys = buildAnswerCaseKeys(answers, positions.episodeKeyByTransactionId);
-    const validated = validateProposedHypotheses(proposed, answerCaseKeys);
+    const structurallyValidated = validateProposedHypotheses(proposed, answerCaseKeys);
 
-    const created = [];
-    for (const hypothesis of validated) {
-      created.push(await insertDnaHypothesisWithEvidence(db, ctx.investorId, hypothesis));
+    // Evidence Grounding (Evidence Grounding + Hypothesis Identity
+    // Hardening task) — a SEPARATE gate from the structural checks above.
+    // A citation can reference a real answer id, a real stance, and a
+    // non-empty description, and still selectively reframe what that
+    // answer actually says (the real CAN case: a missed Nasdaq compliance
+    // deadline and a declining stock, cited as "sold a profitable
+    // position for a better opportunity, thesis intact"). This checks
+    // every citation against the REAL persisted answerText — never the
+    // AI's own description — and recomputes supportingCount/
+    // contradictingCount/evidenceStrength from only what survives, via
+    // the exact same countIndependentCases()/calculateEvidenceStrength()
+    // used everywhere else. Fails closed: any grounding-check failure
+    // excludes the citation, never includes it by default.
+    const answerTextById = new Map(answers.map((a) => [a.id, a.answerText]));
+    const { hypotheses: grounded } = await groundValidatedHypotheses(
+      structurallyValidated,
+      answerTextById,
+      answerCaseKeys,
+      checkEvidenceGrounding
+    );
+
+    // Hypothesis Identity (same task) — every past generate() call
+    // created a brand-new identity for every surviving proposal,
+    // unconditionally. This matches each grounded proposal against this
+    // investor's existing active hypotheses AND against other proposals
+    // in the SAME batch (resolveHypothesisIdentities grows one shared
+    // candidate pool for both), then decides per group: a genuinely new
+    // identity, a new version of an existing identity (only when the
+    // combined evidence contains an independent case the existing
+    // identity's persisted evidence didn't already have), or nothing to
+    // do (matched an existing identity but added no new independent
+    // case). Existing identities/versions/evidence are never edited —
+    // only ever added to.
+    const existingActive = await listActiveDnaHypothesesForInvestor(db, ctx.investorId);
+    const existingForMatching: ExistingHypothesisForMatching[] = await Promise.all(
+      existingActive.map(async (h) => {
+        const ev = await getEvidenceForDnaHypothesis(db, h.id);
+        return {
+          id: h.id,
+          statementText: h.versions[0]?.statementText ?? "",
+          evidenceForCounting: ev
+            .filter((e): e is typeof e & { interviewAnswerId: string } => e.interviewAnswerId !== null)
+            .map((e) => ({ interviewAnswerId: e.interviewAnswerId, stance: e.stance })),
+        };
+      })
+    );
+
+    const resolutions = await resolveHypothesisIdentities(
+      grounded,
+      existingForMatching,
+      answerCaseKeys,
+      classifyHypothesisMatch
+    );
+
+    const createdIdentities = [];
+    const newVersions = [];
+    const skipped = [];
+
+    for (const resolution of resolutions) {
+      if (resolution.action === "new_identity") {
+        createdIdentities.push(
+          await insertDnaHypothesisWithEvidence(db, ctx.investorId, {
+            statement: resolution.statement,
+            evidence: resolution.evidence,
+            supportingCount: resolution.supportingCount,
+            contradictingCount: resolution.contradictingCount,
+            evidenceStrength: resolution.evidenceStrength,
+          })
+        );
+      } else if (resolution.action === "new_version") {
+        try {
+          const { version } = await insertDnaHypothesisVersionWithEvidence(db, resolution.hypothesisId, {
+            statementText: resolution.statement,
+            evidenceStrength: resolution.evidenceStrength,
+            supportingEvidenceCount: resolution.supportingCount,
+            contradictingEvidenceCount: resolution.contradictingCount,
+            newEvidence: resolution.newEvidence,
+            changeReason: "New evidence from a later interview extended this existing pattern.",
+          });
+          newVersions.push({ hypothesisId: resolution.hypothesisId, version });
+        } catch (err) {
+          if (isUniqueViolation(err, "dna_hypothesis_versions_dna_hypothesis_id_version_number_unique")) {
+            // A genuine concurrent generate() race on the same identity —
+            // recoverable by simply retrying the whole generate call,
+            // same as strategy.ts's approveVersion.
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "Another generation just updated this hypothesis — please try again.",
+            });
+          }
+          throw err;
+        }
+      } else {
+        skipped.push({ hypothesisId: resolution.hypothesisId, statement: resolution.statement });
+      }
     }
 
     return {
       proposedCount: proposed.length,
-      createdCount: created.length,
-      droppedCount: proposed.length - created.length,
-      hypotheses: created,
+      createdCount: createdIdentities.length,
+      droppedCount: proposed.length - grounded.length,
+      versionedCount: newVersions.length,
+      unchangedCount: skipped.length,
+      hypotheses: createdIdentities,
+      newVersions,
+      skipped,
     };
   }),
 
