@@ -9,8 +9,9 @@ import {
   insertDnaHypothesisWithEvidence,
   insertDnaHypothesisVersionWithEvidence,
   setDnaHypothesisStatus,
+  getLatestDnaHypothesisVersion,
 } from "@/db/repositories/dna";
-import { getEvidenceForDnaHypothesis } from "@/db/repositories/evidence";
+import { getEvidenceForDnaHypothesis, getEffectiveEvidenceForDnaHypothesisVersion } from "@/db/repositories/evidence";
 import { proposeDnaHypotheses } from "@/lib/ai/dna";
 import { checkEvidenceGrounding } from "@/lib/ai/dna-grounding";
 import { classifyHypothesisMatch } from "@/lib/ai/dna-identity";
@@ -170,9 +171,22 @@ export const dnaRouter = router({
 
   list: protectedProcedure.query(({ ctx }) => listActiveDnaHypothesesForInvestor(db, ctx.investorId)),
 
+  // Version-aware (DNA Grounding Remediation task): "View Evidence" must
+  // agree with the CURRENT version's own counts, not show the identity's
+  // full raw citation pool unconditionally — the two only ever diverge
+  // after a version has been through grounding remediation, and
+  // getEffectiveEvidenceForDnaHypothesisVersion falls back to the exact
+  // previous (raw, unfiltered) behavior for every version that hasn't
+  // been. Raw/historical access itself is untouched and still exported
+  // (getEvidenceForDnaHypothesis, used as-is by dna.generate's identity
+  // matching) — nothing about the underlying data becomes unreachable.
   evidence: protectedProcedure
     .input(z.object({ dnaHypothesisId: z.string().uuid() }))
-    .query(({ input }) => getEvidenceForDnaHypothesis(db, input.dnaHypothesisId)),
+    .query(async ({ input }) => {
+      const latestVersion = await getLatestDnaHypothesisVersion(db, input.dnaHypothesisId);
+      if (!latestVersion) return [];
+      return getEffectiveEvidenceForDnaHypothesisVersion(db, input.dnaHypothesisId, latestVersion.id);
+    }),
 
   // "View Evidence and an option for me to correct, add context, or
   // disagree" (concept doc §4) — the simplest form of disagreement:

@@ -26,6 +26,7 @@ import {
   predictions,
 } from "./decisions";
 import { evidence } from "./evidence";
+import { dnaEvidenceGroundingChecks } from "./dna-grounding";
 import { corrections } from "./corrections";
 
 export const investorsRelations = relations(investors, ({ many }) => ({
@@ -61,12 +62,27 @@ export const dnaHypothesesRelations = relations(dnaHypotheses, ({ one, many }) =
   evidence: many(evidence),
 }));
 
-export const dnaHypothesisVersionsRelations = relations(dnaHypothesisVersions, ({ one }) => ({
+export const dnaHypothesisVersionsRelations = relations(dnaHypothesisVersions, ({ one, many }) => ({
   hypothesis: one(dnaHypotheses, {
     fields: [dnaHypothesisVersions.dnaHypothesisId],
     references: [dnaHypotheses.id],
   }),
+  groundingChecks: many(dnaEvidenceGroundingChecks),
 }));
+
+export const dnaEvidenceGroundingChecksRelations = relations(
+  dnaEvidenceGroundingChecks,
+  ({ one }) => ({
+    version: one(dnaHypothesisVersions, {
+      fields: [dnaEvidenceGroundingChecks.dnaHypothesisVersionId],
+      references: [dnaHypothesisVersions.id],
+    }),
+    evidence: one(evidence, {
+      fields: [dnaEvidenceGroundingChecks.evidenceId],
+      references: [evidence.id],
+    }),
+  })
+);
 
 export const strategyPrinciplesRelations = relations(strategyPrinciples, ({ one, many }) => ({
   investor: one(investors, {

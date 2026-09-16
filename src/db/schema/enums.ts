@@ -17,12 +17,31 @@ export const evidenceStrengthEnum = pgEnum("evidence_strength", [
 
 export const evidenceStanceEnum = pgEnum("evidence_stance", ["supporting", "contradicting"]);
 
+// Persisted verdict of a single checkEvidenceGrounding() call
+// (src/lib/ai/dna-grounding.ts) against one Evidence row, scoped to one
+// DNAHypothesisVersion (DNA Grounding Remediation task) — matches
+// EvidenceGroundingVerdict exactly; kept separate from evidence_stance
+// (a different concept: what the citation CLAIMS vs. whether it actually
+// grounds that claim).
+export const groundingVerdictEnum = pgEnum("grounding_verdict", ["supported", "unsupported"]);
+
 export const dnaHypothesisStatusEnum = pgEnum("dna_hypothesis_status", [
   "active",
   "user_rejected",
 ]);
 
-export const dnaCreatedByEnum = pgEnum("dna_created_by", ["ai_generated", "user_correction"]);
+// "system_grounding_revalidation" (DNA Grounding Remediation task): a
+// version created not by a fresh dna.generate proposal (ai_generated) and
+// not by the investor disputing something (user_correction), but by the
+// system re-checking this identity's OWN already-persisted evidence
+// against the Evidence Grounding standard (src/lib/ai/dna-grounding.ts)
+// and finding the valid evidence set has changed. Neither existing value
+// would be honest here — see docs/data-model.md §2 for the full case.
+export const dnaCreatedByEnum = pgEnum("dna_created_by", [
+  "ai_generated",
+  "user_correction",
+  "system_grounding_revalidation",
+]);
 
 export const principleTypeEnum = pgEnum("principle_type", [
   "declared",

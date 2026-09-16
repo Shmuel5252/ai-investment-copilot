@@ -1,9 +1,10 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import type { db as Db, DbOrTx } from "@/db/client";
-import { dnaHypotheses, dnaHypothesisVersions, evidence } from "@/db/schema";
+import { dnaHypotheses, dnaHypothesisVersions, evidence, dnaEvidenceGroundingChecks } from "@/db/schema";
 import type { InferInsertModel } from "drizzle-orm";
 import type { ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
 import { calculateEvidenceStrength } from "@/lib/dna/evidence-strength";
+import type { RemediationCheckResult, RemediationNewVersion } from "@/lib/dna/remediate-grounding";
 
 export type NewDnaHypothesis = InferInsertModel<typeof dnaHypotheses>;
 export type NewDnaHypothesisVersion = InferInsertModel<typeof dnaHypothesisVersions>;
@@ -175,6 +176,153 @@ export async function insertDnaHypothesisVersionWithEvidence(
           stance: e.stance,
           interviewAnswerId: e.interviewAnswerId,
           description: e.description,
+        }))
+      );
+    }
+
+    return { version: newVersion! };
+  });
+}
+
+// Independent-audit hardening: neither UNIQUE(dna_hypothesis_version_id,
+// evidence_id) nor either FK proves the two sides actually belong to the
+// SAME DNAHypothesis identity — a version FK'd to hypothesis A and an
+// Evidence row FK'd to hypothesis B are both individually valid rows, so
+// a caller bug (or, once a real orchestration exists, a stale/mismatched
+// read) could silently associate hypothesis A's version with hypothesis
+// B's citation with nothing in the schema to catch it. Both insert paths
+// below verify this explicitly, inside their own transaction, before
+// writing — the narrowest possible fix, scoped to exactly the new table
+// this task introduces.
+async function assertEvidenceBelongsToHypothesis(
+  tx: DbOrTx,
+  dnaHypothesisId: string,
+  evidenceIds: readonly string[]
+): Promise<void> {
+  const uniqueIds = [...new Set(evidenceIds)];
+  if (uniqueIds.length === 0) return;
+  const rows = await tx
+    .select({ id: evidence.id })
+    .from(evidence)
+    .where(and(eq(evidence.dnaHypothesisId, dnaHypothesisId), inArray(evidence.id, uniqueIds)));
+  if (rows.length !== uniqueIds.length) {
+    throw new Error(
+      `Grounding check evidence ids do not all belong to DNA hypothesis ${dnaHypothesisId} — refusing to persist a cross-identity association.`
+    );
+  }
+}
+
+// DNA Grounding Remediation — the "checked_no_change" outcome of
+// planGroundingRemediation(): every raw citation still survives grounding
+// under the current standard, so no new version is warranted, but the
+// check itself is still worth persisting. Without these rows this
+// version would stay indistinguishable from one that was never checked
+// at all (getEffectiveEvidenceForDnaHypothesisVersion's legacy fallback
+// would keep treating it as unchecked forever). No version insert here —
+// the current version stays exactly as it was, only new
+// dna_evidence_grounding_checks rows are appended against it.
+//
+// dnaHypothesisId is deliberately NOT a parameter here — it's looked up
+// FROM dnaHypothesisVersionId itself (the one authoritative source),
+// rather than trusting a second, independently-supplied value that could
+// disagree with it.
+export async function insertGroundingChecksForVersion(
+  db: typeof Db,
+  dnaHypothesisVersionId: string,
+  checks: readonly RemediationCheckResult[]
+) {
+  if (checks.length === 0) return [];
+  return db.transaction(async (tx) => {
+    const [version] = await tx
+      .select()
+      .from(dnaHypothesisVersions)
+      .where(eq(dnaHypothesisVersions.id, dnaHypothesisVersionId));
+    if (!version) {
+      throw new Error(`insertGroundingChecksForVersion: DNA hypothesis version ${dnaHypothesisVersionId} not found.`);
+    }
+    await assertEvidenceBelongsToHypothesis(
+      tx,
+      version.dnaHypothesisId,
+      checks.map((c) => c.evidenceId)
+    );
+
+    // onConflictDoNothing (same convention as ensureDefaultRiskPrinciples's
+    // seed insert, strategy.ts): unlike insertDnaHypothesisVersionWithGroundingChecks
+    // (whose version — and therefore whose check rows — is always brand
+    // new inside the same transaction, so a real conflict there can only
+    // mean a caller bug), THIS path appends checks to an EXISTING,
+    // already-live version — a genuine concurrent race is possible if two
+    // "checked_no_change" audits of the same version run at the same
+    // time. Both would have computed the same verdicts from the same
+    // grounding inputs; letting the loser's insert silently no-op instead
+    // of raising a raw uniqueness error avoids a needless failure for a
+    // race with no actual conflicting information.
+    return tx
+      .insert(dnaEvidenceGroundingChecks)
+      .values(
+        checks.map((c) => ({
+          dnaHypothesisVersionId,
+          evidenceId: c.evidenceId,
+          verdict: c.verdict,
+          reason: c.reason,
+        }))
+      )
+      .onConflictDoNothing()
+      .returning();
+  });
+}
+
+// DNA Grounding Remediation — the "new_version" outcome of
+// planGroundingRemediation(): the effective evidence set changed, so a
+// new append-only version is warranted. Deliberately a SEPARATE function
+// from insertDnaHypothesisVersionWithEvidence, not a reuse of it with
+// empty newEvidence: remediation never inserts new Evidence rows (it only
+// ever reinterprets citations that already exist), and it always writes
+// dna_evidence_grounding_checks rows the ordinary generate() path has no
+// concept of — merging the two into one function with optional
+// parameters would make it unclear, at each call site, which invariant
+// applies. Same transactional shape and the same UNIQUE(dna_hypothesis_id,
+// version_number) backstop against a genuine concurrent-write race
+// (isUniqueViolation() at the call site, identical convention).
+export async function insertDnaHypothesisVersionWithGroundingChecks(
+  db: typeof Db,
+  dnaHypothesisId: string,
+  version: RemediationNewVersion,
+  checks: readonly RemediationCheckResult[]
+) {
+  return db.transaction(async (tx) => {
+    if (checks.length > 0) {
+      await assertEvidenceBelongsToHypothesis(
+        tx,
+        dnaHypothesisId,
+        checks.map((c) => c.evidenceId)
+      );
+    }
+
+    const latest = await getLatestDnaHypothesisVersion(tx, dnaHypothesisId);
+    const nextVersionNumber = (latest?.versionNumber ?? 0) + 1;
+
+    const [newVersion] = await tx
+      .insert(dnaHypothesisVersions)
+      .values({
+        dnaHypothesisId,
+        versionNumber: nextVersionNumber,
+        statementText: version.statementText,
+        evidenceStrength: version.evidenceStrength,
+        supportingEvidenceCount: version.supportingEvidenceCount,
+        contradictingEvidenceCount: version.contradictingEvidenceCount,
+        createdBy: "system_grounding_revalidation",
+        changeReason: version.changeReason,
+      })
+      .returning();
+
+    if (checks.length > 0) {
+      await tx.insert(dnaEvidenceGroundingChecks).values(
+        checks.map((c) => ({
+          dnaHypothesisVersionId: newVersion!.id,
+          evidenceId: c.evidenceId,
+          verdict: c.verdict,
+          reason: c.reason,
         }))
       );
     }

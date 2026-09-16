@@ -58,9 +58,32 @@ status(active|user_rejected)`.
 **DNAHypothesisVersion** (append-only) — `id, dna_hypothesis_id,
 version_number, statement_text, evidence_strength, supporting_evidence_count,
 contradicting_evidence_count, created_at, created_by(ai_generated|
-user_correction), change_reason`.
+user_correction|system_grounding_revalidation), change_reason`.
 - נוצר ע"י: AI (ניסוח) + קוד (evidence_strength, ר' §Evidence Strength
   Table). נצרך ע"י: DNA view, Personal Fit, Decision Snapshot.
+- **`created_by=system_grounding_revalidation`** (DNA Grounding
+  Remediation, Autonomous Unit 3): ערך שלישי, נוסף כי אף אחד משני
+  הערכים הקיימים לא כן — `ai_generated` מרמז הצעה טרייה מ-`dna.generate`,
+  `user_correction` מרמז יזמת משתמש; גרסה שנוצרת כשהמערכת בודקת מחדש
+  ראיה **קיימת-שלה-עצמה** מול Evidence Grounding (§ למטה) ומוצאת שהסט
+  התקף השתנה היא לא אחד משני אלה. `statement_text` **לא** משתנה בגרסה
+  כזו — רק ה-composition/ספירה של הראיה.
+
+**DNAEvidenceGroundingCheck** (append-only, `dna_evidence_grounding_checks`
+— DNA Grounding Remediation, Autonomous Unit 3) — `id,
+dna_hypothesis_version_id (FK), evidence_id (FK), verdict(supported|
+unsupported), reason, checked_at`. `UNIQUE(dna_hypothesis_version_id,
+evidence_id)` (שם מפורש, לא auto-generated — ר' ההערה על שמות constraint
+שנחתכים ל-63 תווים למטה). התוצאה המאוחסנת של קריאת `checkEvidenceGrounding()`
+(§ Evidence Grounding למטה) עבור *citation ספציפי* ו-*גרסה ספציפית* —
+לא ל-identity, כי Evidence עצמה (למטה) לא scoped לגרסה בכלל, וללא
+הטבלה הזו אין דרך לדעת אילו citations ספציפית סופרים לאיזו גרסה. תמיד
+נוסף, אף פעם לא נערך — אין כאן flag "נוכחי"; "הגרסה הנוכחית" נשארת
+`MAX(version_number)` בדיוק כמו קודם. **`dna.generate`'s מסלול ה-grounding
+הרגיל אינו כותב לטבלה הזו** (בכוונה, מחוץ ל-scope של Autonomous Unit 3
+— אינטגרציה עתידית נפרדת). גרסה בלי אף שורת check כאן = מעולם לא
+נבדקה מול grounding (כל גרסה שקיימת נכון ל-2026-09-16) — לא "נבדקה
+ועברה".
 
 **Evidence** — `id`, בדיוק אחד מ-
 `{dna_hypothesis_id, strategy_principle_id, learning_insight_id}` (CHECK,
@@ -71,6 +94,16 @@ source_learning_insight_id}` + `manual_note_text?` (CHECK, מקור),
 **Immutable לחלוטין — לעולם לא נערך/נמחק.**
 - נוצר ע"י: קוד (מדפוסי עסקאות) + AI (מפרשנות ראיון, תמיד עם source_id
   אמיתי). נצרך ע"י: חישוב Evidence Strength, כל "View Evidence".
+- **Raw vs. Effective evidence (DNA Grounding Remediation, Autonomous
+  Unit 3):** `Evidence` שייכת תמיד ל-**identity** (`dna_hypothesis_id`),
+  **לא** לגרסה ספציפית — `getEvidenceForDnaHypothesis` (ללא שינוי)
+  ממשיכה להחזיר את **כל** הראיה ההיסטורית של ה-identity, בלי סינון,
+  לעולם לא הופכת ללא-נגישה. "View Evidence" בעמוד ה-DNA (וכל צרכן
+  עתידי שצריך את מה שגרסה *ספציפית* באמת סופרת) קורא במקום זאת ל-
+  `getEffectiveEvidenceForDnaHypothesisVersion` (`src/db/repositories/evidence.ts`)
+  — מסננת לפי `DNAEvidenceGroundingCheck` (למעלה) כשקיימות שורות check
+  לגרסה, ונופלת אוטומטית לכל-הראיה-הגולמית כשאין (כל גרסה שלא עברה
+  remediation — ההתנהגות המקורית, ללא שינוי).
 - **`source_learning_insight_id` (תיקון, התגלה בזמן מימוש Learning
   Insight task):** נדרש בפועל כדי לממש את "סגירת הלולאה ל-DNA" ב-§8 —
   `learning_insight_id` הקיים הוא **subject בלבד** (לא יכול להיות
@@ -362,7 +395,7 @@ Append-only. `transaction_id` נשאר עמודה יחידה (לא junction/מע
   `DecisionSnapshot`, `DecisionReview`, `ReviewDimension`, `Thesis`,
   `LaterContext`, `Evidence`, `DNAHypothesisVersion`,
   `StrategyPrincipleVersion`, `StrategyVersion`, `LearningInsightVersion`,
-  `InterviewAnswer`.
+  `InterviewAnswer`, `DNAEvidenceGroundingCheck`.
 - **`ON DELETE RESTRICT`**: `strategy_version_id`, `market_context_id`,
   `dna_hypothesis_version_id` (דרך `DecisionSnapshotDNAReference`),
   `thesis_id` — כל FK שיוצא מ-`DecisionSnapshot`.
