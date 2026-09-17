@@ -256,6 +256,57 @@ hypothesis-identity resolution — וה-catch המתאים כבר קיים בפ�
 ---
 
 ## נבנה
+- **Strategy Grounding + Identity Hardening — generate-time פעיל, remediation infrastructure בלבד** (2026-09-16, המשך ישיר לחקירת האבחון
+  (Strategy Grounding Diagnostic, read-only) ולעיצוב הארכיטקטורה
+  (Strategy Hardening Architecture, read-only) שקדמו לה): מיישם את שני
+  הפערים שנמצאו באופן ממשי בקוד — Evidence Grounding מעולם לא הופעל
+  עבור Strategy (`generateObserved` אישר כל ציטוט ללא בדיקה מול
+  `InterviewAnswer.answerText` האמיתי), ו-`insertObservedPrincipleWithEvidence`
+  יצר תמיד identity+version 1 חדשים ללא תנאי, ללא שום matching מול
+  עקרונות `observed` קיימים או בין proposals באותו batch — בדיוק המצב
+  שבו DNA היה לפני `25fe506`.
+
+  **Generate-time (פעיל מרגע שה-migration תאושר):** `checkEvidenceGrounding`
+  ו-`classifyHypothesisMatch` (`src/lib/ai/dna-grounding.ts`/`dna-identity.ts`)
+  נעשה בהם **reuse ללא שינוי** — נבדק במפורש שהם גנריים (אין טיפוס/פרומפט
+  ספציפי ל-DNA) לפני החיווט. `groundValidatedObservedPrinciples`
+  (`src/lib/strategy/ground-evidence.ts`) ו-`resolveObservedPrincipleIdentities`
+  (`src/lib/strategy/resolve-principle-identity.ts`) הם port כמעט-מכני
+  של המקבילות ב-DNA — `ValidatedObservedPrinciple` כבר זהה במבנה ל-
+  `ValidatedHypothesis`. **הבדל אמיתי אחד, לא מכני:** `strategyPrinciples`
+  היא טבלת identity הטרוגנית (declared/observed/validated יחד) —
+  `filterToObservedCandidates` מסנן ל-`observed` בלבד **לפני** ההתאמה,
+  אחרת דפוס observed טרי היה יכול "להתאים" ולגרום לגרסה חדשה על הצהרה
+  מילולית של המשתמש או ברירת מחדל קבועה.
+
+  **Remediation infrastructure (טרם הופעל בפועל — אין remediation אמיתי
+  על 4 העקרונות ה-observed הקיימים בהחלטה זו):** טבלה חדשה
+  `strategy_evidence_grounding_checks` (migration `0009_large_jackpot.sql`,
+  **נכתבה בלבד, לא הורצה**) — מקבילה סמנטית מדויקת ל-`dna_evidence_grounding_checks`
+  אך **טבלה נפרדת** (לא reuse — `Evidence.strategy_principle_id`/
+  `Evidence.dna_hypothesis_id` הן שתי עמודות subject שונות); `verdict`
+  כן עושה reuse ל-enum `grounding_verdict` הקיים (סמנטית גנרי, לא
+  ספציפי ל-DNA). ערך enum רביעי על `principle_created_by`:
+  `system_grounding_revalidation` — enum **נפרד** מ-`dna_created_by`,
+  אותו שם מחרוזת בלבד. `getEffectiveEvidenceForStrategyPrincipleVersion`
+  ו-`planPrincipleGroundingRemediation` (`src/lib/strategy/remediate-grounding.ts`)
+  הם ports מדויקים של המקבילות ב-DNA, כולל תיקוני ה-independent-review
+  שנמצאו שם (`assertEvidenceBelongsToPrinciple` cross-identity guard,
+  ו-completeness invariant על non-InterviewAnswer citations) **מיושמים
+  מראש הפעם**, לא מתגלים בדיעבד.
+
+  **נבדק ואומת:** typecheck ✓, lint ✓, 53/53 קבצי טסט, 420 עוברים +
+  6 skipped בכוונה (migration 0009 לא הורצה — מזוהה אוטומטית בזמן ריצה,
+  כמו ב-DNA). 2 טסטי אינטגרציה אמיתיים (`insertObservedPrincipleVersionWithEvidence`,
+  כולל race אמיתי על 15 קריאות מקבילות) **רצו בפועל נגד Postgres אמיתי**
+  ואישרו אמפירית את שם ה-constraint המקוצר
+  (`strategy_principle_versions_strategy_principle_id_version_numbe`,
+  63 תווים) — לא רק חושב.
+
+  **מפורשות לא בוצע ביחידה הזו:** remediation אמיתי של 4 העקרונות
+  ה-observed הקיימים (כולל אי-ההסכמה שנמצאה על `d29a3897`); הרצת
+  migration 0009; קריאות AI אמיתיות; שינוי ל-`dna.generate` הרגיל;
+  Strategy UI; Decision Review; Behavioral/Decision Independence.
 - **DNA Grounding Remediation — תשתית בלבד, לא הופעלה** (2026-09-16,
   Autonomous Unit 3, בהמשך ל-Autonomous Unit 1 [Evidence Grounding Audit,
   read-only] ו-Autonomous Unit 2 [architecture design, read-only]): בונה

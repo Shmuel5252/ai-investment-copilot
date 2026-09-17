@@ -1,16 +1,18 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
-import type { db as Db } from "@/db/client";
+import type { db as Db, DbOrTx } from "@/db/client";
 import {
   strategyPrinciples,
   strategyPrincipleVersions,
   strategyVersions,
   strategyVersionPrinciples,
+  strategyEvidenceGroundingChecks,
   evidence,
 } from "@/db/schema";
 import { DEFAULT_RISK_PRINCIPLES } from "@/lib/strategy/default-risk-principles";
 import { slugifyPrincipleKey } from "@/lib/strategy/slugify";
-import type { ValidatedDeclaredPrinciple, ValidatedObservedPrinciple } from "@/lib/strategy/validate-principles";
+import type { ValidatedDeclaredPrinciple, ValidatedObservedPrinciple, ValidatedPrincipleEvidence } from "@/lib/strategy/validate-principles";
+import type { RemediationCheckResult, RemediationNewPrincipleVersion } from "@/lib/strategy/remediate-grounding";
 
 export type NewStrategyPrinciple = InferInsertModel<typeof strategyPrinciples>;
 export type NewStrategyPrincipleVersion = InferInsertModel<typeof strategyPrincipleVersions>;
@@ -62,8 +64,11 @@ export async function getLatestStrategyVersion(db: typeof Db, investorId: string
   return row;
 }
 
+// DbOrTx (not typeof Db) so the version-writing functions below can
+// read-then-insert inside one outer transaction — same reasoning as
+// getLatestDnaHypothesisVersion (src/db/repositories/dna.ts).
 export async function getLatestStrategyPrincipleVersion(
-  db: typeof Db,
+  db: DbOrTx,
   strategyPrincipleId: string
 ) {
   const [row] = await db
@@ -225,6 +230,199 @@ export async function insertObservedPrincipleWithEvidence(
     );
 
     return { principle: identity!, version: version! };
+  });
+}
+
+// Hypothesis/Identity Hardening for Strategy — the first real caller of
+// insertStrategyPrincipleVersion for an EXISTING identity (previously
+// dead code from generateObserved's point of view: every call always
+// created a brand-new identity). Appends exactly one new version to an
+// existing OBSERVED strategyPrinciples identity, plus the genuinely-new
+// Evidence rows that justified it — mirrors
+// insertDnaHypothesisVersionWithEvidence exactly, including relying on
+// the table's own UNIQUE(strategy_principle_id, version_number)
+// constraint as the concurrency backstop (caller catches
+// isUniqueViolation()). principleType is always "observed" here — this
+// path only exists for the observed-identity-matching flow.
+export async function insertObservedPrincipleVersionWithEvidence(
+  db: typeof Db,
+  strategyPrincipleId: string,
+  version: {
+    statementText: string;
+    evidenceStrength: ValidatedObservedPrinciple["evidenceStrength"];
+    supportingEvidenceCount: number;
+    contradictingEvidenceCount: number;
+    newEvidence: ValidatedPrincipleEvidence[];
+    changeReason: string;
+  }
+) {
+  return db.transaction(async (tx) => {
+    const latest = await getLatestStrategyPrincipleVersion(tx, strategyPrincipleId);
+    const nextVersionNumber = (latest?.versionNumber ?? 0) + 1;
+
+    const [newVersion] = await tx
+      .insert(strategyPrincipleVersions)
+      .values({
+        strategyPrincipleId,
+        versionNumber: nextVersionNumber,
+        principleType: "observed",
+        statementText: version.statementText,
+        rationaleText: "Observed as a pattern across your interview answers, not stated directly.",
+        evidenceStrength: version.evidenceStrength,
+        supportingEvidenceCount: version.supportingEvidenceCount,
+        contradictingEvidenceCount: version.contradictingEvidenceCount,
+        createdBy: "ai_observed",
+        changeReason: version.changeReason,
+      })
+      .returning();
+
+    if (version.newEvidence.length > 0) {
+      await tx.insert(evidence).values(
+        version.newEvidence.map((e) => ({
+          strategyPrincipleId,
+          stance: e.stance,
+          interviewAnswerId: e.interviewAnswerId,
+          description: e.description,
+        }))
+      );
+    }
+
+    return { version: newVersion! };
+  });
+}
+
+// Independent-audit hardening, applied proactively this time (learned
+// from the DNA equivalent's own independent review, src/db/repositories/dna.ts):
+// neither UNIQUE(strategy_principle_version_id, evidence_id) nor either
+// FK proves the two sides belong to the SAME strategyPrinciples identity
+// — a version FK'd to principle A and an Evidence row FK'd to principle B
+// are each individually valid rows. Both grounding-check insert paths
+// below verify this explicitly, inside their own transaction, before
+// writing.
+async function assertEvidenceBelongsToPrinciple(
+  tx: DbOrTx,
+  strategyPrincipleId: string,
+  evidenceIds: readonly string[]
+): Promise<void> {
+  const uniqueIds = [...new Set(evidenceIds)];
+  if (uniqueIds.length === 0) return;
+  const rows = await tx
+    .select({ id: evidence.id })
+    .from(evidence)
+    .where(and(eq(evidence.strategyPrincipleId, strategyPrincipleId), inArray(evidence.id, uniqueIds)));
+  if (rows.length !== uniqueIds.length) {
+    throw new Error(
+      `Grounding check evidence ids do not all belong to Strategy principle ${strategyPrincipleId} — refusing to persist a cross-identity association.`
+    );
+  }
+}
+
+// DNA Grounding Remediation's Strategy mirror — the "checked_no_change"
+// outcome of planPrincipleGroundingRemediation(): every raw citation
+// still survives grounding under the current standard, so no new version
+// is warranted, but the check itself is still worth persisting (without
+// it this version would stay indistinguishable from one that was never
+// checked at all). No version insert here.
+//
+// strategyPrincipleId is deliberately NOT a parameter — it's looked up
+// FROM strategyPrincipleVersionId itself (the one authoritative source),
+// rather than trusting a second, independently-supplied value that could
+// disagree with it.
+export async function insertGroundingChecksForPrincipleVersion(
+  db: typeof Db,
+  strategyPrincipleVersionId: string,
+  checks: readonly RemediationCheckResult[]
+) {
+  if (checks.length === 0) return [];
+  return db.transaction(async (tx) => {
+    const [version] = await tx
+      .select()
+      .from(strategyPrincipleVersions)
+      .where(eq(strategyPrincipleVersions.id, strategyPrincipleVersionId));
+    if (!version) {
+      throw new Error(`insertGroundingChecksForPrincipleVersion: Strategy principle version ${strategyPrincipleVersionId} not found.`);
+    }
+    await assertEvidenceBelongsToPrinciple(
+      tx,
+      version.strategyPrincipleId,
+      checks.map((c) => c.evidenceId)
+    );
+
+    // onConflictDoNothing (same convention as ensureDefaultRiskPrinciples's
+    // seed insert, and its DNA mirror insertGroundingChecksForVersion): a
+    // genuine concurrent race between two "checked_no_change" audits of
+    // the same version would have computed the same verdicts from the
+    // same inputs — let the loser's insert silently no-op rather than
+    // raise a raw uniqueness error.
+    return tx
+      .insert(strategyEvidenceGroundingChecks)
+      .values(
+        checks.map((c) => ({
+          strategyPrincipleVersionId,
+          evidenceId: c.evidenceId,
+          verdict: c.verdict,
+          reason: c.reason,
+        }))
+      )
+      .onConflictDoNothing()
+      .returning();
+  });
+}
+
+// DNA Grounding Remediation's Strategy mirror — the "new_version" outcome
+// of planPrincipleGroundingRemediation(): the effective evidence set
+// changed, so a new append-only version is warranted. Deliberately a
+// SEPARATE function from insertObservedPrincipleVersionWithEvidence:
+// remediation never inserts new Evidence rows (it only ever reinterprets
+// citations that already exist), and it always writes
+// strategy_evidence_grounding_checks rows the ordinary generateObserved
+// path has no concept of.
+export async function insertObservedPrincipleVersionWithGroundingChecks(
+  db: typeof Db,
+  strategyPrincipleId: string,
+  version: RemediationNewPrincipleVersion,
+  checks: readonly RemediationCheckResult[]
+) {
+  return db.transaction(async (tx) => {
+    if (checks.length > 0) {
+      await assertEvidenceBelongsToPrinciple(
+        tx,
+        strategyPrincipleId,
+        checks.map((c) => c.evidenceId)
+      );
+    }
+
+    const latest = await getLatestStrategyPrincipleVersion(tx, strategyPrincipleId);
+    const nextVersionNumber = (latest?.versionNumber ?? 0) + 1;
+
+    const [newVersion] = await tx
+      .insert(strategyPrincipleVersions)
+      .values({
+        strategyPrincipleId,
+        versionNumber: nextVersionNumber,
+        principleType: version.principleType,
+        statementText: version.statementText,
+        rationaleText: "Observed as a pattern across your interview answers, not stated directly.",
+        evidenceStrength: version.evidenceStrength,
+        supportingEvidenceCount: version.supportingEvidenceCount,
+        contradictingEvidenceCount: version.contradictingEvidenceCount,
+        createdBy: "system_grounding_revalidation",
+        changeReason: version.changeReason,
+      })
+      .returning();
+
+    if (checks.length > 0) {
+      await tx.insert(strategyEvidenceGroundingChecks).values(
+        checks.map((c) => ({
+          strategyPrincipleVersionId: newVersion!.id,
+          evidenceId: c.evidenceId,
+          verdict: c.verdict,
+          reason: c.reason,
+        }))
+      );
+    }
+
+    return { version: newVersion! };
   });
 }
 

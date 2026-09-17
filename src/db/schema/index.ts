@@ -13,5 +13,6 @@ export * from "./ideas-cases";
 export * from "./decisions";
 export * from "./evidence";
 export * from "./dna-grounding";
+export * from "./strategy-grounding";
 export * from "./corrections";
 export * from "./relations";

@@ -27,6 +27,7 @@ import {
 } from "./decisions";
 import { evidence } from "./evidence";
 import { dnaEvidenceGroundingChecks } from "./dna-grounding";
+import { strategyEvidenceGroundingChecks } from "./strategy-grounding";
 import { corrections } from "./corrections";
 
 export const investorsRelations = relations(investors, ({ many }) => ({
@@ -101,6 +102,21 @@ export const strategyPrincipleVersionsRelations = relations(
       references: [strategyPrinciples.id],
     }),
     bundledInVersions: many(strategyVersionPrinciples),
+    groundingChecks: many(strategyEvidenceGroundingChecks),
+  })
+);
+
+export const strategyEvidenceGroundingChecksRelations = relations(
+  strategyEvidenceGroundingChecks,
+  ({ one }) => ({
+    version: one(strategyPrincipleVersions, {
+      fields: [strategyEvidenceGroundingChecks.strategyPrincipleVersionId],
+      references: [strategyPrincipleVersions.id],
+    }),
+    evidence: one(evidence, {
+      fields: [strategyEvidenceGroundingChecks.evidenceId],
+      references: [evidence.id],
+    }),
   })
 );
 

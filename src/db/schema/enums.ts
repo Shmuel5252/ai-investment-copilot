@@ -49,10 +49,22 @@ export const principleTypeEnum = pgEnum("principle_type", [
   "validated",
 ]);
 
+// "system_grounding_revalidation" (Strategy Grounding + Identity
+// Hardening task) — the exact same provenance concept as DNA's own
+// dna_created_by value of the same name (see that enum's comment above),
+// mirrored here rather than reused: a version created by the system
+// re-checking this OBSERVED principle identity's own already-persisted
+// evidence against Evidence Grounding, not by a fresh generateObserved
+// proposal (ai_observed) and not by the investor (user_declared) or a
+// fixed default (system_default). A separate Postgres enum type from
+// dna_created_by — enum values cannot be shared across two different
+// enum types, and principle_created_by already has its own three
+// Strategy-specific values with no DNA equivalent.
 export const principleCreatedByEnum = pgEnum("principle_created_by", [
   "user_declared",
   "ai_observed",
   "system_default",
+  "system_grounding_revalidation",
 ]);
 
 export const caseStatusEnum = pgEnum("case_status", ["researching", "decided", "archived"]);

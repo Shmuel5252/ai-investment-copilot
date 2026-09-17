@@ -59,10 +59,43 @@ export async function getGroundingChecksForDnaHypothesisVersion(
   });
 }
 
+// Raw/historical — Strategy's mirror of getEvidenceForDnaHypothesis
+// above, unchanged in behavior. Every Evidence row ever attached to this
+// Strategy principle identity, unfiltered by version. Never narrowed —
+// generateObserved's identity-matching step keeps using this raw form,
+// same reasoning as DNA's.
 export async function getEvidenceForStrategyPrinciple(db: typeof Db, strategyPrincipleId: string) {
   return db.query.evidence.findMany({
     where: (e, { eq }) => eq(e.strategyPrincipleId, strategyPrincipleId),
     orderBy: (e, { desc }) => desc(e.createdAt),
+  });
+}
+
+// Version-aware/"effective" read (Strategy Grounding + Identity
+// Hardening task) — Strategy's mirror of
+// getEffectiveEvidenceForDnaHypothesisVersion above. Falls back to the
+// full raw pool for any version with no persisted grounding-check rows
+// (every version that predates this task, and every ordinary
+// generateObserved new_version from identity matching, which never
+// writes to strategy_evidence_grounding_checks).
+export async function getEffectiveEvidenceForStrategyPrincipleVersion(
+  db: typeof Db,
+  strategyPrincipleId: string,
+  strategyPrincipleVersionId: string
+) {
+  const [rawEvidence, groundingChecks] = await Promise.all([
+    getEvidenceForStrategyPrinciple(db, strategyPrincipleId),
+    getGroundingChecksForStrategyPrincipleVersion(db, strategyPrincipleVersionId),
+  ]);
+  return selectEffectiveEvidence(rawEvidence, groundingChecks);
+}
+
+export async function getGroundingChecksForStrategyPrincipleVersion(
+  db: typeof Db,
+  strategyPrincipleVersionId: string
+) {
+  return db.query.strategyEvidenceGroundingChecks.findMany({
+    where: (c, { eq }) => eq(c.strategyPrincipleVersionId, strategyPrincipleVersionId),
   });
 }
 

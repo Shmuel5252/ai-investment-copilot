@@ -155,7 +155,7 @@ run-based key assignment) בתיעוד התכנון של ה-session; אין טב
 **StrategyPrincipleVersion** (append-only) — `id, strategy_principle_id,
 version_number, principle_type(declared|observed|validated), statement_text,
 rationale_text, created_at, created_by(user_declared|ai_observed|
-system_default), change_reason, evidence_strength?, supporting_evidence_count?,
+system_default|system_grounding_revalidation), change_reason, evidence_strength?, supporting_evidence_count?,
 contradicting_evidence_count?`. שלושת השדות האחרונים **nullable** —
 נמלאים רק כש-`principle_type=observed` (אותה טבלת סף כמו DNA, ר' §2;
 קוד תמיד מחשב, לעולם לא ה-LLM). `declared` הוא ציטוט מפורש של המשתמש
@@ -166,6 +166,46 @@ contradicting_evidence_count?`. שלושת השדות האחרונים **nullabl
 יחד עם DNA Hypothesis ו-Learning Insight כשלוש הישויות שצוברות ראיות
 לפי אותה טבלת סף, ושתי האחרות כן כוללות את השדה — נסתר עד שקוד ה-Baseline
 Strategy בפועל נתקל בזה.
+
+- **`created_by=system_grounding_revalidation`** (Strategy Grounding +
+  Identity Hardening task) — ערך רביעי, המקבילה המדויקת של
+  `dna_created_by`'s הערך באותו שם (ר' §2 למעלה), אבל ב-**enum נפרד**
+  (`principle_created_by`) — לא reuse בין שני סוגי enum שונים ב-Postgres.
+  נוסף כי גרסה שנוצרת כשהמערכת בודקת מחדש ראיה **קיימת-שלה-עצמה** של
+  עיקרון `observed` מול Evidence Grounding (למטה) ומוצאת שהסט התקף
+  השתנה — היא לא `ai_observed` (לא הצעה טרייה מ-`generateObserved`)
+  ולא `user_declared`/`system_default`. `principle_type` נשאר בלתי-משתנה
+  בגרסה כזו — remediation לעולם לא מסווג מחדש עיקרון.
+
+**StrategyEvidenceGroundingCheck** (append-only,
+`strategy_evidence_grounding_checks` — Strategy Grounding + Identity
+Hardening task) — `id, strategy_principle_version_id (FK), evidence_id
+(FK), verdict(supported|unsupported), reason, checked_at`.
+`UNIQUE(strategy_principle_version_id, evidence_id)` (שם מפורש). המקבילה
+המדויקת מבחינה סמנטית של `DNAEvidenceGroundingCheck` (§2) — **טבלה
+נפרדת ולא reuse**, כי `Evidence.strategy_principle_id` ו-`Evidence.dna_hypothesis_id`
+הן שתי עמודות subject שונות, וטבלת grounding-check משותפת-פולימורפית
+לא הייתה מוסיפה תועלת אמיתית על פני שתי טבלאות ממוקדות. `verdict` כן
+**reuse** את ה-enum `grounding_verdict` הקיים (לא מוגדר-מחדש) — בניגוד
+ל-provenance, לערכי ה-verdict אין שום סמנטיקה ספציפית ל-DNA; הם הפלט
+הגנרי של `checkEvidenceGrounding()` (`src/lib/ai/dna-grounding.ts`),
+הנקרא ללא שינוי גם עבור Strategy. אותה סמנטיקת raw-vs-effective, אותה
+נפילה-אחורה ל-legacy, ואותו invariant של "complete check set" כמו
+המקבילה ב-DNA — ר' §2 להסבר המלא, לא חוזר כאן.
+
+**Strategy Identity Resolution** (Strategy Grounding + Identity
+Hardening task) — `generateObserved` כבר לא יוצר identity חדש+version 1
+ללא-תנאי לכל proposal ששרד validation+grounding; `classifyHypothesisMatch`
+(`src/lib/ai/dna-identity.ts`, נקרא ללא שינוי) מותאם מול עקרונות
+`observed` **פעילים קיימים בלבד** — `filterToObservedCandidates`
+(`src/lib/strategy/resolve-principle-identity.ts`) מסנן `declared`/
+`validated`/`system_default` החוצה **לפני** שמשהו מגיע לשלב ההתאמה,
+כי `strategyPrinciples` היא טבלת identity הטרוגנית המשותפת לשלושת
+ה-tiers (בניגוד ל-`dnaHypotheses`, שאין לה פיצול כזה) — התאמה לא-מסוננת
+הייתה יכולה ליצור merge חסר-משמעות בין דפוס observed טרי לבין הצהרה
+מילולית של המשתמש עצמו או ברירת-מחדל קבועה של המערכת. אותו כלל
+"case-key set גדל ממש → גרסה חדשה" כמו ב-DNA. אין matching לעקרונות
+`declared`/`validated` בכלל, גם לא כ-fallback.
 
 **StrategyVersion** (append-only) — `id, investor_id, version_number,
 created_at, change_summary`. אין עמודת `approved_by` נפרדת — הטבלה
@@ -395,7 +435,7 @@ Append-only. `transaction_id` נשאר עמודה יחידה (לא junction/מע
   `DecisionSnapshot`, `DecisionReview`, `ReviewDimension`, `Thesis`,
   `LaterContext`, `Evidence`, `DNAHypothesisVersion`,
   `StrategyPrincipleVersion`, `StrategyVersion`, `LearningInsightVersion`,
-  `InterviewAnswer`, `DNAEvidenceGroundingCheck`.
+  `InterviewAnswer`, `DNAEvidenceGroundingCheck`, `StrategyEvidenceGroundingCheck`.
 - **`ON DELETE RESTRICT`**: `strategy_version_id`, `market_context_id`,
   `dna_hypothesis_version_id` (דרך `DecisionSnapshotDNAReference`),
   `thesis_id` — כל FK שיוצא מ-`DecisionSnapshot`.

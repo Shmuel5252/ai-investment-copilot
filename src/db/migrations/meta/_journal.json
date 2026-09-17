@@ -64,6 +64,13 @@
       "when": 1789514559530,
       "tag": "0008_numerous_lily_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789589153340,
+      "tag": "0009_large_jackpot",
+      "breakpoints": true
     }
   ]
 }
