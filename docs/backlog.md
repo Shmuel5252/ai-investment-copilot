@@ -253,9 +253,43 @@ hypothesis-identity resolution — וה-catch המתאים כבר קיים בפ�
 זהה, אותו סיכון בדיוק) לפני שכל מנגנון עתידי קורא מ-DNA/Strategy
 בתור קלט להחלטה מה להציע.
 
+### AI structured-output boundary — חשיפות שנותרו אחרי ההקשחה של שלושת ה-generators
+**נמצא:** 2026-09-18, אגב תיקון תקרית ה-Strategy generation
+(ר' "נבנה" למטה). **לא בקשת קוד פעילה, ולא נצפה בפועל באף אחד מהם.**
+(1) שדות מערך **מקוננים בתוך פריט** (`evidence`, `citedAnswerIds`) שמגיעים
+כ-JSON string: `validate-principles.ts`/`validate-hypotheses.ts` כבר
+מוציאים פריט כזה בשקט (`!Array.isArray(...) → continue`) — fail-closed,
+אבל השערה שלמה נעלמת בלי אות. התקרית הממשית הייתה ב-parameter העליון של
+ה-tool call, לא בשדות מקוננים בתוך ה-JSON הפנימי, ולכן לא הורחב לכאן.
+(2) generators שצורכים אובייקט שלם ולא collection עליון
+(`review.ts` `dimensions`, `learning.ts` `evidence`, `case.ts` מערכי
+ציטוט, `decision.ts`) — אין להם גבול `Array.isArray` מפורש בכלל;
+`validateReviewDimensions` על string היה זורק TypeError גולמי. לא נגעו.
+(3) הוולידטורים של הדומיין **מוציאים פריט פגום ומשאירים את השאר**, הם לא
+זורקים על כל התוצאה — התנהגות קיימת ומאושרת שלא שונתה. אם רוצים
+all-or-nothing, זו החלטת מוצר נפרדת על שכבת הוולידציה, לא על שכבת
+ה-representation.
+
 ---
 
 ## נבנה
+- **AI structured-output boundary hardening — `normalizeStructuredCollection`** (2026-09-18): ב-strategy generation
+  האמיתי הראשון המודל החזיר HTTP 200 עם `principles` כ-**JSON string** שעוטף
+  `{"principles":[...]}` במקום מערך; ה-`Array.isArray(input.principles)` המחמיר
+  זרק לפני grounding/identity/persistence (אומת: 30 טבלאות זהות בית-לבית,
+  שום דבר לא נכתב). `src/lib/ai/structured-output.ts` חדש — helper יחיד,
+  דטרמיניסטי, ללא AI/DB, בשימוש שלושת המקומות עם אותו גבול בדיוק
+  (Strategy observed, Strategy declared, DNA). מקבל רק ייצוגים שקולים של
+  collection תחת המפתח הצפוי: מערך ישיר, wrapper, מחרוזת JSON של כל אחד
+  מהם, ושדה wrapper שהוא עצמו מחרוזת (מחלקת התקרית). **גבול מפורש:** עד שני
+  `JSON.parse` ושני unwrap, בקו ישר בלי רקורסיה; עומק מעבר לכך → `depth_exceeded`.
+  נדחים: JSON פגום, פרוזה, גדר Markdown, מפתח שגוי/חסר, wrapper דו-משמעי
+  (המפתח הצפוי + שדה מערך נוסף), null/boolean/number, אובייקט במקום מערך.
+  אין חילוץ regex, אין תיקון JSON, אין ניחוש שמות שדות, אין salvage
+  חלקי. **הוא לא שופט את הפריטים** — הוולידציה הדומיינית (ציטוטים, stance,
+  answer ids) רצה אחריו ללא שינוי. שגיאות נושאות קוד + תווית סטטית בלבד,
+  לעולם לא ערך גולמי או ציטוט של `JSON.parse`. 98 טסטים חדשים
+  (`tests/unit/structured-output.test.ts`, `ai-structured-output-callers.test.ts`).
 - **Strategy Grounding + Identity Hardening — generate-time פעיל, remediation infrastructure בלבד** (2026-09-16, המשך ישיר לחקירת האבחון
   (Strategy Grounding Diagnostic, read-only) ולעיצוב הארכיטקטורה
   (Strategy Hardening Architecture, read-only) שקדמו לה): מיישם את שני

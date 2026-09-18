@@ -1,4 +1,5 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
+import { normalizeStructuredCollection } from "./structured-output";
 
 export interface InterviewAnswerForAnalysis {
   id: string;
@@ -99,14 +100,10 @@ export async function proposeDnaHypotheses(
     throw new Error("AI did not return hypotheses via the expected tool call.");
   }
 
-  const input = toolUse.input as { hypotheses?: unknown };
-  if (!Array.isArray(input.hypotheses)) {
-    throw new Error("AI returned a malformed hypotheses list.");
-  }
-
-  // Structural validation only here (right shape) — whether cited
-  // answer IDs actually exist is validated by the caller against the
-  // real DB rows (src/server/routers/dna.ts), since this function has
-  // no DB access and shouldn't be trusted to police its own citations.
-  return input.hypotheses as ProposedHypothesis[];
+  // Representation-only normalization (structured-output.ts) — whether
+  // cited answer IDs actually exist is validated by the caller against
+  // the real DB rows (src/server/routers/dna.ts), since this function
+  // has no DB access and shouldn't be trusted to police its own
+  // citations.
+  return normalizeStructuredCollection(toolUse.input, "hypotheses", "hypotheses") as ProposedHypothesis[];
 }

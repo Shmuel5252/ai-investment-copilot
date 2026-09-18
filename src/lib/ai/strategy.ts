@@ -1,4 +1,5 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
+import { normalizeStructuredCollection } from "./structured-output";
 
 export interface InterviewAnswerForAnalysis {
   id: string;
@@ -99,14 +100,14 @@ export async function extractDeclaredPrinciples(
     throw new Error("AI did not return declared principles via the expected tool call.");
   }
 
-  const input = toolUse.input as { principles?: unknown };
-  if (!Array.isArray(input.principles)) {
-    throw new Error("AI returned a malformed declared-principles list.");
-  }
-
-  // Structural validation only — real citation-id checking happens in
-  // src/lib/strategy/validate-principles.ts against actual DB rows.
-  return input.principles as ProposedDeclaredPrinciple[];
+  // Representation-only normalization (structured-output.ts) — the
+  // items are still unvalidated here; real citation-id checking happens
+  // in src/lib/strategy/validate-principles.ts against actual DB rows.
+  return normalizeStructuredCollection(
+    toolUse.input,
+    "principles",
+    "declared-principles"
+  ) as ProposedDeclaredPrinciple[];
 }
 
 // ---------------------------------------------------------------------
@@ -207,10 +208,9 @@ export async function proposeObservedPrinciples(
     throw new Error("AI did not return observed principles via the expected tool call.");
   }
 
-  const input = toolUse.input as { principles?: unknown };
-  if (!Array.isArray(input.principles)) {
-    throw new Error("AI returned a malformed observed-principles list.");
-  }
-
-  return input.principles as ProposedObservedPrinciple[];
+  return normalizeStructuredCollection(
+    toolUse.input,
+    "principles",
+    "observed-principles"
+  ) as ProposedObservedPrinciple[];
 }
