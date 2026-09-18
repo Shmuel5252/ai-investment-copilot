@@ -33,6 +33,21 @@ import { anthropic, CLAUDE_MODEL } from "./client";
 // call failed" and "the citation is ungrounded" have to look identical to
 // every caller, or the fail-closed guarantee doesn't actually hold end to
 // end.
+//
+// Contradicting-stance semantic hardening (Strategy Grounding + Identity
+// Hardening follow-up — found on real, human-reviewed Strategy data, not
+// hypothetical): a compound hypothesis of the shape "does X because of Y,
+// rather than Z" was being rejected as a contradicting citation even when
+// the source clearly showed the investor NOT doing X — the model was
+// additionally requiring the source to explain what alternative motive
+// drove the counter-example, something it structurally cannot do when X
+// itself never happened in that instance. The contradicting branch below
+// now says explicitly: a clear counter-example to the material, headline
+// behavior is sufficient on its own; an unobservable secondary clause
+// (motive/manner) is not the same as an unproven one. This function's
+// shared, generic interface is unchanged — DNA and Strategy both call the
+// exact same checkEvidenceGrounding(), so this fix applies identically to
+// both without any DNA- or Strategy-specific branching.
 export interface EvidenceGroundingCheckInput {
   hypothesisStatement: string;
   stance: "supporting" | "contradicting";
@@ -56,7 +71,7 @@ The two stances are judged by DIFFERENT rules. Read the stance you were given an
 
 - Stance = "supporting": the citation is grounded only when the answer's own words provide evidence FOR the hypothesis claim — genuinely establishing the behavior described. If the answer is silent on a material part of the claim, doesn't clearly match it, or actually contains details that undercut it (for example: the position wasn't actually profitable, the original thesis didn't actually hold, no real alternative is described, an external target was missed rather than met), it is NOT grounded.
 
-- Stance = "contradicting": the citation is grounded only when the answer's own words provide evidence AGAINST the hypothesis claim — genuinely showing the investor did the opposite, or something clearly inconsistent with it. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. Only reject a contradicting citation if the answer is silent on the material part of the claim it is supposed to contradict, or if the answer is actually consistent with / supports the hypothesis instead of going against it.
+- Stance = "contradicting": the citation is grounded only when the answer's own words provide evidence AGAINST the hypothesis claim — genuinely showing the investor did the opposite, or something clearly inconsistent with it. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. When the hypothesis pairs a headline behavior with an attributed motive or manner ("does X because of Y, rather than Z"), a clear counter-example to the headline behavior is enough on its own to ground the contradiction — do not additionally require the answer to state an alternative motive for the counter-example, and do not reject the citation merely because the motive clause cannot be evaluated when the described behavior never happened in this instance; an unobservable secondary clause is not the same as an unproven one. Only reject a contradicting citation if the answer is silent on the material behavioral claim it is supposed to contradict, if it contradicts only a minor or non-material detail while leaving that material behavior unaddressed, or if the answer is actually consistent with / supports the hypothesis instead of going against it.
 
 Do not soften your verdict because the claim sounds like a reasonable investing pattern in general — judge strictly against this one answer's own words. Respond only with the structured verdict.`;
 

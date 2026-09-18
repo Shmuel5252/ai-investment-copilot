@@ -228,4 +228,111 @@ describe("checkEvidenceGrounding — mocked client, no real API call", () => {
     });
     expect(malformedResult.verdict).toBe("unsupported");
   });
+
+  // Contradicting-stance semantic hardening regression (Strategy Grounding
+  // + Identity Hardening follow-up — a real, human-reviewed disagreement,
+  // not a hypothetical). Generic fixtures throughout: no investor-specific
+  // text, no real persisted answers, per the task's explicit constraint.
+  // These tests are mocked-client, same convention as every other test in
+  // this describe block — they prove (a) the real system prompt sent
+  // contains the corrected contract, and (b) checkEvidenceGrounding
+  // faithfully passes through whatever verdict comes back, never
+  // second-guessing it. Whether a real live model actually applies the
+  // corrected rule is a separate, deliberately out-of-scope live-model
+  // question, same disclosure as every other mocked test here.
+  it("6. a behavioral counter-example to the material headline claim is grounded even though a secondary motive clause is unobservable (the corrected contract)", async () => {
+    const { anthropic } = await import("@/lib/ai/client");
+    (anthropic.messages.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      content: [{
+        type: "tool_use",
+        input: {
+          verdict: "supported",
+          reason: "The answer shows the investor did not take the claimed action at all in this instance — a direct counter-example to the material behavior, even though no alternative motive is stated.",
+        },
+      }],
+    });
+    const { checkEvidenceGrounding } = await import("@/lib/ai/dna-grounding");
+
+    const result = await checkEvidenceGrounding({
+      hypothesisStatement: "You tend to do X because of motive M, rather than following rule R.",
+      stance: "contradicting",
+      sourceAnswerText: "I did not do X in this case; I did the opposite, without following rule R either.",
+    });
+
+    expect(result.verdict).toBe("supported");
+    const call = (anthropic.messages.create as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(call.system).toMatch(/a clear counter-example to the headline behavior is enough on its own/i);
+    expect(call.system).toMatch(/do not additionally require the answer to state an alternative motive/i);
+    expect(call.system).toMatch(/an unobservable secondary clause is not the same as an unproven one/i);
+  });
+
+  it("7. a citation silent about the claimed material behavior fails closed", async () => {
+    const { anthropic } = await import("@/lib/ai/client");
+    (anthropic.messages.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      content: [{
+        type: "tool_use",
+        input: {
+          verdict: "unsupported",
+          reason: "The answer never addresses whether X happened or not — silent on the material behavioral claim.",
+        },
+      }],
+    });
+    const { checkEvidenceGrounding } = await import("@/lib/ai/dna-grounding");
+
+    const result = await checkEvidenceGrounding({
+      hypothesisStatement: "You tend to do X because of motive M, rather than following rule R.",
+      stance: "contradicting",
+      sourceAnswerText: "I had lunch and thought about something unrelated to X entirely.",
+    });
+
+    expect(result.verdict).toBe("unsupported");
+    const call = (anthropic.messages.create as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(call.system).toMatch(/silent on the material behavioral claim/i);
+  });
+
+  it("8. contradicting only a non-material/trivial clause while the material behavior itself remains untouched fails closed", async () => {
+    const { anthropic } = await import("@/lib/ai/client");
+    (anthropic.messages.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      content: [{
+        type: "tool_use",
+        input: {
+          verdict: "unsupported",
+          reason: "The answer disagrees only with the trivial rule/manner detail — it still confirms the material behavior X itself happened, so this does not contradict the hypothesis.",
+        },
+      }],
+    });
+    const { checkEvidenceGrounding } = await import("@/lib/ai/dna-grounding");
+
+    const result = await checkEvidenceGrounding({
+      hypothesisStatement: "You tend to do X because of motive M, rather than following rule R.",
+      stance: "contradicting",
+      sourceAnswerText: "I did do X, exactly as usual, but I happened to also glance at rule R this one time before doing it.",
+    });
+
+    expect(result.verdict).toBe("unsupported");
+    const call = (anthropic.messages.create as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(call.system).toMatch(/contradicts only a minor or non-material detail/i);
+  });
+
+  it("9. genuinely ambiguous compound contradiction fails closed", async () => {
+    const { anthropic } = await import("@/lib/ai/client");
+    (anthropic.messages.create as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      content: [{
+        type: "tool_use",
+        input: {
+          verdict: "unsupported",
+          reason: "It is genuinely unclear from the answer whether X happened or not in this instance — too ambiguous to count as a counter-example.",
+        },
+      }],
+    });
+    const { checkEvidenceGrounding } = await import("@/lib/ai/dna-grounding");
+
+    const result = await checkEvidenceGrounding({
+      hypothesisStatement: "You tend to do X because of motive M, rather than following rule R.",
+      stance: "contradicting",
+      sourceAnswerText: "It's hard to say exactly what happened that time, things were unclear.",
+    });
+
+    expect(result.verdict).toBe("unsupported");
+  });
 });
