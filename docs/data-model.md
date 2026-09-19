@@ -58,7 +58,7 @@ status(active|user_rejected)`.
 **DNAHypothesisVersion** (append-only) — `id, dna_hypothesis_id,
 version_number, statement_text, evidence_strength, supporting_evidence_count,
 contradicting_evidence_count, created_at, created_by(ai_generated|
-user_correction|system_grounding_revalidation), change_reason`.
+user_correction|system_grounding_revalidation|system_confidence_recalculation), change_reason`.
 - נוצר ע"י: AI (ניסוח) + קוד (evidence_strength, ר' §Evidence Strength
   Table). נצרך ע"י: DNA view, Personal Fit, Decision Snapshot.
 - **`created_by=system_grounding_revalidation`** (DNA Grounding
@@ -68,6 +68,24 @@ user_correction|system_grounding_revalidation), change_reason`.
   ראיה **קיימת-שלה-עצמה** מול Evidence Grounding (§ למטה) ומוצאת שהסט
   התקף השתנה היא לא אחד משני אלה. `statement_text` **לא** משתנה בגרסה
   כזו — רק ה-composition/ספירה של הראיה.
+- **`created_by=system_confidence_recalculation`** (Confidence Recalculation
+  Remediation; ערך זהה גם ב-`principle_created_by` של Strategy §3 — enum
+  values לא משותפים בין enum types, לכן ערך משוקף בכל אחד): גרסה שמצורפת
+  append-only כש-*הסמנטיקה* של `evidence_strength` השתנתה (ר' טבלת הסף למטה)
+  וה-tier ששמור בגרסה **האחרונה** כבר לא מה ש-`calculateEvidenceStrength()`
+  מחשב מאותם S/C. אינה ראיה חדשה, אינה grounding, אינה מידע זהות חדש ואינה
+  תיקון משתמש — לכן אף אחד מארבעת הערכים האחרים לא כן. נשמרים זהים: statement,
+  S, C (ב-Strategy גם `principle_type` ו-`rationale_text`); משתנים רק id,
+  version_number, created_at, created_by, change_reason ו-`evidence_strength`.
+  ה-grounding checks של הגרסה הקודמת (scoped לגרסה) מועתקים קדימה עם הסימון
+  המפורש "Carried forward unchanged from version …" והנימוק המקורי — לא מתבצע
+  judgment חדש, ובלי ההעתקה הגרסה החדשה הייתה נופלת חזרה לכל-הראיה-הגולמית
+  ומחזירה ציטוטים שנדחו. אין AI. אידמפוטנטי — ההחלטה היא השוואת הגרסה
+  האחרונה מול ה-helper הנוכחי, כך שהרצה שנייה היא no-op; מקביליות: נעילת שורת
+  ה-identity (`FOR UPDATE`) + `UNIQUE(parent, version_number)` כ-backstop. Bundles
+  ו-DecisionSnapshots לא נוגעים. (מימוש: `src/lib/evidence/recalculate-confidence.ts`,
+  `recalculateDnaHypothesisConfidence`/`recalculatePrincipleConfidence`;
+  מיגרציה 0010 — נכתבה, טרם הופעלה על ה-DB האמיתי.)
 
 **DNAEvidenceGroundingCheck** (append-only, `dna_evidence_grounding_checks`
 — DNA Grounding Remediation, Autonomous Unit 3) — `id,
@@ -170,7 +188,7 @@ run-based key assignment) בתיעוד התכנון של ה-session; אין טב
 **StrategyPrincipleVersion** (append-only) — `id, strategy_principle_id,
 version_number, principle_type(declared|observed|validated), statement_text,
 rationale_text, created_at, created_by(user_declared|ai_observed|
-system_default|system_grounding_revalidation), change_reason, evidence_strength?, supporting_evidence_count?,
+system_default|system_grounding_revalidation|system_confidence_recalculation), change_reason, evidence_strength?, supporting_evidence_count?,
 contradicting_evidence_count?`. שלושת השדות האחרונים **nullable** —
 נמלאים רק כש-`principle_type=observed` (אותה טבלת סף כמו DNA, ר' §2;
 קוד תמיד מחשב, לעולם לא ה-LLM). `declared` הוא ציטוט מפורש של המשתמש

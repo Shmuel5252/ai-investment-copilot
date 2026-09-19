@@ -37,10 +37,21 @@ export const dnaHypothesisStatusEnum = pgEnum("dna_hypothesis_status", [
 // against the Evidence Grounding standard (src/lib/ai/dna-grounding.ts)
 // and finding the valid evidence set has changed. Neither existing value
 // would be honest here — see docs/data-model.md §2 for the full case.
+//
+// "system_confidence_recalculation" (Confidence Recalculation Remediation):
+// a version appended when the evidenceStrength SEMANTICS changed and a
+// latest version's stored tier no longer matches what the current helper
+// computes from its own unchanged S/C. No new evidence, no grounding
+// call, no new identity information, no investor action — a
+// deterministic recomputation, so none of the three values above is
+// truthful. Mirrored in principle_created_by below (enum values cannot
+// be shared across enum types). This enum is also what
+// learning_insight_versions.created_by uses.
 export const dnaCreatedByEnum = pgEnum("dna_created_by", [
   "ai_generated",
   "user_correction",
   "system_grounding_revalidation",
+  "system_confidence_recalculation",
 ]);
 
 export const principleTypeEnum = pgEnum("principle_type", [
@@ -60,11 +71,16 @@ export const principleTypeEnum = pgEnum("principle_type", [
 // dna_created_by — enum values cannot be shared across two different
 // enum types, and principle_created_by already has its own three
 // Strategy-specific values with no DNA equivalent.
+// "system_confidence_recalculation" — the Strategy mirror of dna_created_by's
+// value of the same name (see the comment there): a deterministic
+// evidenceStrength recomputation over unchanged counts, not any of the
+// other four origins.
 export const principleCreatedByEnum = pgEnum("principle_created_by", [
   "user_declared",
   "ai_observed",
   "system_default",
   "system_grounding_revalidation",
+  "system_confidence_recalculation",
 ]);
 
 export const caseStatusEnum = pgEnum("case_status", ["researching", "decided", "archived"]);

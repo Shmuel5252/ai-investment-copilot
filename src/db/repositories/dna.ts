@@ -5,6 +5,13 @@ import type { InferInsertModel } from "drizzle-orm";
 import type { ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
 import { calculateEvidenceStrength } from "@/lib/dna/evidence-strength";
 import type { RemediationCheckResult, RemediationNewVersion } from "@/lib/dna/remediate-grounding";
+import { isUniqueViolation } from "@/db/errors";
+import {
+  planConfidenceRecalculation,
+  buildRecalculatedDnaVersion,
+  carryForwardGroundingChecks,
+  type ConfidenceRecalculationOutcome,
+} from "@/lib/evidence/recalculate-confidence";
 
 export type NewDnaHypothesis = InferInsertModel<typeof dnaHypotheses>;
 export type NewDnaHypothesisVersion = InferInsertModel<typeof dnaHypothesisVersions>;
@@ -329,6 +336,79 @@ export async function insertDnaHypothesisVersionWithGroundingChecks(
 
     return { version: newVersion! };
   });
+}
+
+// Confidence Recalculation Remediation (DNA): if this identity's LATEST
+// version stores a tier the current calculateEvidenceStrength() would not
+// produce from that version's own S/C, append ONE new version that
+// repeats everything and differs only in the recomputed tier and
+// provenance. Never an UPDATE; the old version stays untouched. No AI, no
+// new Evidence rows — only version-scoped grounding checks are carried
+// forward so the effective evidence set cannot change.
+//
+// Concurrency: the identity row is locked FOR UPDATE, so concurrent
+// recalculations of one identity serialize — the loser then re-reads the
+// (now corrected) latest version and no-ops. UNIQUE(dna_hypothesis_id,
+// version_number) remains the backstop against a writer that does not take
+// the lock (a concurrent dna.generate version append): that surfaces as
+// "superseded_concurrently" — nothing written, safe to simply re-run.
+export async function recalculateDnaHypothesisConfidence(
+  db: typeof Db,
+  dnaHypothesisId: string
+): Promise<ConfidenceRecalculationOutcome<typeof dnaHypothesisVersions.$inferSelect>> {
+  try {
+    return await db.transaction(async (tx) => {
+      await tx
+        .select({ id: dnaHypotheses.id })
+        .from(dnaHypotheses)
+        .where(eq(dnaHypotheses.id, dnaHypothesisId))
+        .for("update");
+
+      const latest = await getLatestDnaHypothesisVersion(tx, dnaHypothesisId);
+      if (!latest) throw new Error(`recalculateDnaHypothesisConfidence: DNA hypothesis ${dnaHypothesisId} has no versions.`);
+
+      const plan = planConfidenceRecalculation(latest);
+      if (plan.action === "no_op") return { action: "no_op" as const, reason: plan.reason };
+
+      const baseChecks = await tx
+        .select()
+        .from(dnaEvidenceGroundingChecks)
+        .where(eq(dnaEvidenceGroundingChecks.dnaHypothesisVersionId, latest.id));
+      const carried = carryForwardGroundingChecks(latest.id, baseChecks);
+      await assertEvidenceBelongsToHypothesis(
+        tx,
+        dnaHypothesisId,
+        carried.map((c) => c.evidenceId)
+      );
+
+      const [version] = await tx
+        .insert(dnaHypothesisVersions)
+        .values({
+          dnaHypothesisId,
+          versionNumber: latest.versionNumber + 1,
+          ...buildRecalculatedDnaVersion(latest, plan),
+        })
+        .returning();
+
+      if (carried.length > 0) {
+        await tx.insert(dnaEvidenceGroundingChecks).values(
+          carried.map((c) => ({
+            dnaHypothesisVersionId: version!.id,
+            evidenceId: c.evidenceId,
+            verdict: c.verdict,
+            reason: c.reason,
+          }))
+        );
+      }
+
+      return { action: "appended" as const, plan, version: version!, carriedForwardChecks: carried.length };
+    });
+  } catch (err) {
+    if (isUniqueViolation(err, "dna_hypothesis_versions_dna_hypothesis_id_version_number_unique")) {
+      return { action: "no_op", reason: "superseded_concurrently" };
+    }
+    throw err;
+  }
 }
 
 // The identity row's status (active|user_rejected) is a simple lifecycle

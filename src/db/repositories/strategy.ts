@@ -13,6 +13,13 @@ import { DEFAULT_RISK_PRINCIPLES } from "@/lib/strategy/default-risk-principles"
 import { slugifyPrincipleKey } from "@/lib/strategy/slugify";
 import type { ValidatedDeclaredPrinciple, ValidatedObservedPrinciple, ValidatedPrincipleEvidence } from "@/lib/strategy/validate-principles";
 import type { RemediationCheckResult, RemediationNewPrincipleVersion } from "@/lib/strategy/remediate-grounding";
+import { isUniqueViolation } from "@/db/errors";
+import {
+  planConfidenceRecalculation,
+  buildRecalculatedStrategyVersion,
+  carryForwardGroundingChecks,
+  type ConfidenceRecalculationOutcome,
+} from "@/lib/evidence/recalculate-confidence";
 
 export type NewStrategyPrinciple = InferInsertModel<typeof strategyPrinciples>;
 export type NewStrategyPrincipleVersion = InferInsertModel<typeof strategyPrincipleVersions>;
@@ -424,6 +431,74 @@ export async function insertObservedPrincipleVersionWithGroundingChecks(
 
     return { version: newVersion! };
   });
+}
+
+// Confidence Recalculation Remediation (Strategy) — the mirror of
+// recalculateDnaHypothesisConfidence (see that comment for the full
+// reasoning). If this principle's LATEST version stores a tier the current
+// calculateEvidenceStrength() would not produce from its own S/C, append
+// ONE new version that repeats identity, statement, principleType and
+// rationale and differs only in the recomputed tier and provenance. Never
+// an UPDATE, no AI, no new Evidence; declared/validated principles carry
+// no tier and are a no-op. The Strategy BUNDLE tables are not touched — a
+// whole-Strategy version only ever moves on explicit user approval.
+export async function recalculatePrincipleConfidence(
+  db: typeof Db,
+  strategyPrincipleId: string
+): Promise<ConfidenceRecalculationOutcome<typeof strategyPrincipleVersions.$inferSelect>> {
+  try {
+    return await db.transaction(async (tx) => {
+      await tx
+        .select({ id: strategyPrinciples.id })
+        .from(strategyPrinciples)
+        .where(eq(strategyPrinciples.id, strategyPrincipleId))
+        .for("update");
+
+      const latest = await getLatestStrategyPrincipleVersion(tx, strategyPrincipleId);
+      if (!latest) throw new Error(`recalculatePrincipleConfidence: Strategy principle ${strategyPrincipleId} has no versions.`);
+
+      const plan = planConfidenceRecalculation(latest);
+      if (plan.action === "no_op") return { action: "no_op" as const, reason: plan.reason };
+
+      const baseChecks = await tx
+        .select()
+        .from(strategyEvidenceGroundingChecks)
+        .where(eq(strategyEvidenceGroundingChecks.strategyPrincipleVersionId, latest.id));
+      const carried = carryForwardGroundingChecks(latest.id, baseChecks);
+      await assertEvidenceBelongsToPrinciple(
+        tx,
+        strategyPrincipleId,
+        carried.map((c) => c.evidenceId)
+      );
+
+      const [version] = await tx
+        .insert(strategyPrincipleVersions)
+        .values({
+          strategyPrincipleId,
+          versionNumber: latest.versionNumber + 1,
+          ...buildRecalculatedStrategyVersion(latest, plan),
+        })
+        .returning();
+
+      if (carried.length > 0) {
+        await tx.insert(strategyEvidenceGroundingChecks).values(
+          carried.map((c) => ({
+            strategyPrincipleVersionId: version!.id,
+            evidenceId: c.evidenceId,
+            verdict: c.verdict,
+            reason: c.reason,
+          }))
+        );
+      }
+
+      return { action: "appended" as const, plan, version: version!, carriedForwardChecks: carried.length };
+    });
+  } catch (err) {
+    if (isUniqueViolation(err, "strategy_principle_versions_strategy_principle_id_version_numbe")) {
+      return { action: "no_op", reason: "superseded_concurrently" };
+    }
+    throw err;
+  }
 }
 
 // "User approves a change -> new [whole-Strategy] version"

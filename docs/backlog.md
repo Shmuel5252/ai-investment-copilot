@@ -280,10 +280,16 @@ all-or-nothing, זו החלטת מוצר נפרדת על שכבת הוולידצ
 החדש שתיהן `insufficient_evidence`. **השפעה ממשית, לא רק תווית:**
 `excludeInsufficientEvidence` (cases/decisions/reviews) כולל אותן עכשיו
 בהקשר ה-AI של Personal Fit / הערכה בזמן-אמת. כל שאר 17 הגרסאות עם tier
-תואמות. **לא בוצע** — היסטוריה immutable; הפתרון הוא גרסה חדשה append-only
-עם tier מחושב מחדש (דטרמיניסטי, ללא AI). פתוח לפני שמימוש: ל-`created_by`
-אין ערך שמתאים ("recompute") — `system_grounding_revalidation` מטעה, ערך חדש
-דורש enum migration; החלטה נפרדת.
+תואמות. **לא בוצע על ה-DB האמיתי** — היסטוריה immutable. **מומש (2026-09-20,
+ממתין לאישור אנושי):** מנגנון כללי append-only — `recalculateDnaHypothesisConfidence`/
+`recalculatePrincipleConfidence`, dry-run read-only
+(`planConfidenceRecalculationsForInvestor`) ו-`applyConfidenceRecalculationsForInvestor`
+— עם `created_by=system_confidence_recalculation` (ערך חדש בשני ה-enums;
+מיגרציה `0010`, שתי פקודות `ALTER TYPE … ADD VALUE`, **נכתבה ולא הופעלה**).
+grounding checks scoped-לגרסה מועתקים קדימה במפורש כדי שהראיה האפקטיבית לא
+תשתנה. אומת על DB scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמיתי:
+בדיוק 2 תיקונים מתוכננים, 0 כתיבות. **נותר:** אישור אנושי ← החלת מיגרציה 0010
+על ה-DB האמיתי ← הרצת apply פעם אחת.
 
 ### Behavioral/Decision Independence חוצה-tickers — עכשיו מהותי (`a48426b1`)
 **נמצא:** 2026-09-20. `deriveEpisodeKeys` (`positions.ts`) הוא per-ticker מהגדרתו

@@ -71,6 +71,13 @@
       "when": 1789589153340,
       "tag": "0009_large_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789853441576,
+      "tag": "0010_confidence_recalculation",
+      "breakpoints": true
     }
   ]
 }
