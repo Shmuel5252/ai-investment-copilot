@@ -261,6 +261,9 @@ hypothesis-identity resolution — וה-catch המתאים כבר קיים בפ�
 מוציאים פריט כזה בשקט (`!Array.isArray(...) → continue`) — fail-closed,
 אבל השערה שלמה נעלמת בלי אות. התקרית הממשית הייתה ב-parameter העליון של
 ה-tool call, לא בשדות מקוננים בתוך ה-JSON הפנימי, ולכן לא הורחב לכאן.
+**עדכון 2026-09-19:** ה-strict tool schema (ר' "נבנה") מגביל גם את שדות
+המערך המקוננים של שלושת ה-generators לסוג `array` ברמת ה-provider, כך שהחשיפה
+הזו אמורה להיסגר שם — **עדיין לא אומת חי**.
 (2) generators שצורכים אובייקט שלם ולא collection עליון
 (`review.ts` `dimensions`, `learning.ts` `evidence`, `case.ts` מערכי
 ציטוט, `decision.ts`) — אין להם גבול `Array.isArray` מפורש בכלל;
@@ -273,6 +276,23 @@ all-or-nothing, זו החלטת מוצר נפרדת על שכבת הוולידצ
 ---
 
 ## נבנה
+- **Strict tool contract — הבעיה נמנעת ברמת ה-request, לא רק נתפסת אחריו** (2026-09-19): שני ריצות
+  Strategy אמיתיות (2026-09-18) החזירו `principles` כ-JSON string — בשנייה גם
+  JSON לא תקין (מרכאות ASCII לא מוברחות בתוך טקסט). ה-normalizer נכשל סגור
+  נכון, אבל תיקון parser אינו פתרון ל"מחרוזת שאינה JSON". `strict: true` על שלוש
+  הכלים (`propose_observed_principles`, `propose_declared_principles`,
+  `propose_hypotheses`) גורם ל-provider לאכוף את ה-schema **בזמן הייצור** ("guarantees
+  schema validation on tool names and inputs" — `Tool.strict` ב-`@anthropic-ai/sdk`
+  0.116.0; המודל `claude-sonnet-5` ברשימת המודלים הנתמכים בתיעוד הרשמי). הדרישה
+  המחייבת: `additionalProperties: false` על **כל** אובייקט; אין מילות-מפתח לא
+  נתמכות (`minLength`, `pattern`, `anyOf`...) — מפרה מחזירה HTTP 400. כל שלושת
+  ה-schemas כבר הכריזו כל שדה כ-`required` ולא השתמשו ב-union/constraint, ולכן
+  הוסף רק `strict` ו-`additionalProperties`. **לא נוספה** אפשרות string לאף
+  collection. `tool_choice` הכפוי נשאר. ה-normalizer נשאר כהגנה בעומק, ללא שינוי.
+  `tests/unit/ai-strict-tool-contract.test.ts` בודק את ה-request האמיתי שנשלח
+  (mock ל-SDK בלבד): strict נשלח, כל אובייקט strict, ה-collection בדיוק `array`,
+  ורשימת מילות-מפתח מותרות סגורה. **לא אומת חי** — שילוב strict + `tool_choice`
+  כפוי מול המודל הזה, וקבלת ה-schema ע"י ה-API (בקשה שנדחית = 400 לפני כל כתיבה).
 - **AI structured-output boundary hardening — `normalizeStructuredCollection`** (2026-09-18): ב-strategy generation
   האמיתי הראשון המודל החזיר HTTP 200 עם `principles` כ-**JSON string** שעוטף
   `{"principles":[...]}` במקום מערך; ה-`Array.isArray(input.principles)` המחמיר

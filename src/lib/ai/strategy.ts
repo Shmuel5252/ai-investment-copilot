@@ -40,6 +40,8 @@ Ground rules:
 const DECLARE_TOOL = {
   name: "propose_declared_principles",
   description: "Extract explicit, investor-stated investing rules/preferences from interview answers.",
+  // Strict tool use forces `principles` to be a real array (the same-shaped observed-principles tool came back string-encoded live); requires additionalProperties:false on EVERY object.
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {
@@ -63,10 +65,12 @@ const DECLARE_TOOL = {
             },
           },
           required: ["statementText", "rationaleText", "citedAnswerIds"],
+          additionalProperties: false,
         },
       },
     },
     required: ["principles"],
+    additionalProperties: false,
   },
 };
 
@@ -148,6 +152,8 @@ const OBSERVE_TOOL = {
   name: "propose_observed_principles",
   description:
     "Propose risk/strategy-behavior hypotheses about the investor, each backed by cited evidence.",
+  // Strict tool use forces `principles` to be a real array (live runs returned it string-encoded); requires additionalProperties:false on EVERY object.
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {
@@ -173,14 +179,17 @@ const OBSERVE_TOOL = {
                   },
                 },
                 required: ["interviewAnswerId", "stance", "description"],
+                additionalProperties: false,
               },
             },
           },
           required: ["statement", "evidence"],
+          additionalProperties: false,
         },
       },
     },
     required: ["principles"],
+    additionalProperties: false,
   },
 };
 

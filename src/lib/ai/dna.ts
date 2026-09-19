@@ -34,6 +34,8 @@ Ground rules:
 const PROPOSE_TOOL = {
   name: "propose_hypotheses",
   description: "Propose behavioral hypotheses about the investor, each backed by cited evidence.",
+  // Strict tool use forces `hypotheses` to be a real array (the same-shaped observed-principles tool came back string-encoded live); requires additionalProperties:false on EVERY object.
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {
@@ -59,14 +61,17 @@ const PROPOSE_TOOL = {
                   },
                 },
                 required: ["interviewAnswerId", "stance", "description"],
+                additionalProperties: false,
               },
             },
           },
           required: ["statement", "evidence"],
+          additionalProperties: false,
         },
       },
     },
     required: ["hypotheses"],
+    additionalProperties: false,
   },
 };
 

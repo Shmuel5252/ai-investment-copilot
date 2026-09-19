@@ -88,6 +88,13 @@ describe.each(["principles", "hypotheses"])("normalizeStructuredCollection — e
       expect(codeOf(() => norm({ [K]: "[{broken" }))).toBe("malformed_json");
     });
 
+    it("8b. SECOND LIVE INCIDENT CLASS: a string-wrapped collection whose JSON is invalid because a value contains unescaped ASCII quotes fails closed (no quote repair)", () => {
+      // Generic stand-in: the model used raw " as quotation marks inside a value.
+      const invalid = `{"${K}":[{"statement":"You tend to "lock in" gains early","evidence":[]}]}`;
+      expect(codeOf(() => norm({ [K]: invalid }))).toBe("malformed_json");
+      expect(codeOf(() => norm(invalid))).toBe("malformed_json");
+    });
+
     it("9. natural-language prose, including prose that merely CONTAINS valid JSON and Markdown-fenced JSON (no extraction, no fence stripping)", () => {
       expect(codeOf(() => norm("Here are the results you asked for."))).toBe("malformed_json");
       expect(codeOf(() => norm(`Sure! ${JSON.stringify({ [K]: ITEMS })} Hope that helps.`))).toBe("malformed_json");

@@ -123,6 +123,11 @@ const CALLERS: CallerConfig[] = [
 
 const REJECTS: [string, (key: Key, items: unknown[]) => unknown, string][] = [
   ["prose", () => "Here are your results.", "malformed_json"],
+  [
+    "a string-wrapped collection with unescaped quotes inside a value (second live incident class)",
+    (k) => ({ [k]: `{"${k}":[{"statement":"You tend to "lock in" gains early","evidence":[]}]}` }),
+    "malformed_json",
+  ],
   ["Markdown-fenced JSON", () => "```json\n[]\n```", "malformed_json"],
   ["a wrong wrapper key", () => ({ wrongKey: [] }), "unexpected_representation"],
   ["a missing key", () => ({}), "unexpected_representation"],
