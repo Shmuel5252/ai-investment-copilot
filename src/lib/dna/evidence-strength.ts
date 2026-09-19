@@ -5,16 +5,26 @@ import type { evidenceStrengthEnum } from "@/db/schema";
 
 export type EvidenceStrength = (typeof evidenceStrengthEnum.enumValues)[number];
 
+// The tier is CONFIDENCE IN THE CLAIM, not how much evidence exists, so
+// the two sample-size gates count SUPPORTING independent cases only.
+// Invariant (tests/unit/evidence-strength.test.ts): holding S fixed,
+// raising C never raises the tier — a contradiction is real information
+// (it stays persisted and counted), but it can never manufacture
+// confidence. Before this, the gates used S+C: a lone contradicting case
+// took a claim with 2 supporting cases from insufficient_evidence to
+// moderate on a live run (uncertainty increasing confidence, and moving
+// the claim into the AI narrative context excludeInsufficientEvidence
+// keeps it out of). Contradiction still lowers the tier through the
+// ratio gate below.
 export function calculateEvidenceStrength(
   supportingCount: number,
   contradictingCount: number
 ): EvidenceStrength {
-  const total = supportingCount + contradictingCount;
-  if (total < 3) return "insufficient_evidence";
+  if (supportingCount < 3) return "insufficient_evidence";
 
-  const ratio = supportingCount / total;
+  const ratio = supportingCount / (supportingCount + contradictingCount);
   if (ratio < 0.6) return "weak";
-  if (total >= 5 && ratio >= 0.8) return "strong";
+  if (supportingCount >= 5 && ratio >= 0.8) return "strong";
   return "moderate";
 }
 

@@ -60,7 +60,9 @@ describe("validateLearningInsightEvidence", () => {
     };
     const result = validateLearningInsightEvidence(proposed, caseKeys);
     expect(result!.contradictingCount).toBe(1);
-    expect(result!.evidenceStrength).toBe("moderate"); // 3 total, ratio 0.67
+    // 2 supporting + 1 contradicting: the contradiction is kept and counted,
+    // but it can't lift 2 supporting cases out of insufficient_evidence.
+    expect(result!.evidenceStrength).toBe("insufficient_evidence");
   });
 
   it("returns null for an empty statement", () => {

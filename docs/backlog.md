@@ -273,9 +273,64 @@ hypothesis-identity resolution — וה-catch המתאים כבר קיים בפ�
 all-or-nothing, זו החלטת מוצר נפרדת על שכבת הוולידציה, לא על שכבת
 ה-representation.
 
+### Evidence Strength — גרסאות שכבר נשמרו מפרות את האינווריאנט (דורש remediation append-only נפרד)
+**נמצא:** 2026-09-20, אגב תיקון הסמנטיקה (ר' "נבנה"). שתי גרסאות אמיתיות
+נשמרו תחת הכלל הישן ועדיין הגרסה **האחרונה** שלהן: `dna 7c3665ca v1`
+(S=2,C=1, `moderate`) ו-`strategy 3653aeed v2` (S=2,C=1, `moderate`). תחת הכלל
+החדש שתיהן `insufficient_evidence`. **השפעה ממשית, לא רק תווית:**
+`excludeInsufficientEvidence` (cases/decisions/reviews) כולל אותן עכשיו
+בהקשר ה-AI של Personal Fit / הערכה בזמן-אמת. כל שאר 17 הגרסאות עם tier
+תואמות. **לא בוצע** — היסטוריה immutable; הפתרון הוא גרסה חדשה append-only
+עם tier מחושב מחדש (דטרמיניסטי, ללא AI). פתוח לפני שמימוש: ל-`created_by`
+אין ערך שמתאים ("recompute") — `system_grounding_revalidation` מטעה, ערך חדש
+דורש enum migration; החלטה נפרדת.
+
+### Behavioral/Decision Independence חוצה-tickers — עכשיו מהותי (`a48426b1`)
+**נמצא:** 2026-09-20. `deriveEpisodeKeys` (`positions.ts`) הוא per-ticker מהגדרתו
+("no state crosses tickers"), ולטבלת `transactions` אין שום עמודת קישור בין
+עסקאות (רק `ticker, quantity, price, amount, notes` חופשי, `intra_day_order`).
+במציאות: המכירה הסופית של MP (MP#1) והקנייה של MRVL#3 — שתיהן ב-2026-08-28,
+פדיון MP ≈$506 מול קנייה ≈$1,000 ("חלק מההון") — הן **החלטת הקצאה אחת**, ונספרו
+כשני מקרים (S=2 במקום 1) ב-`a48426b1`. נשאר insufficient כי S<3 (שער ה-tier
+סופר supporting cases בלבד).
+**כיוון אפשרי לבחינה (לא אושר, לא מומשה):** לעגן קישור ב-**transaction ids**
+(immutable), לא ב-episode keys (נגזרים מחדש בכל קריאה): עובדת קישור
+`from_txn/to_txn/kind/origin`; שני episodes מקושרים אם כל עסקה שלהם מקושרת;
+פונקציית ה-case-key ממוטטת רכיבי קשירות. מקור הקישור: מועמדים דטרמיניסטיים בקוד
+(SELL→BUY חוצה-tickers באותו יום או למחרת, עלות ≥ פדיון, ו/או שתי תשובות
+שמזכירות זו את הטיקר של זו) + **אישור משתמש** (AI לא קובע עובדות). נדחו:
+`decision_episode_id` מאוחסן (episodes נגזרים בכוונה, לא מאוחסנים), ו-
+`capital_reallocation_event_id` (צר מדי — עצמאות היא תכונה של ה-*אירוע*, לא של
+סוג ה-claim).
+**מדיניות למקרה שהקישור לא ידוע — לא הוכרעה בכוונה.** ההתנהגות הנוכחית (מקרים
+חוצי-tickers נספרים כעצמאיים) מנפחת S, ולכן היחידה העתידית חייבת להעריך אותה
+במפורש מול האינווריאנט "אי-ודאות / קישור לא ידוע לעולם לא מעלה ביטחון" לפני
+שנקבעת ברירת-מחדל כלשהי.
+
+### Evidence.description — מוצג כראיה עצמה, בלי מקור ובלי תיוג
+**נמצא:** 2026-09-20 (ראיה `2ff448c6`: "למרות האמונה בחברה" — לא בתשובת המקור).
+`description` נוצר ע"י ה-AI המייצר, נשמר `NOT NULL`, ומוצג ב-"View Evidence"
+(dna/strategy/learning) **כשורה היחידה** — בלי טקסט התשובה המקורית ובלי סימון
+"סיכום AI". **אף מסלול קוד לא קורא אותו**: grounding מקבל את `answerText`
+בלבד, identity רק statements, הספירה רק `interviewAnswerId/stance/case key`,
+ה-remediation כנ"ל, ו-prompts של cases/decisions/reviews מקבלים
+`statementText`+tier בלבד; snapshots/bundles מצביעים על גרסאות, לא על ראיה.
+לכן זו בעיית **תצוגה/provenance אנושית**, לא השפעה על חשיבה. תיקון עתידי:
+להציג את קטע התשובה המקורית לצד התיאור, או לתייג כ"סיכום AI".
+
 ---
 
 ## נבנה
+- **Evidence Strength — אינווריאנט מונוטוני: סתירה לעולם לא מעלה ביטחון** (2026-09-20): ריצת
+  ה-Strategy החיה הראשונה העלתה את `3653aeed` מ-insufficient ל-moderate כשהמקרה
+  החדש היחיד היה **סותר** (S=2,C=0 → S=2,C=1). שורש: `calculateEvidenceStrength`
+  השתמש ב-`total=S+C` בשני שערי הגודל (`total<3`, `total>=5`), כך שסתירה נחשבה
+  "נפח". תיקון בפונקציה המשותפת היחידה (DNA, Strategy, Learning, שני ה-remediation
+  ושני ה-resolvers): שערים לפי **S בלבד**; שער ה-ratio (0.6/0.8) ללא שינוי, כך
+  שסתירה עדיין מורידה tier. אומת בכוח-גס: הכלל הישן הפר מונוטוניות ב-4 תאים
+  (0,3),(1,2),(2,1),(4,1); החדש הוא ה-repair המונוטוני הגדול ביותר (רק מוריד, רק
+  במקום הנדרש, עמודת C=0 זהה). הטסטים נכשלים 22× על הכלל הישן. **לא נכתבה מחדש
+  היסטוריה** — ר' "פתוח" למעלה.
 - **Strict tool contract — הבעיה נמנעת ברמת ה-request, לא רק נתפסת אחריו** (2026-09-19): שני ריצות
   Strategy אמיתיות (2026-09-18) החזירו `principles` כ-JSON string — בשנייה גם
   JSON לא תקין (מרכאות ASCII לא מוברחות בתוך טקסט). ה-normalizer נכשל סגור

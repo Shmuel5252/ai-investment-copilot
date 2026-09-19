@@ -118,10 +118,25 @@ source_learning_insight_id}` + `manual_note_text?` (CHECK, מקור),
 
 | # | תנאי | תוצאה |
 |---|---|---|
-| 1 | total < 3 | Insufficient Evidence |
+| 1 | **S** < 3 (supporting independent cases בלבד) | Insufficient Evidence |
 | 2 | S/total < 0.6 | Weak |
-| 3 | total ≥ 5 וגם S/total ≥ 0.8 | Strong |
-| 4 | אחרת (total∈[3,5) עם ratio≥0.6, או total≥5 עם ratio∈[0.6,0.8)) | Moderate |
+| 3 | **S** ≥ 5 וגם S/total ≥ 0.8 | Strong |
+| 4 | אחרת (S∈[3,5) עם ratio≥0.6, או S≥5 עם ratio∈[0.6,0.8)) | Moderate |
+
+**ה-tier הוא ביטחון ב-claim, לא כמות ראיה (2026-09-20, תוקן אחרי ריצה חיה).**
+שני שערי גודל-המדגם (שורות 1 ו-3) סופרים **S בלבד**, לא S+C. הגרסה הקודמת
+השתמשה ב-total: מקרה **סותר** בודד העלה claim עם 2 מקרים תומכים מ-Insufficient
+ל-Moderate (`3653aeed` v2 בריצת ה-Strategy החיה; וגם `7c3665ca` v1 ב-DNA האמיתי),
+וגם העביר אותו מ"מוחרג מהקשר ה-AI" (`excludeInsufficientEvidence`) ל"נכלל בו".
+**אינווריאנט (נאכף בטסט על גריד S,C∈0..25):** בהינתן S קבוע, הגדלת C **לעולם לא**
+מעלה את ה-tier, ואף tier לא עולה על מה שאותה ראיה תומכת מרוויחה ללא שום סתירה.
+סתירה נשארת מידע אמיתי — נשמרת, נספרת ונראית — היא רק לא יכולה *ליצור* ביטחון;
+היא עדיין **מורידה** אותו דרך שער ה-ratio (למשל S=3,C=3 → Weak; S=5,C=20 → Weak).
+שינוי מינימלי: בדיוק ה-repair המונוטוני הגדול ביותר של הכלל הישן (מוריד tiers
+רק במקום שהיה צריך; עמודת C=0 לא השתנתה) — בגריד S,C∈0..40: 117 תאים עם S<3, ועוד (4,1)
+שהיה Strong (הסתירה הרימה Moderate ל-Strong). אין tier "contested" — הוא היה
+דורש שינוי enum/מיגרציה; הספירות S/C נשארות גלויות. **גרסאות שכבר נשמרו לא
+נכתבו מחדש** (היסטוריה immutable); תיקון-בדיעבד שלהן הוא append-only נפרד.
 
 **"total"/S/C סופרים independent EPISODES, לא raw Evidence rows —
 Investment Episode Independence (תוקן בפועל, session זה).** `total`
