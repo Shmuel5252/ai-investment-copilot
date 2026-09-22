@@ -16,6 +16,12 @@ import {
   type NewTransactionWithOrder,
 } from "@/db/repositories/portfolio";
 
+// Every row here is a distinct manual trade, so the History Refresh V1
+// reconciliation step (which now runs first inside the same call) never
+// flags anything — this file stays about the ordering contract only.
+const confirm = async (rows: NewTransactionWithOrder[]) =>
+  (await confirmTransactionsWithOrdering(db, investorId, rows, { mode: "manual_entry" })).inserted;
+
 const client = postgres(process.env.DATABASE_URL!, { max: 10 });
 const db = drizzle(client, { schema });
 
@@ -61,9 +67,9 @@ function row(
   };
 }
 
-describe("confirmTransactionsWithOrdering", () => {
+describe("confirmTransactionsWithOrdering — same-day ordering", () => {
   it("a batch with no same-day collision leaves both ordering fields null", async () => {
-    const inserted = await confirmTransactionsWithOrdering(db, investorId, [
+    const inserted = await confirm([
       row("NOCOL", "buy", 10, "2026-01-01"),
       row("NOCOL", "sell", 5, "2026-02-01"),
     ]);
@@ -75,7 +81,7 @@ describe("confirmTransactionsWithOrdering", () => {
   });
 
   it("a same-day collision purely within the batch, with distinct declared orders, is honored exactly", async () => {
-    const inserted = await confirmTransactionsWithOrdering(db, investorId, [
+    const inserted = await confirm([
       row("DECL", "sell", 8, "2026-03-01", 1),
       row("DECL", "buy", 2, "2026-03-01", 2),
     ]);
@@ -89,7 +95,7 @@ describe("confirmTransactionsWithOrdering", () => {
   });
 
   it("a same-day collision within the batch with an incomplete/missing declaration falls back to user_declared for the whole group", async () => {
-    const inserted = await confirmTransactionsWithOrdering(db, investorId, [
+    const inserted = await confirm([
       row("UNDECL", "sell", 8, "2026-04-01", 1), // only one row declared, the other wasn't
       row("UNDECL", "buy", 2, "2026-04-01"),
     ]);
@@ -101,13 +107,13 @@ describe("confirmTransactionsWithOrdering", () => {
   });
 
   it("a new row colliding with an already-persisted row is auto-resolved to never_recorded on BOTH sides", async () => {
-    const [existing] = await confirmTransactionsWithOrdering(db, investorId, [
+    const [existing] = await confirm([
       row("CROSS", "buy", 10, "2026-05-01"),
     ]);
     expect(existing!.intraDayOrder).toBeNull();
     expect(existing!.orderUnknownReason).toBeNull(); // lone row, no collision yet
 
-    const inserted = await confirmTransactionsWithOrdering(db, investorId, [
+    const inserted = await confirm([
       row("CROSS", "sell", 3, "2026-05-01"), // same investor+ticker+date as `existing`
     ]);
     expect(inserted[0]!.orderUnknownReason).toBe("never_recorded");
@@ -118,10 +124,10 @@ describe("confirmTransactionsWithOrdering", () => {
   });
 
   it("rejects (does not silently override) a declared order that turns out to collide with a pre-existing row", async () => {
-    await confirmTransactionsWithOrdering(db, investorId, [row("STALE", "buy", 10, "2026-06-01")]);
+    await confirm([row("STALE", "buy", 10, "2026-06-01")]);
 
     await expect(
-      confirmTransactionsWithOrdering(db, investorId, [row("STALE", "sell", 3, "2026-06-01", 1)])
+      confirm([row("STALE", "sell", 3, "2026-06-01", 1)])
     ).rejects.toThrow(OrderResolutionError);
 
     // No partial write: the rejected row must not have been inserted.
@@ -132,13 +138,13 @@ describe("confirmTransactionsWithOrdering", () => {
   });
 
   it("rejects adding another same-day transaction to a group that already has a declared order", async () => {
-    await confirmTransactionsWithOrdering(db, investorId, [
+    await confirm([
       row("REDECL", "sell", 8, "2026-07-01", 1),
       row("REDECL", "buy", 2, "2026-07-01", 2),
     ]);
 
     await expect(
-      confirmTransactionsWithOrdering(db, investorId, [row("REDECL", "buy", 1, "2026-07-01")])
+      confirm([row("REDECL", "buy", 1, "2026-07-01")])
     ).rejects.toThrow(OrderResolutionError);
 
     const rows = await db.query.transactions.findMany({
@@ -148,7 +154,7 @@ describe("confirmTransactionsWithOrdering", () => {
   });
 
   it("resolves a multi-group batch (two independently colliding tickers) correctly in one call", async () => {
-    const inserted = await confirmTransactionsWithOrdering(db, investorId, [
+    const inserted = await confirm([
       row("MULTIA", "sell", 8, "2026-08-01", 2), // declared, out-of-numeric-order on purpose
       row("MULTIA", "buy", 2, "2026-08-01", 1),
       row("MULTIB", "sell", 5, "2026-08-01"), // undeclared -> user_declared
@@ -163,8 +169,8 @@ describe("confirmTransactionsWithOrdering", () => {
 
   it("two concurrent confirms targeting the same previously-empty group both succeed and both end up consistently order-unknown, never a partial mixed state", async () => {
     const [resultA, resultB] = await Promise.all([
-      confirmTransactionsWithOrdering(db, investorId, [row("RACE", "buy", 10, "2026-09-01")]),
-      confirmTransactionsWithOrdering(db, investorId, [row("RACE", "sell", 3, "2026-09-01")]),
+      confirm([row("RACE", "buy", 10, "2026-09-01")]),
+      confirm([row("RACE", "sell", 3, "2026-09-01")]),
     ]);
 
     const all = [...resultA, ...resultB];
@@ -187,7 +193,7 @@ describe("confirmTransactionsWithOrdering", () => {
 
   it("validates ownership: refuses a batch containing a row for a different investor", async () => {
     await expect(
-      confirmTransactionsWithOrdering(db, investorId, [
+      confirm([
         { ...row("OWNER", "buy", 1, "2026-10-01"), investorId: "00000000-0000-0000-0000-000000000000" },
       ])
     ).rejects.toThrow();

@@ -477,12 +477,56 @@ Boundary): ה-accumulator הקיים של `computePositions()`
 בלבד (`episodeKeyByTransactionId`) על ה-return שלו; שום ערך שה-accumulator
 כבר חישב לא נקרא/משתנה בחזרה. ר' מטה.
 
+**Transaction identity / reconciliation (History Refresh V1, 2026-09-22)**
+— אין עמודה ואין אילוץ; זהות מחושבת בקוד (`src/lib/import/reconcile.ts`)
+בכל preview ובכל confirm (תחת ה-advisory locks של
+`confirmTransactionsWithOrdering`, על השורות הקיימות שנשלפו שם — לעולם לא
+על סיווג מהלקוח). **מפתח זהות מדויקת:** `(ticker↑, transaction_type,
+transaction_date [timestamp מדויק, אותה גרנולריות כמו התנגשות הסדר-היומי],
+quantity, price, amount)`, כל מספר בצורה קנונית = עיגול ל-8 ספרות אחרי
+הנקודה + הסרת אפסים — הייצוג הסמכותי ב-pipeline הוא `String(number)` לתוך
+`numeric`, שמדליף רעש IEEE-754 (השורה הידנית האמיתית של MRVL:
+`-999.9901229999999` עבור 4.5419×220.17); הדיוק האמיתי לעולם לא עולה על 6
+ספרות (כמות 4 × מחיר 2; סכומי CSV ≤ 2), כך שהקנוניזציה מסירה רק רעש.
+**Multiset:** N קיימים בולעים ≤ N נכנסים; העודף חדש. `notes` אינו חלק
+מהזהות. **התאמה אפשרית (probable manual match):** רק כשלפחות צד אחד הוא
+`manual_entry`; אותו ticker/type/date, ולקנייה/מכירה — כמות **וגם** מחיר
+מסכימים אחרי עיגול-חצי-למעלה על ספרות עשרוניות (לא float) לדיוק
+**הגס** מבין שני הערכים (`20.65` ↔ `20.6521` מתאימים; `20.6521` ↔
+`20.6522` לא; `20.65` ↔ `20.655` לא) — `amount` לא נבדק כי עמלה שנכללת
+בסכום מ-CSV משנה אותו בלגיטימיות; לסוגים בלי כמות (dividend/fee/…) —
+`amount` באותו כלל. מועמדת אחת ייחודית → `probable_manual_match`; יותר
+מאחת, או מועמדת שמשותפת לכמה שורות נכנסות → `ambiguous`. שני המצבים
+**דורשים הכרעה מפורשת** (`same` + id המועמדת שנבחרה / `separate`). כל
+הכרעה **קשורה לזהות השורה** שהוצגה בתצוגה המקדימה (`identityKey`, לא רק
+`clientRowKey` המיקומי): אם השורה באותו מיקום השתנתה (קובץ אחר, טופס
+שנערך) ההכרעה לא עוברת אליה. `same` לשורה שכבר לא מועמדת, הכרעה לשורה
+שכבר לא דורשת אותה, הכרעה שזהותה לא תואמת את השורה הטרייה, או שתי שורות
+שטוענות לאותה קיימת → `ReconciliationError` (stale/invalid), הייבוא כולו
+נדחה. **חוזה התאריך:** הזהות משתמשת ב-timestamp המדויק כפי שה-parser
+מייצר אותו; קובץ הברוקר הנתמך (זה שיובא בפועל: 153/153 שורות ב-00:00:00Z)
+הוא בפורמט תאריך-בלבד ISO (`YYYY-MM-DD` → חצות UTC, כמו `<input
+type=date>` בהזנה ידנית). קובץ באותו מקור ובאותו פורמט מתאים בדיוק; פורמט
+תאריך אחר (`MM/DD/YYYY`, תאריך+שעה) היה מתפרש לפי אזור הזמן של השרת
+ומייצר timestamps אחרים — כלומר "חדש" ולא "כפול" — סיכון מתועד, לא
+מנורמל (החלטת Product נפרדת). ערכים מחוץ לטווח `toFixed` (|x| ≥ 1e21)
+נכשלים בקול, לא מושווים. CSV: `exact_duplicate` מדולג תמיד, בלי אפשרות override. הזנה
+ידנית: `exact_duplicate` (מול קיימת **או** מול שורה קודמת באותו טופס)
+דורש הכרעה — `separate` = "זהה בכוונה, שמור", `same` = דלג. שורות קיימות
+לעולם לא נמחקות/ממוזגות/מוחלפות ב-V1.
+
 **PortfolioOpeningState** — `id, investor_id, ticker, quantity,
 cost_basis_per_share?, cost_basis_confidence(known|approximate|unknown),
 as_of_date, created_at, updated_at`. Mutable-לתיקון, מסומן UI כ-self-reported.
 
 **ImportBatch** — `id, investor_id, filename, uploaded_at, row_count,
-status`.
+status`. מאז History Refresh V1 נוצר **בתוך אותה טרנזקציה** עם השורות
+שלו (`confirmTransactionsWithOrdering`, אופציית `importBatch`), ולכן
+ייבוא שנדחה (reconciliation/ordering) לא משאיר batch יתום, ו-`row_count`
+= מספר השורות שנוספו בפועל אחרי reconciliation — 0 לקובץ שכבר יובא
+במלואו (עדיין נרשם: עקבות לכך שהקובץ נבדק). סיכום ה-reconciliation עצמו
+(דולגו/אותה-עסקה/נפרדות) מוחזר בתשובת ה-confirm ולא נשמר — ניתן לשחזור
+דטרמיניסטי מהנתונים; שמירה קבועה שלו תדרוש שינוי סכימה (לא בוצע).
 
 **Portfolio / Position** — **אין טבלה.** `computePositions(investorId,
 asOfDate?)` מעל Transaction+PortfolioOpeningState. גם ממלא את

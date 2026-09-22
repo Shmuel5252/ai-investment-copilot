@@ -203,7 +203,58 @@ export const importPage = {
   confirmImportButton: "אשר ייבוא",
   importingButton: "מייבא...",
   importedLabel: "עסקאות יובאו.",
+  skippedExactLabel: "שורות דולגו כי כבר היו בהיסטוריה (כפילות מדויקת).",
+  skippedSameLabel: "שורות דולגו כי אישרת שהן אותן עסקאות שהוזנו ידנית.",
   currentPositions: "פוזיציות נוכחיות:",
+};
+
+// --- History freshness (History Refresh V1) — /import and the Dashboard
+// import card. Facts about how far the persisted history reaches; never a
+// broker-sync claim and never a statement that the portfolio is current
+// beyond the latest transaction date. ---
+export const historyFreshness = {
+  title: "מצב ההיסטוריה",
+  upToDatePrefix: "היסטוריית העסקאות מעודכנת עד",
+  agePrefix: "עודכנה לפני",
+  ageSuffixDays: "ימים",
+  ageToday: "עודכנה היום",
+  transactionsSuffix: "עסקאות בסך הכול",
+  latestBatchPrefix: "הייבוא האחרון:",
+  latestBatchWindow: "מכסה",
+  latestBatchTo: "עד",
+  latestBatchRows: "שורות נוספו",
+  manualPrefix: "הזנה ידנית:",
+  manualSuffix: "עסקאות, האחרונה ב-",
+  noHistory: "עדיין אין היסטוריית עסקאות — ייבא קובץ או הזן עסקאות ידנית.",
+  disclaimer: "המערכת יודעת רק מה שיובא או הוזן; היא לא מסונכרנת עם הברוקר.",
+};
+
+// --- Transaction reconciliation (History Refresh V1) — shared by CSV
+// review and manual entry in src/app/import/page.tsx. ---
+export const reconciliation = {
+  heading: "התאמה מול ההיסטוריה הקיימת",
+  explanation:
+    "לפני ההוספה כל שורה מושווית לעסקאות שכבר במערכת. כפילות מדויקת מדולגת אוטומטית; שורה שאולי תואמת עסקה שהזנת ידנית דורשת את ההכרעה שלך — המערכת לא מנחשת.",
+  newCount: "חדשות",
+  exactCount: "כפילויות מדויקות (ידולגו)",
+  probableCount: "התאמות אפשריות לעסקה ידנית",
+  ambiguousCount: "לא חד-משמעיות",
+  willInsertPrefix: "ייכנסו להיסטוריה:",
+  willInsertSuffix: "שורות",
+  unresolvedNote: "יש שורות שדורשות הכרעה לפני האישור.",
+  rowPrefix: "שורה",
+  probableRowNote: "אולי אותה עסקה שהוזנה ידנית:",
+  ambiguousRowNote: "יותר מעסקה קיימת אחת יכולה להתאים — בחר איזו, או סמן כעסקה נפרדת:",
+  exactRowNote: "זהה לעסקה שכבר קיימת במערכת.",
+  exactWithinBatchNote: "זהה לשורה קודמת בטופס הזה.",
+  sameChoice: "זו אותה עסקה — השאר את הידנית ודלג על שורה זו",
+  separateChoice: "זו עסקה נפרדת — הוסף גם אותה",
+  manualSameChoice: "זו אותה עסקה — אל תשמור שוב",
+  manualSeparateChoice: "זו עסקה זהה נפרדת בכוונה — שמור בכל זאת",
+  candidateLabel: "עסקה קיימת:",
+  manualSource: "הוזנה ידנית",
+  csvSource: "מקובץ",
+  chooseCandidate: "— בחר עסקה קיימת —",
 };
 
 // --- Same-day ordering collision resolution (Investment Episode
@@ -243,6 +294,7 @@ export const manualEntryPage = {
   provenanceBadge: "הוזן ידנית",
   provenanceExplanation: "הנתונים הוזנו ידנית ולא יובאו מקובץ מסחר.",
   savedCountLabel: "עסקאות נשמרו.",
+  skippedCountLabel: "שורות לא נשמרו כי אישרת שהן אותן עסקאות שכבר במערכת.",
   enterMoreButton: "הזן עוד עסקאות",
 };
 

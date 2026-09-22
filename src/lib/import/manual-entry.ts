@@ -32,8 +32,21 @@ export const manualTransactionRowSchema = z.object({
   intraDayOrder: z.number().int().optional(),
 });
 
+// History Refresh V1 — the investor's explicit answer for a row the
+// reconciliation preview flagged (src/lib/import/reconcile.ts
+// ReconciliationResolution). Shared by CSV import and manual entry; keyed
+// by the same clientRowKey the preview used for that row.
+export const reconciliationResolutionSchema = z.object({
+  clientRowKey: z.string().min(1),
+  identityKey: z.string().min(1),
+  action: z.enum(["same", "separate"]),
+  existingTransactionId: z.string().uuid().optional(),
+});
+
 export const manualEntryBatchSchema = z.object({
   rows: z.array(manualTransactionRowSchema).min(1),
+  // Keyed by String(row index) in `rows` — the key checkManualEntry used.
+  resolutions: z.array(reconciliationResolutionSchema).default([]),
 });
 
 export type ManualTransactionRow = z.infer<typeof manualTransactionRowSchema>;
@@ -49,7 +62,7 @@ export function buildManualTransactionValues(
   investorId: string,
   rows: ManualTransactionRow[]
 ): NewTransactionWithOrder[] {
-  return rows.map((row) => {
+  return rows.map((row, index) => {
     const ticker = row.ticker.trim().toUpperCase();
     const amount = computeAmountFromQuantityPrice(row.transactionType, row.quantity, row.price);
     return {
@@ -64,6 +77,8 @@ export function buildManualTransactionValues(
       importBatchId: null,
       notes: row.notes?.trim() || null,
       clientDeclaredOrder: row.intraDayOrder,
+      // Same key the checkManualEntry preview reports this row under.
+      clientRowKey: String(index),
     };
   });
 }

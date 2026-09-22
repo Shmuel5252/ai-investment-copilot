@@ -6,7 +6,7 @@ import { Frank_Ruhl_Libre, Assistant } from "next/font/google";
 import { trpc } from "@/trpc/react";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
 import { Num } from "@/components/num";
-import { dashboardPage as t, importPage, interviewPage, journalPage, dnaPage, strategyPage, ideasPage, casesListPage, decisionsListPage } from "@/lib/i18n/strings";
+import { dashboardPage as t, importPage, interviewPage, journalPage, historyFreshness, dnaPage, strategyPage, ideasPage, casesListPage, decisionsListPage } from "@/lib/i18n/strings";
 
 const serifHeader = Frank_Ruhl_Libre({ subsets: ["latin", "hebrew"], weight: ["400", "700"], display: "swap" });
 const sansBody = Assistant({ subsets: ["latin", "hebrew"], weight: ["400", "500", "600", "700"], display: "swap" });
@@ -37,6 +37,9 @@ export default function HomePage() {
   const guard = useSubmitGuard();
   const me = trpc.auth.me.useQuery();
   const coverage = trpc.interview.journalCoverage.useQuery();
+  // History freshness (History Refresh V1) — the latest persisted
+  // transaction date, never a claim about the live portfolio.
+  const history = trpc.import.history.useQuery();
   const logout = trpc.auth.logout.useMutation({
     onSuccess: () => {
       router.push("/login");
@@ -69,6 +72,18 @@ export default function HomePage() {
             className="rounded border border-journal-rule bg-journal-surface p-3 text-sm hover:bg-journal-bg"
           >
             {s.label}
+            {s.href === "/import" && history.data?.latestTransactionDate && (
+              <span className="text-xs text-journal-muted">
+                {" — "}
+                {historyFreshness.upToDatePrefix} <Num>{new Date(history.data.latestTransactionDate).toLocaleDateString("he-IL")}</Num>
+                {history.data.ageDays !== null && history.data.ageDays > 0 && (
+                  <>
+                    {" · "}
+                    {historyFreshness.agePrefix} <Num>{history.data.ageDays}</Num> {historyFreshness.ageSuffixDays}
+                  </>
+                )}
+              </span>
+            )}
             {s.href === "/journal" && coverage.data && (
               <span className="text-xs text-journal-muted">
                 {" — "}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/db/client";
@@ -8,15 +8,23 @@ import { parseCsv, suggestColumnMapping, validateImportRows, CANONICAL_FIELDS } 
 import {
   manualEntryBatchSchema,
   manualTransactionRowSchema,
+  reconciliationResolutionSchema,
   buildManualTransactionValues,
 } from "@/lib/import/manual-entry";
 import { detectCollisionGroups, type CollisionGroup } from "@/lib/import/collision-resolution";
+import {
+  reconcileTransactions,
+  ReconciliationError,
+  type IncomingTransaction,
+  type ReconciliationResult,
+  type TransactionSource,
+} from "@/lib/import/reconcile";
 import { computePositions } from "@/lib/portfolio/positions";
 import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
 import {
-  insertImportBatch,
   insertPortfolioOpeningState,
   confirmTransactionsWithOrdering,
+  getHistoryFreshness,
   OrderResolutionError,
   type NewTransactionWithOrder,
 } from "@/db/repositories/portfolio";
@@ -48,6 +56,55 @@ async function previewCollisions(
     .where(and(eq(transactions.investorId, investorId), inArray(transactions.ticker, tickers)));
 
   return detectCollisionGroups(incomingRows, existingRows);
+}
+
+// Read-only reconciliation preview (History Refresh V1) — the SAME engine
+// confirmTransactionsWithOrdering re-runs under its locks at confirm time
+// (src/lib/import/reconcile.ts); this only lets the review step show what
+// is already in the history and collect the investor's resolutions. Same
+// existing-row scope as the confirm path: every persisted row sharing a
+// (ticker, date) key with an incoming row, ticker-less rows included.
+async function previewReconciliation(
+  investorId: string,
+  incoming: IncomingTransaction[],
+  mode: TransactionSource
+): Promise<ReconciliationResult> {
+  const tickers = [...new Set(incoming.map((r) => r.ticker).filter((t): t is string => t !== null))];
+  const tickerlessDates = [...new Set(incoming.filter((r) => r.ticker === null).map((r) => r.transactionDate.getTime()))].map(
+    (t) => new Date(t)
+  );
+  const scope = [
+    tickers.length > 0 ? inArray(transactions.ticker, tickers) : undefined,
+    tickerlessDates.length > 0 ? and(isNull(transactions.ticker), inArray(transactions.transactionDate, tickerlessDates)) : undefined,
+  ].filter((c) => c !== undefined);
+  const existing =
+    scope.length === 0
+      ? []
+      : await db
+          .select()
+          .from(transactions)
+          .where(and(eq(transactions.investorId, investorId), or(...scope)));
+  return reconcileTransactions(
+    incoming,
+    existing.map((e) => ({
+      id: e.id,
+      ticker: e.ticker,
+      transactionType: e.transactionType,
+      quantity: e.quantity,
+      price: e.price,
+      amount: e.amount,
+      transactionDate: e.transactionDate,
+      source: e.source,
+    })),
+    { mode }
+  );
+}
+
+function translateConfirmError(err: unknown): never {
+  if (err instanceof OrderResolutionError || err instanceof ReconciliationError) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+  }
+  throw err;
 }
 
 const columnMappingSchema = z.object(
@@ -101,14 +158,30 @@ export const importRouter = router({
         []
       );
 
-      const collisionGroups = await previewCollisions(
-        ctx.investorId,
-        result.validRows.map((r) => ({
-          clientRowKey: String(r.rowIndex),
-          ticker: r.ticker,
-          transactionDate: r.transactionDate,
-        }))
-      );
+      const [collisionGroups, reconciliation] = await Promise.all([
+        previewCollisions(
+          ctx.investorId,
+          result.validRows.map((r) => ({
+            clientRowKey: String(r.rowIndex),
+            ticker: r.ticker,
+            transactionDate: r.transactionDate,
+          }))
+        ),
+        previewReconciliation(
+          ctx.investorId,
+          result.validRows.map((r) => ({
+            clientRowKey: String(r.rowIndex),
+            ticker: r.ticker,
+            transactionType: r.transactionType,
+            quantity: r.quantity,
+            price: r.price,
+            amount: r.amount,
+            transactionDate: r.transactionDate,
+            source: "csv_import" as const,
+          })),
+          "csv_import"
+        ),
+      ]);
 
       return {
         validCount: result.validRows.length,
@@ -116,26 +189,54 @@ export const importRouter = router({
         detectedTickers: result.detectedTickers,
         tickersNeedingOpeningState: [...new Set(dryRun.warnings.map((w) => w.ticker))],
         collisionGroups,
+        reconciliation,
       };
     }),
 
-  // Read-only collision preview for Manual Entry, mirroring `validate`'s
-  // collisionGroups for CSV — same shared detectCollisionGroups, same
-  // "against the file/batch itself AND against already-persisted rows"
-  // scope. Rows are keyed by their position in the submitted array (the
-  // client has no other stable id before insert).
-  checkManualEntryCollisions: protectedProcedure
+  // Read-only preview for Manual Entry: same-day collisions (mirroring
+  // `validate`'s collisionGroups — same shared detectCollisionGroups, same
+  // "against the batch itself AND against already-persisted rows" scope)
+  // plus the reconciliation classification (History Refresh V1). Rows are
+  // keyed by their position in the submitted array (the client has no
+  // other stable id before insert) — the same key buildManualTransactionValues
+  // stamps for confirm.
+  checkManualEntry: protectedProcedure
     .input(z.object({ rows: z.array(manualTransactionRowSchema) }))
-    .query(({ ctx, input }) =>
-      previewCollisions(
-        ctx.investorId,
-        input.rows.map((r, i) => ({
-          clientRowKey: String(i),
-          ticker: r.ticker.trim().toUpperCase(),
-          transactionDate: r.transactionDate,
-        }))
-      )
-    ),
+    .query(async ({ ctx, input }) => {
+      const values = buildManualTransactionValues(ctx.investorId, input.rows);
+      const [collisionGroups, reconciliation] = await Promise.all([
+        previewCollisions(
+          ctx.investorId,
+          values.map((v) => ({ clientRowKey: v.clientRowKey!, ticker: v.ticker!, transactionDate: v.transactionDate as Date }))
+        ),
+        previewReconciliation(
+          ctx.investorId,
+          values.map((v) => ({
+            clientRowKey: v.clientRowKey!,
+            ticker: v.ticker!,
+            transactionType: v.transactionType,
+            quantity: v.quantity!,
+            price: v.price!,
+            amount: v.amount,
+            transactionDate: v.transactionDate as Date,
+            source: "manual_entry" as const,
+          })),
+          "manual_entry"
+        ),
+      ]);
+      return { collisionGroups, reconciliation };
+    }),
+
+  // History freshness (History Refresh V1) — how far the persisted history
+  // reaches. Informational facts only (docs/architecture.md §2.1): never a
+  // broker sync claim, never a statement that the portfolio is current
+  // beyond the latest transaction date.
+  history: protectedProcedure.query(async ({ ctx }) => {
+    const freshness = await getHistoryFreshness(db, ctx.investorId);
+    const latest = freshness.latestTransactionDate;
+    const ageDays = latest === null ? null : Math.max(0, Math.floor((Date.now() - latest.getTime()) / 86_400_000));
+    return { ...freshness, ageDays };
+  }),
 
   // Step 3: write everything. Refuses to import while any row is still
   // invalid — partial/silent imports would violate "never assume the
@@ -154,6 +255,11 @@ export const importRouter = router({
         // the one stable identifier validate()'s collisionGroups already
         // exposes per row (NormalizedTransactionRow.rowIndex).
         rowOrderDeclarations: z.record(z.string(), z.number().int()).default({}),
+        // History Refresh V1: the investor's answers for rows the review
+        // step's `reconciliation` flagged, keyed by the same String(rowIndex).
+        // Re-verified under the lock — a stale or missing answer fails the
+        // whole import, never a silent insert.
+        reconciliationResolutions: z.array(reconciliationResolutionSchema).default([]),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -167,13 +273,6 @@ export const importRouter = router({
         });
       }
 
-      const batch = await insertImportBatch(db, {
-        investorId: ctx.investorId,
-        filename: input.filename,
-        rowCount: result.validRows.length,
-        status: "completed",
-      });
-
       const values: NewTransactionWithOrder[] = result.validRows.map((r) => ({
         investorId: ctx.investorId,
         ticker: r.ticker,
@@ -183,19 +282,22 @@ export const importRouter = router({
         amount: String(r.amount),
         transactionDate: r.transactionDate,
         source: "csv_import" as const,
-        importBatchId: batch.id,
+        importBatchId: null, // stamped inside the confirm transaction (importBatch option below)
         notes: r.notes,
         clientDeclaredOrder: input.rowOrderDeclarations[String(r.rowIndex)],
+        clientRowKey: String(r.rowIndex),
       }));
 
-      try {
-        await confirmTransactionsWithOrdering(db, ctx.investorId, values);
-      } catch (err) {
-        if (err instanceof OrderResolutionError) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
-        }
-        throw err;
-      }
+      // The ImportBatch row is created inside the same transaction as the
+      // rows it contributes, with row_count = rows actually inserted after
+      // reconciliation (0 for a file that was already fully imported) — an
+      // import refused for an unresolved/stale reconciliation leaves no
+      // batch behind.
+      const confirmed = await confirmTransactionsWithOrdering(db, ctx.investorId, values, {
+        mode: "csv_import",
+        resolutions: input.reconciliationResolutions,
+        importBatch: { filename: input.filename },
+      }).catch(translateConfirmError);
 
       for (const os of input.openingStates) {
         await insertPortfolioOpeningState(db, {
@@ -210,7 +312,14 @@ export const importRouter = router({
 
       const positions = await computePositionsForInvestor(db, ctx.investorId);
 
-      return { batchId: batch.id, importedCount: result.validRows.length, positions };
+      return {
+        batchId: confirmed.batch!.id,
+        importedCount: confirmed.inserted.length,
+        skippedExactCount: confirmed.plan.skippedExact.length,
+        skippedSameCount: confirmed.plan.skippedSame.length,
+        separateCount: confirmed.plan.separate.length,
+        positions,
+      };
     }),
 
   // Manual Historical Entry (docs/backlog.md) — Actual trades only, one
@@ -225,28 +334,30 @@ export const importRouter = router({
   // computeAmountFromQuantityPrice), not a second implementation of it.
   //
   // The whole batch is one all-or-nothing DB write: confirmTransactionsWithOrdering
-  // wraps everything (locks, ordering resolution, the insert itself) in
-  // one db.transaction, so a mid-batch failure — including an
-  // OrderResolutionError — leaves zero rows, not a partial batch. Same
-  // atomic same-day-ordering contract as CSV import's confirmImport,
-  // through the exact same shared function.
+  // wraps everything (locks, reconciliation, ordering resolution, the
+  // insert itself) in one db.transaction, so a mid-batch failure —
+  // including an OrderResolutionError or a ReconciliationError — leaves
+  // zero rows, not a partial batch. Same atomic contract as CSV import's
+  // confirmImport, through the exact same shared function; manual mode
+  // is stricter about identical rows (History Refresh V1: an identical
+  // row blocks until the investor says it is intentionally a separate
+  // trade — never silently a second copy).
   confirmManualEntry: protectedProcedure
     .input(manualEntryBatchSchema)
     .mutation(async ({ ctx, input }) => {
       const values = buildManualTransactionValues(ctx.investorId, input.rows);
 
-      let inserted;
-      try {
-        inserted = await confirmTransactionsWithOrdering(db, ctx.investorId, values);
-      } catch (err) {
-        if (err instanceof OrderResolutionError) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
-        }
-        throw err;
-      }
+      const confirmed = await confirmTransactionsWithOrdering(db, ctx.investorId, values, {
+        mode: "manual_entry",
+        resolutions: input.resolutions,
+      }).catch(translateConfirmError);
 
       const positions = await computePositionsForInvestor(db, ctx.investorId);
 
-      return { transactions: inserted, positions };
+      return {
+        transactions: confirmed.inserted,
+        skippedCount: confirmed.plan.skippedExact.length + confirmed.plan.skippedSame.length,
+        positions,
+      };
     }),
 });
