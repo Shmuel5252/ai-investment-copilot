@@ -57,17 +57,30 @@ Architecture). `CLAUDE.md` מצביע לכאן לפרטים; המקור הרעי
   לעסקה שנדונה.
 - **"Tell me why" (2026-09-08, ר' `docs/backlog.md`) — flow נפרד, לא
   חלק מהראיון האלגוריתמי הזה:** המשקיע יוזם בעצמו תיעוד רציונל על
-  עסקה ספציפית. **Contract (עודכן 2026-09-08, מחליף החלטה קודמת
-  שהגבילה ל-"אותו batch"):** כל transaction בבעלות המשקיע עם
-  `source="manual_entry"` (Manual Historical Entry, §2.1) — בלי הגבלת
-  זמן ובלי תלות בזה שהיא מ-batch מסוים — לא נבחר ע"י
+  עסקה ספציפית. **Contract (עודכן 2026-09-22, Episode Journal V1 —
+  מחליף את ההחלטה מ-2026-09-08 שהגבילה ל-`source="manual_entry"`):**
+  כל transaction מסוג buy/sell עם ticker בבעלות המשקיע, מכל source,
+  איזו עסקה של ה-episode שנבחרה — לא נבחר ע"י
   `selectInterestingTransactions`, לא slot נוסף בתוך אותו ראיון.
-  **ה-UI כרגע חושף את הכפתור רק ישירות אחרי submit של הזנה ידנית**
-  (אין עדיין מסך "כל העסקאות הידניות שלי" שיציג אותו במקום אחר) — זו
-  מגבלת UI זמנית, לא מגבלת ה-contract עצמו. השאלה דטרמיניסטית-בקוד
-  (לא AI). נשמר כ-`InterviewAnswer` רגיל, מסומן
+  ה-**episode** (lifecycle רציף פתוח→שטוח של ticker) הוא **נגזר**, לא
+  ישות: בדיוק `computePositions().episodeKeyByTransactionId` — אותה מפה
+  שה-Decision Independence resolver סופר לפיה (`src/lib/portfolio/episodes.ts`
+  רק מקבץ אותה, לא מממש episodes מחדש). הרציונל נשמר כ-`InterviewAnswer`
+  רגיל עם **anchor דטרמיניסטי אחד** — קניית הכניסה של ה-episode (לפי
+  תאריך, `intra_day_order` מוצהר, id) — גם אם המשקיע בחר במכירה; episode
+  ללא קנייה בהיסטוריה (נפתח לפני חלון הייבוא) נדחה, לא מנוחש. השאלה
+  דטרמיניסטית-בקוד (`buildTellMeWhyQuestion`, לא AI) ונושאת **רק עובדות
+  מזמן הכניסה** — ticker, מספר episode, פתוח/סגור, תאריך/כמות/מחיר
+  הקנייה — לעולם לא P&L, יציאה או מחירים מאוחרים (הגנת hindsight, החלטת
+  Product): ה-API (`interview.journal`) משמיט server-side כל עובדה
+  מאוחרת ל-episode בלי רציונל, ומציג אותה (מסומנת כ"מה קרה אחר כך") רק
+  אחרי שהתשובה נשמרה. עדכון = תשובה חדשה עם `supersedes_answer_id`
+  (שרשרת, לא fork; רק תשובה של אותו משקיע), לעולם לא עריכה. **ה-UI:**
+  `/journal` (יומן פוזיציות — כל ה-episodes, ממתינים-לרציונל קודם, כיסוי
+  "X מתוך Y"), בנוסף לכפתור אחרי submit של הזנה ידנית. נשמר מסומן
   `InterviewSession.origin=user_initiated` (traceability בלבד, לא
-  משנה Evidence Strength) לעומת `guided_interview` של הראיון הזה.
+  משנה Evidence Strength) לעומת `guided_interview` של הראיון הזה. שמירה
+  **לא** מריצה יצירת DNA/Strategy — המשתמש מפעיל אותה כרגיל.
 
 ### 2.3 Investor DNA ראשוני
 - **משתמש:** רואה השערות, View Evidence, מסכים/חולק/מוסיף הקשר.
@@ -161,7 +174,9 @@ aggregation אוטומטי · דרישת היסטוריה מלאה · אופצי
 
 - **Frontend** — Next.js (App Router), כל הזרימות (Interview, DNA/Strategy
   views, Case builder, Decision Snapshot, Review דו-שכבתי, Learning feed,
-  Portfolio view).
+  Portfolio view — **דיוק 2026-09-22:** אין עמוד portfolio analytics
+  נפרד; ה-surface הקיים להיסטוריית הפוזיציות הוא `/journal` (Episode
+  Journal, §2.2), ו-positions/exposure מוצגים בתוך Case/Decision).
 - **Backend/API** — אותו repo; tRPC routers מארחים לוגיקה דטרמיניסטית
   (positions, exposure, evidence strength, outcome) + AI orchestration.
 - **AI Orchestration** — שכבה דקה: פונקציות טיפוסות לכל "role" (לא agents

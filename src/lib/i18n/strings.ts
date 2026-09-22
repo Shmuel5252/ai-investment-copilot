@@ -260,6 +260,56 @@ export const tellMeWhy = {
   saveButton: "שמור",
   savingButton: "שומר...",
   savedConfirmation: "נשמר — התשובה תילקח בחשבון בפעם הבאה שתיצור השערות DNA.",
+  // Episode Journal V1 — the same deterministic builder, with episode
+  // context. Only ENTRY-time facts may appear in these templates
+  // (hindsight protection): never P&L, exit, or later prices.
+  questionTemplateOpen:
+    "ספר לי על ההשקעה שלך ב-{ticker} — למה נכנסת, ואיך אתה מנהל את הפוזיציה מאז?",
+  contextTemplate: "פוזיציה {episode} — כניסה ב-{date} {amount}.",
+  entryAmountTemplate: "(קנייה של {quantity} מניות במחיר ${price})",
+  updateButton: "עדכן את הרציונל",
+  updateHint: "עדכון יוצר תשובה חדשה שמחליפה את הקודמת בספירה; התשובה המקורית נשארת בהיסטוריה כמות שהיא.",
+  cancelButton: "ביטול",
+};
+
+// --- Episode Journal (src/app/journal/page.tsx) ---
+
+export const journalPage = {
+  title: "יומן פוזיציות",
+  description:
+    "כל פוזיציה שפתחת (וסגרת) בהיסטוריה שלך — כדי לתעד, בקצב שלך, למה החלטת מה שהחלטת. הרציונל נשמר במילים שלך בלבד ומזין את השערות ה-DNA ואת האסטרטגיה בפעם הבאה שתיצור אותן; המערכת לא מריצה את זה לבד.",
+  loading: "טוען...",
+  empty: "עדיין אין פוזיציות ביומן — ייבא היסטוריית מסחר קודם.",
+  coveragePrefix: "תועדו",
+  coverageMiddle: "מתוך",
+  coverageSuffix: "פוזיציות",
+  unansweredHeading: "ממתינות לרציונל",
+  answeredHeading: "מתועדות",
+  allDocumented: "כל הפוזיציות מתועדות.",
+  statusOpen: "פתוחה",
+  statusClosed: "סגורה",
+  episodeLabel: "פוזיציה",
+  entryLabel: "כניסה",
+  firstTransactionLabel: "עסקה ראשונה בחלון",
+  sharesAtLabel: "מניות במחיר",
+  buysLabel: "קניות",
+  sellsLabel: "מכירות",
+  notAnchorable:
+    "לא ניתן לתעד רציונל לפוזיציה הזו: אין קנייה בהיסטוריה שלה (כנראה נפתחה לפני חלון הייבוא).",
+  hindsightNote:
+    "לפני הכתיבה מוצגות רק עובדות מזמן הכניסה. מה שקרה אחר כך יוצג רק אחרי שהרציונל יישמר — כדי לא לצבוע את הזיכרון.",
+  rationaleLabel: "הרציונל שלך",
+  writtenOnLabel: "נכתב ב",
+  showRationale: "הצג רציונל",
+  hideRationale: "הסתר רציונל",
+  laterFactsHeading: "מה קרה אחר כך — עובדות מאוחרות, לא חלק מהרציונל",
+  exitLabel: "יציאה",
+  holdingDaysLabel: "ימי החזקה",
+  sellLabel: "מכירה",
+  realizedLabel: "תשואה ממומשת",
+  insufficientHoldingsNote: "מכירה שעלתה על ההחזקה הידועה — ייתכן ש-Opening State חסר; המספר לא אמין",
+  stillOpenNote: "הפוזיציה עדיין פתוחה — אין עדיין תוצאה ממומשת.",
+  noSellTrace: "לא נרשמו מכירות עם תוצאה ממומשת לפוזיציה הזו.",
 };
 
 // --- Onboarding Interview (src/app/interview/page.tsx) ---

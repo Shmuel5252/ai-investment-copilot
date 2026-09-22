@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Frank_Ruhl_Libre, Assistant } from "next/font/google";
 import { trpc } from "@/trpc/react";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
-import { dashboardPage as t, importPage, interviewPage, dnaPage, strategyPage, ideasPage, casesListPage, decisionsListPage } from "@/lib/i18n/strings";
+import { Num } from "@/components/num";
+import { dashboardPage as t, importPage, interviewPage, journalPage, dnaPage, strategyPage, ideasPage, casesListPage, decisionsListPage } from "@/lib/i18n/strings";
 
 const serifHeader = Frank_Ruhl_Libre({ subsets: ["latin", "hebrew"], weight: ["400", "700"], display: "swap" });
 const sansBody = Assistant({ subsets: ["latin", "hebrew"], weight: ["400", "500", "600", "700"], display: "swap" });
@@ -17,6 +18,9 @@ const sansBody = Assistant({ subsets: ["latin", "hebrew"], weight: ["400", "500"
 const SECTIONS = [
   { href: "/import", label: importPage.title },
   { href: "/interview", label: interviewPage.title },
+  // Episode Journal — its card also shows rationale coverage (derived
+  // from production data by interview.journalCoverage, never hard-coded).
+  { href: "/journal", label: journalPage.title },
   { href: "/dna", label: dnaPage.title },
   { href: "/strategy", label: strategyPage.title },
   { href: "/ideas", label: ideasPage.title },
@@ -32,6 +36,7 @@ export default function HomePage() {
   const router = useRouter();
   const guard = useSubmitGuard();
   const me = trpc.auth.me.useQuery();
+  const coverage = trpc.interview.journalCoverage.useQuery();
   const logout = trpc.auth.logout.useMutation({
     onSuccess: () => {
       router.push("/login");
@@ -64,6 +69,13 @@ export default function HomePage() {
             className="rounded border border-journal-rule bg-journal-surface p-3 text-sm hover:bg-journal-bg"
           >
             {s.label}
+            {s.href === "/journal" && coverage.data && (
+              <span className="text-xs text-journal-muted">
+                {" — "}
+                {journalPage.coveragePrefix} <Num>{coverage.data.covered}</Num> {journalPage.coverageMiddle}{" "}
+                <Num>{coverage.data.total}</Num> {journalPage.coverageSuffix}
+              </span>
+            )}
           </Link>
         ))}
       </div>

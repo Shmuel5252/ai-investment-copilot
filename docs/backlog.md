@@ -299,24 +299,37 @@ scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמי�
 קריאה-בלבד ישירה על ה-DB האמיתי (מיגרציות מוחלות, ערך ה-enum, שורות הגרסה
 עצמן), לא הונח.
 
-### Decision Independence V1 — מומש, נותרו החלה + הרחבות
+### Decision Independence V1 — מומש והוחל, נותרו הרחבות
 **מומש (2026-09-22) — ר' "נבנה".** נותר:
-1. **אישור אנושי ← החלת מיגרציה `0011` על ה-DB האמיתי ← `applyIndependenceRecalculationsForInvestor`
-   פעם אחת.** dry-run אמיתי (קריאה-בלבד על ה-DB האמיתי, ועל clone ממיגרר): בדיוק 2 גרסאות
-   חדשות — Strategy `a48426b1` ו-DNA `699cdb50` (S: 2 → 1, tier נשאר insufficient_evidence).
+1. ~~אישור אנושי ← החלת מיגרציה `0011` ← apply פעם אחת~~ **בוצע (2026-09-22, תוקן במסמך
+   באותו יום):** מיגרציה `0011` הוחלה על ה-DB האמיתי (12 מיגרציות; fingerprint של 7,163 שורות
+   היסטוריה זהה לפני/אחרי — schema בלבד), ו-`applyIndependenceRecalculationsForInvestor` רץ
+   **פעם אחת** אחרי dry-run אמיתי קריאה-בלבד: בדיוק 2 גרסאות — Strategy `a48426b1` → v2 ו-DNA
+   `699cdb50` → v3 (S: 2 → 1, S_ub=2, C_ub=0, tier נשאר insufficient_evidence, `created_by=
+   system_independence_recalculation`, basis דטרמיניסטי, 3 grounding checks נישאו קדימה ל-DNA);
+   plan חוזר = 0 appends, 0 requires_review; 0 LinkFacts.
 2. **Review UI + workflow אישור שיכתוב `TransactionLinkFact`.** כרגע אין דרך לכתוב עובדה
    (בכוונה — אין mutation procedure). זו גם הדרך היחידה להעלות `S_lb` אחרי dismissal: עלייה
    אינה נכתבת אוטומטית (`requires_review`).
 3. שדה "funded by" מובנה ב-manual entry (כל 4 העסקאות הידניות בהיסטוריה הן בדיוק אירוע MP→MRVL).
 4. **Claim-scoped release.** קישור מאושר קורס לכל claim שמצטט את שני הקצוות — נכון ל-2/2 claims
    אמיתיים (הקצאת הון), אך מקטין ספירה ל-claim שרואה את הקצוות כנפרדים. גלוי ב-`basis`, לא שקט.
-5. **Learning Insight** — ה-key שלו `decisionId`, בלי מודעות לתלות בין החלטות. 2 insights אמיתיים
-   נשענים על 3 החלטות BUY מאותו יום (2026-08-15; מקור לא אומת, ייתכן test data). הסכמה מוכנה
-   להרחבה (`decision_id` כעמודת endpoint נוספת — additive).
+5. **Learning Insight** — ה-key שלו `decisionId`, בלי מודעות לתלות בין החלטות. **תוקן
+   2026-09-22 (אומת קריאה-בלבד):** למשקיע האמיתי יש **0** Learning Insights; ה-"2 insights על 3
+   החלטות BUY מאותו יום" שהוזכרו כאן היו fixtures של טסטים (לפני Test DB Safety), לא נתון אמיתי.
+   הסכמה מוכנה להרחבה (`decision_id` כעמודת endpoint נוספת — additive).
 6. תלות same-ticker בין episodes שונים (מכירה וקנייה מחדש כהחלטה אחת).
 7. AI reader/proposals — בטבלה נפרדת שה-resolver לא קורא; אף פעם לא משפיע על ספירה.
 8. **חשיפה מתועדת:** תלות בלתי-נצפית (יום rebalance עמוס, בלי isolation ובלי הזכרת ticker) נשארת
    נספרת כעצמאית. היא נראית ב-`reviewOnly` של ה-basis, לא מוסתרת.
+
+### `computePositionsForInvestor` לא מעביר `intra_day_order` ל-`computePositions` (נמצא 2026-09-22)
+**נמצא** תוך כדי Episode Journal V1, בקריאה בלבד: ה-wrapper (`src/lib/portfolio/compute-for-investor.ts`)
+ממפה את שורות ה-DB ל-`TransactionInput` בלי `intraDayOrder`/`orderUnknownReason`, ולכן קבוצת
+אותו-יום עם סדר **מוצהר** נחשבת בייצור "לא פתירה" ב-`deriveEpisodeKeys` — פחות episodes מוכחים,
+לעולם לא יותר (הכיוון השמרני של No Fake Certainty). זהה בכל הצרכנים (resolver, journal), ולכן
+עקבי; לא תוקן כאן כי זה נוגע ב-`computePositions()` המוגן ובספירת Decision Independence הקפואה —
+דורש החלטה ובדיקה נפרדות (האם להעביר את העמודות, ומה זה משנה על ההיסטוריה האמיתית).
 
 ### Evidence.description — מוצג כראיה עצמה, בלי מקור ובלי תיוג
 **נמצא:** 2026-09-20 (ראיה `2ff448c6`: "למרות האמונה בחברה" — לא בתשובת המקור).
@@ -332,8 +345,40 @@ scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמי�
 ---
 
 ## נבנה
-- **Decision Independence V1 — עצמאות חוצת-tickers** (2026-09-22; מיגרציה `0011` נכתבה ו**לא
-  הופעלה** על ה-DB האמיתי): החלטה אחת שנפרשת על שני tickers (MP נמכר כדי לממן MRVL) נספרה
+- **Episode Journal V1 — רציונל לכל episode פוזיציה** (2026-09-22): הפער שנמצא ב-architecture
+  review — למשקיע האמיתי 157 עסקאות ב-51 episodes (46 tickers, 42 סגורים, 9 פתוחים) אבל רק **8**
+  episodes עם רציונל כלשהו (10 תשובות ראיון), ולכן כל 10 השערות ה-DNA וכל 6 העקרונות ה-observed
+  ב-`insufficient_evidence` (S<3) ו-`excludeInsufficientEvidence` מסנן את כולם מ-Personal Fit /
+  Decision / Review — הבטחת "לומד איך אני משקיע" לא נראית בשום מקום. שני מסלולי התיעוד לא יכלו
+  להגיע להיסטוריה: הראיון המודרך בוחר 6 עסקאות-קיצון לסשן בלי dedup בין סשנים, ו-"Tell me why"
+  היה מוגבל ל-`source="manual_entry"` (4 מ-157) ומוצג רק אחרי submit. **נבנה:** (1)
+  `src/lib/portfolio/episodes.ts` — `deriveEpisodeJournal()` טהור מעל
+  `computePositions().episodeKeyByTransactionId` (אותה מפה של ה-Decision Independence resolver — לא
+  מנוע episodes שני; כל P&L מ-`sellTrace`), anchor = קניית הכניסה (תאריך → `intra_day_order` → id),
+  `entry=null` = אין קנייה → נדחה (fail closed), כיסוי = episode עם ≥1 תשובה **אפקטיבית**
+  (superseded לא נספר; כמה תשובות לאותו episode = מכוסה אחד), סדר דטרמיניסטי (לא-מכוסים קודם,
+  כניסה חדשה קודם). (2) `src/lib/interview/journal.ts` — projection hindsight-safe: `later=null`
+  לכל episode בלי רציונל, **server-side**. (3) `interview.startTellMeWhy` הורחב לכל buy/sell עם
+  ticker בבעלות המשקיע (dividend/fee/deposit/withdrawal/ללא ticker/זר/לא קיים נדחים), מחזיר את
+  ה-anchor; `interview.answer` מקבל `supersedesAnswerId` (אותו משקיע, פעם אחת) ובודק בעלות על
+  ה-session (גם `complete`/`answersForSession`); `interview.journal` + `journalCoverage` חדשים.
+  (4) `buildTellMeWhyQuestion` — אותו builder, עם context של episode: רק עובדות כניסה (ticker,
+  מספר, תאריך dd/mm/yyyy, כמות, מחיר), ניסוח לפוזיציה פתוחה בלי "למה יצאת"; אין input ל-P&L
+  בכלל. (5) `/journal` (עברית/RTL, `<Num>`) + כרטיס בדשבורד עם "תועדו X מתוך Y" (נגזר, לא
+  hard-coded). ללא migration, ללא AI, ללא שינוי בספים/resolver/grounding/identity; שמירה לא
+  מריצה generation. **אומת:** 21 unit + 12 integration (router אמיתי דרך createCaller על DB
+  scratch מסומן: חוזה, anchor למכירה, דחיות, בעלות, append-only + supersession (כולל 6 עדכונים
+  מקבילים לאותה תשובה — בדיוק אחד מצליח, יורש אחד; נמצא ותוקן בסקירה האדברסרית: הבדיקה
+  "יש יורש?" לא הייתה אטומית ופיצלה שרשרת 8/8 — עכשיו תחת `FOR UPDATE`), hindsight,
+  downstream — התשובה מגיעה ל-`getAllAnswersForInvestor` וה-resolver סופר 3 תשובות על MP#1 כמקרה
+  אחד ו-MP/MRVL כשניים); replay קריאה-בלבד על הנתונים האמיתיים: 51/8 בדיוק, 9 פתוחים, 0 ללא
+  anchor, MRVL#1–#3 שלושה episodes אמיתיים, שאלת MP#1 ללא P&L. `/import`'s panel מעגן עכשיו גם
+  הוא ל-anchor שהשרת מחזיר. **תצפית (לא שונה):** `computePositionsForInvestor` לא מעביר
+  `intra_day_order` ל-`computePositions`, כך שסדר-יום מוצהר לא משפיע על episodes בייצור — כיוון
+  שמרני (פחות episodes מוכחים), זהה ב-resolver ובאיומן, מתועד כפער פתוח למטה.
+- **Decision Independence V1 — עצמאות חוצת-tickers** (2026-09-22; מיגרציה `0011` **הוחלה** על
+  ה-DB האמיתי ו-apply רץ פעם אחת באותו יום — ר' "פתוח" למעלה לפרטים; הטקסט המקורי כאן אמר
+  "נכתבה ולא הופעלה" נכון לזמנו): החלטה אחת שנפרשת על שני tickers (MP נמכר כדי לממן MRVL) נספרה
   כשני מקרים. `resolve-independence.ts` — resolver טהור יחיד ל-DNA ו-Strategy (validation,
   grounding, remediation, identity, recalculation): קבוצות חזקות (episode + `TransactionLinkFact`
   מאושר) וקשתות **חלשות** רק כשזוג cross-ticker בצדדים הפוכים ב-≤14 ימים מקורבר ע"י

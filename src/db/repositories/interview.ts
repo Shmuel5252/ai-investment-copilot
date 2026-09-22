@@ -25,6 +25,50 @@ export async function insertInterviewAnswer(db: typeof Db, values: NewInterviewA
   return row!;
 }
 
+export async function getInterviewSession(db: typeof Db, id: string) {
+  return db.query.interviewSessions.findFirst({ where: (s, { eq }) => eq(s.id, id) });
+}
+
+export type SupersedingInsertResult =
+  | { ok: true; row: typeof interviewAnswers.$inferSelect }
+  | { ok: false; reason: "not_found" | "already_superseded" };
+
+// Append a NEW answer that supersedes an existing one (Episode Journal V1),
+// atomically enforcing the chain invariant: the old answer must belong to
+// this investor (through its session) and may be superseded at most once —
+// a chain, never a fork. There is no UNIQUE(supersedes_answer_id) in the
+// schema (no migration in this unit), so two concurrent updates of the same
+// answer would both pass a plain "has a successor?" read and fork the chain.
+// Locking the superseded row FOR UPDATE serializes them: the second waits
+// for the first to commit, then sees its successor and is refused. The old
+// row itself is only ever locked and read — never written.
+export async function insertSupersedingInterviewAnswer(
+  db: typeof Db,
+  investorId: string,
+  values: NewInterviewAnswer & { supersedesAnswerId: string }
+): Promise<SupersedingInsertResult> {
+  return db.transaction(async (tx) => {
+    const [previous] = await tx
+      .select({ id: interviewAnswers.id, interviewSessionId: interviewAnswers.interviewSessionId })
+      .from(interviewAnswers)
+      .where(eq(interviewAnswers.id, values.supersedesAnswerId))
+      .for("update");
+    if (!previous) return { ok: false, reason: "not_found" };
+    const session = await tx.query.interviewSessions.findFirst({
+      where: (s, { eq }) => eq(s.id, previous.interviewSessionId),
+      columns: { investorId: true },
+    });
+    if (!session || session.investorId !== investorId) return { ok: false, reason: "not_found" };
+    const successor = await tx.query.interviewAnswers.findFirst({
+      where: (a, { eq }) => eq(a.supersedesAnswerId, previous.id),
+      columns: { id: true },
+    });
+    if (successor) return { ok: false, reason: "already_superseded" };
+    const [row] = await tx.insert(interviewAnswers).values(values).returning();
+    return { ok: true, row: row! };
+  });
+}
+
 export async function getAnswersForSession(db: typeof Db, interviewSessionId: string) {
   return db.query.interviewAnswers.findMany({
     where: (a, { eq }) => eq(a.interviewSessionId, interviewSessionId),

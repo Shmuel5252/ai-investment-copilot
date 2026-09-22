@@ -203,7 +203,9 @@ run-based key assignment) בתיעוד התכנון של ה-session; אין טב
 מאוחסן, באותה רוח כמו `computePositions()` עצמו.
 
 **Decision Independence V1 — עצמאות חוצת-tickers (מומש 2026-09-22;
-מיגרציה `0011` נכתבה ו**לא הופעלה** על ה-DB האמיתי).** ה-episode הוא
+מיגרציה `0011` **הוחלה** על ה-DB האמיתי ב-2026-09-22 ו-`applyIndependenceRecalculationsForInvestor`
+רץ פעם אחת — DNA `699cdb50` → v3, Strategy `a48426b1` → v2, שתיהן S=1/C=0
+insufficient_evidence, 0 requires_review; תוקן במסמך 2026-09-22).** ה-episode הוא
 per-ticker בכוונה, ולכן החלטה אחת שנפרשת על שני tickers (מכירת MP כדי
 לממן קניית MRVL — `a48426b1`) נספרה פעמיים. `createIndependenceResolver`
 (טהור: בלי DB ובלי AI) הוא **האלגוריתם היחיד** ש-DNA ו-Strategy סופרים
@@ -524,8 +526,21 @@ status, origin(guided_interview|user_initiated)`. `origin` נוסף
 ב-Manual Historical Entry task (2026-09-08, ר' `docs/backlog.md`):
 `guided_interview` = הראיון האלגוריתמי הרגיל (`selectInterestingTransactions`
 + AI question); `user_initiated` = "Tell me why" — המשקיע יזם תיעוד
-רציונל על עסקה ספציפית (בפועל: רק על עסקה שהוזנה ידנית, נאכף ב-router).
-Traceability בלבד — לא משפיע על Evidence Strength/weighting.
+רציונל על episode ספציפי (**עודכן 2026-09-22, Episode Journal V1:** כל
+buy/sell עם ticker בבעלותו, מכל source — לא רק הזנה ידנית; ר'
+`docs/architecture.md` §2.2). Traceability בלבד — לא משפיע על Evidence
+Strength/weighting.
+
+**Episode (נגזר, לא טבלה — Episode Journal V1):** אין ישות Episode ואין FK
+אליו. `src/lib/portfolio/episodes.ts` מקבץ את
+`computePositions().episodeKeyByTransactionId` (המפה היחידה שמגדירה episode,
+ר' §6) ל-`JournalEpisode`: ticker, מספר, פתוח/סגור (הפוזיציה מוחזקת עכשיו
+וזה ה-episode האחרון של ה-ticker), העסקאות, **anchor** = קניית הכניסה
+(תאריך → `intra_day_order` → id; `null` = אין קנייה → אין "Tell me why"),
+עובדות מאוחרות מ-`sellTrace` בלבד (לא מחושבות מחדש), ו-**כיסוי רציונל**:
+episode מכוסה כשלפחות תשובה **אפקטיבית** אחת (פלט `getAllAnswersForInvestor`,
+ללא superseded) מעוגנת לאחת מעסקאותיו — כמה תשובות לאותו episode = episode
+מכוסה אחד. הכול מחושב בכל קריאה, לא נשמר.
 
 **InterviewAnswer** — `id, interview_session_id, transaction_id?,
 question_text(AI עבור guided_interview, דטרמיניסטי-בקוד עבור
@@ -533,7 +548,17 @@ user_initiated), answer_text(משתמש), supersedes_answer_id?, created_at`.
 Append-only. `transaction_id` נשאר עמודה יחידה (לא junction/מערך) גם
 אחרי Manual Historical Entry — `answer_text` הוא טקסט חופשי לא-מוגבל,
 יכול לתאר lifecycle שלם שחוצה כמה transactions (למשל BUY+SELL+SELL)
-תחת anchor transaction יחיד, בלי אכיפה מבנית שהתוכן מוגבל אליו.
+תחת anchor transaction יחיד, בלי אכיפה מבנית שהתוכן מוגבל אליו. **ב-Episode
+Journal ה-anchor הוא תמיד קניית הכניסה של ה-episode** (ר' Episode למעלה).
+**`supersedes_answer_id` — חוזה (מיושם ב-`interview.answer`, 2026-09-22):**
+עדכון רציונל = שורה חדשה שמצביעה על הקודמת; הקודמת חייבת להיות של אותו
+משקיע ועדיין ללא יורש (שרשרת, לא fork) — נבדק **תחת נעילת שורה** (`SELECT …
+FOR UPDATE` על התשובה הקודמת, בטרנזקציה אחת עם ה-insert,
+`insertSupersedingInterviewAnswer`): אין UNIQUE על `supersedes_answer_id`
+בסכמה, ובלי הנעילה שני עדכונים מקבילים לאותה תשובה יצרו fork (שוחזר בפועל
+8/8 בסקירה, 2026-09-22); `getAllAnswersForInvestor` מחזיר רק
+את ראש השרשרת, כך ש-DNA/Strategy/כיסוי רואים תשובה אחת נוכחית לכל שרשרת.
+`question_text` של Episode Journal נושא רק עובדות מזמן הכניסה (הגנת hindsight).
 
 ---
 

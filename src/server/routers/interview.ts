@@ -12,10 +12,53 @@ import {
   insertInterviewAnswer,
   completeInterviewSession,
   getAnswersForSession,
+  getAllAnswersForInvestor,
+  getInterviewSession,
+  insertSupersedingInterviewAnswer,
 } from "@/db/repositories/interview";
+import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
+import { deriveEpisodeJournal, type EpisodeJournal } from "@/lib/portfolio/episodes";
+import { resolveTellMeWhyAnchor, toHindsightSafeJournal } from "@/lib/interview/journal";
 import { selectInterestingTransactions } from "@/lib/interview/select-transactions";
 import { buildTellMeWhyQuestion } from "@/lib/interview/tell-me-why-question";
 import { describeTransactionFacts, generateInterviewQuestion } from "@/lib/ai/interview";
+
+// Episode Journal V1 — the derived journal over the investor's whole
+// position history (src/lib/portfolio/episodes.ts). Episode membership is
+// computePositionsForInvestor()'s own map — the exact same one the Decision
+// Independence resolver counts evidence by (loadIndependenceContext) — and
+// coverage is computed from getAllAnswersForInvestor, the exact reader
+// dna.generate / strategy.generateObserved consume, so "covered" means
+// "will be seen by generation". Read-only; nothing is stored.
+async function loadEpisodeJournal(investorId: string): Promise<EpisodeJournal> {
+  const [portfolio, transactions, answers] = await Promise.all([
+    computePositionsForInvestor(db, investorId),
+    listTransactionsForInvestor(db, investorId),
+    getAllAnswersForInvestor(db, investorId),
+  ]);
+  return deriveEpisodeJournal(
+    transactions.map((t) => ({
+      id: t.id,
+      ticker: t.ticker,
+      transactionType: t.transactionType,
+      quantity: t.quantity === null ? null : Number(t.quantity),
+      price: t.price === null ? null : Number(t.price),
+      amount: Number(t.amount),
+      transactionDate: t.transactionDate,
+      intraDayOrder: t.intraDayOrder,
+    })),
+    portfolio,
+    answers
+  );
+}
+
+async function requireOwnedSession(investorId: string, sessionId: string) {
+  const session = await getInterviewSession(db, sessionId);
+  if (!session || session.investorId !== investorId) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Interview session not found." });
+  }
+  return session;
+}
 
 export const interviewRouter = router({
   // Selects a sample of transactions (code) and generates one question
@@ -73,6 +116,12 @@ export const interviewRouter = router({
     return { sessionId: session.id, questions };
   }),
 
+  // Append-only (docs/data-model.md §0/§9): a new row every time. A
+  // correction/update of an earlier answer is a NEW row whose
+  // supersedesAnswerId points at the old one — the old text is never
+  // touched, and getAllAnswersForInvestor simply stops returning it. The
+  // session and any superseded answer must belong to this investor; an
+  // answer can be superseded at most once (a chain, never a fork).
   answer: protectedProcedure
     .input(
       z.object({
@@ -80,42 +129,69 @@ export const interviewRouter = router({
         transactionId: z.string().uuid(),
         questionText: z.string().min(1),
         answerText: z.string().min(1),
+        supersedesAnswerId: z.string().uuid().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      return insertInterviewAnswer(db, {
+    .mutation(async ({ ctx, input }) => {
+      await requireOwnedSession(ctx.investorId, input.sessionId);
+      // The anchor must be this investor's own transaction — an answer can
+      // never point at a row it does not own (the guided interview and the
+      // journal only ever hand back owned ids; this closes the raw API).
+      const anchor = await getTransaction(db, input.transactionId);
+      if (!anchor || anchor.investorId !== ctx.investorId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found." });
+      }
+      const values = {
         interviewSessionId: input.sessionId,
         transactionId: input.transactionId,
         questionText: input.questionText,
         answerText: input.answerText,
+      };
+      if (input.supersedesAnswerId === undefined) return insertInterviewAnswer(db, values);
+
+      // Ownership of the superseded answer and the one-successor rule are
+      // checked under a row lock inside the repository, so a concurrent
+      // double update cannot fork the chain.
+      const result = await insertSupersedingInterviewAnswer(db, ctx.investorId, {
+        ...values,
+        supersedesAnswerId: input.supersedesAnswerId,
       });
+      if (!result.ok) {
+        if (result.reason === "not_found") {
+          throw new TRPCError({ code: "NOT_FOUND", message: "The answer being updated was not found." });
+        }
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That answer has already been updated once — update its latest version instead.",
+        });
+      }
+      return result.row;
     }),
 
   complete: protectedProcedure
     .input(z.object({ sessionId: z.string().uuid() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      await requireOwnedSession(ctx.investorId, input.sessionId);
       await completeInterviewSession(db, input.sessionId);
       return { ok: true };
     }),
 
-  // "Tell me why" (docs/backlog.md) — user-initiated, separate from the
-  // guided/algorithmic flow above. Contract (Product decision,
-  // 2026-09-08 — explicitly replaces an earlier same-batch-only
-  // decision): available for ANY transaction the investor owns with
-  // source="manual_entry" — no time limit, no batch identifier, checked
-  // by the two guards right below (ownership, then source). The client
-  // does not enforce any scope here anymore: src/app/import/page.tsx
-  // currently only renders the "Tell me why" button right after a
-  // manual-entry submit because there's no "all my manual transactions"
-  // history screen yet to surface it from elsewhere — that's a UI gap,
-  // not a limit on this endpoint's actual contract. The question is
-  // deterministic code, not AI (buildTellMeWhyQuestion — no Anthropic
-  // import in that file at all). Deliberately does NOT reuse `start`
-  // above: that mutation always re-selects from the investor's *entire*
-  // transaction history via selectInterestingTransactions with
-  // maxCount=6 — wrong shape entirely for "ask about this one specific
-  // transaction the investor chose." Saving the answer reuses the
-  // existing `answer` mutation above unchanged; so does `complete`.
+  // "Tell me why" — user-initiated, separate from the guided/algorithmic
+  // flow above. Contract (Product decision, Episode Journal V1, 2026-09-22
+  // — explicitly replaces the 2026-09-08 manual-entry-only contract):
+  // available for ANY buy/sell transaction the investor owns that has a
+  // ticker, whatever its source, whichever transaction of the episode was
+  // chosen. The rationale is persisted against ONE deterministic anchor —
+  // the episode's entry BUY (src/lib/portfolio/episodes.ts) — so the
+  // returned `transactionId` is that anchor, not necessarily the one the
+  // investor clicked; `requestedTransactionId` echoes the click. An episode
+  // with no BUY (opened before the imported window) fails closed here. The
+  // question is deterministic code, not AI (buildTellMeWhyQuestion), and by
+  // construction carries only entry-time facts — never realized P&L, exit
+  // or later prices (hindsight protection). Deliberately does NOT reuse
+  // `start`: that re-selects from the whole history with maxCount=6 — the
+  // wrong shape for "ask about the episode the investor chose". Saving
+  // reuses `answer`/`complete` above.
   startTellMeWhy: protectedProcedure
     .input(z.object({ transactionId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -123,10 +199,10 @@ export const interviewRouter = router({
       if (!transaction || transaction.investorId !== ctx.investorId) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found." });
       }
-      if (transaction.source !== "manual_entry") {
+      if (transaction.transactionType !== "buy" && transaction.transactionType !== "sell") {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "\"Tell me why\" is only available for a transaction you entered manually (not one imported from a file).",
+          message: "\"Tell me why\" is only available for a buy or sell — not a dividend, fee, deposit or withdrawal.",
         });
       }
       if (!transaction.ticker) {
@@ -136,20 +212,50 @@ export const interviewRouter = router({
         });
       }
 
+      const journal = await loadEpisodeJournal(ctx.investorId);
+      const anchor = resolveTellMeWhyAnchor(journal, transaction.id);
+      if (!anchor.ok) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            anchor.reason === "no_entry_anchor"
+              ? "This position has no buy in the imported history (it was probably opened before the import window), so there is no decision to anchor a rationale to."
+              : "This transaction does not belong to any investment episode.",
+        });
+      }
+
       const session = await insertInterviewSession(db, {
         investorId: ctx.investorId,
         origin: "user_initiated",
       });
+      const { episode } = anchor;
 
       return {
         sessionId: session.id,
-        transactionId: transaction.id,
-        ticker: transaction.ticker,
-        questionText: buildTellMeWhyQuestion(transaction.ticker),
+        transactionId: anchor.anchorTransactionId,
+        requestedTransactionId: transaction.id,
+        ticker: episode.ticker,
+        episodeKey: episode.key,
+        episodeStatus: episode.status,
+        questionText: buildTellMeWhyQuestion({
+          ticker: episode.ticker,
+          episodeNumber: episode.episodeNumber,
+          status: episode.status,
+          entry: episode.entry,
+        }),
       };
     }),
 
+  // The hindsight-safe journal (src/lib/interview/journal.ts): later/outcome
+  // facts are omitted server-side for every episode without a rationale.
+  journal: protectedProcedure.query(async ({ ctx }) => toHindsightSafeJournal(await loadEpisodeJournal(ctx.investorId))),
+
+  journalCoverage: protectedProcedure.query(async ({ ctx }) => (await loadEpisodeJournal(ctx.investorId)).coverage),
+
   answersForSession: protectedProcedure
     .input(z.object({ sessionId: z.string().uuid() }))
-    .query(({ input }) => getAnswersForSession(db, input.sessionId)),
+    .query(async ({ ctx, input }) => {
+      await requireOwnedSession(ctx.investorId, input.sessionId);
+      return getAnswersForSession(db, input.sessionId);
+    }),
 });

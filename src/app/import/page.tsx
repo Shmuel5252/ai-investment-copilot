@@ -664,7 +664,11 @@ export default function ImportPage() {
 function TellMeWhyPanel({ transactionId }: { transactionId: string }) {
   const guard = useSubmitGuard();
   const [phase, setPhase] = useState<"idle" | "answering" | "done">("idle");
-  const [session, setSession] = useState<{ sessionId: string; questionText: string } | null>(null);
+  // anchorTransactionId comes back from the server (Episode Journal V1): the
+  // rationale is persisted against the episode's entry BUY, which may differ
+  // from the manual row that was just entered (e.g. a manual SELL closing an
+  // imported position) — same rule as /journal.
+  const [session, setSession] = useState<{ sessionId: string; anchorTransactionId: string; questionText: string } | null>(null);
   const [answerText, setAnswerText] = useState("");
 
   const startMutation = trpc.interview.startTellMeWhy.useMutation();
@@ -677,7 +681,7 @@ function TellMeWhyPanel({ transactionId }: { transactionId: string }) {
       `tell-me-why-start-${transactionId}`
     );
     if (result) {
-      setSession({ sessionId: result.sessionId, questionText: result.questionText });
+      setSession({ sessionId: result.sessionId, anchorTransactionId: result.transactionId, questionText: result.questionText });
       setPhase("answering");
     }
   }
@@ -687,7 +691,7 @@ function TellMeWhyPanel({ transactionId }: { transactionId: string }) {
     const result = await guard(async () => {
       await answerMutation.mutateAsync({
         sessionId: session.sessionId,
-        transactionId,
+        transactionId: session.anchorTransactionId,
         questionText: session.questionText,
         answerText: answerText.trim(),
       });
