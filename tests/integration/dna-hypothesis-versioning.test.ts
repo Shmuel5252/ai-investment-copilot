@@ -15,7 +15,8 @@ import {
   getLatestDnaHypothesisVersion,
 } from "@/db/repositories/dna";
 import { insertInterviewSession, insertInterviewAnswer } from "@/db/repositories/interview";
-import { isUniqueViolation } from "@/db/errors";
+import { isUniqueViolation, StaleIdentityVersionError } from "@/db/errors";
+import { fixtureBasis } from "../helpers/independence";
 
 const client = postgres(process.env.DATABASE_URL!, { max: 5 });
 const db = drizzle(client, { schema });
@@ -74,11 +75,15 @@ describe("insertDnaHypothesisVersionWithEvidence", () => {
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
 
     const { version: v2 } = await insertDnaHypothesisVersionWithEvidence(db, hypothesis.id, {
+      expectedBaseVersionId: v1.id,
+      expectedBaseCheckCount: 0,
       statementText: "Extended statement.",
       evidenceStrength: "moderate",
+      independenceBasis: fixtureBasis(),
       supportingEvidenceCount: 3,
       contradictingEvidenceCount: 0,
       newEvidence: [
@@ -131,18 +136,22 @@ describe("insertDnaHypothesisVersionWithEvidence", () => {
     // does not assert a specific fulfilled/rejected split, only that a
     // real collision happens and every rejection is the right, classified
     // error, never a raw/unclassified one and never partial state.
-    const { hypothesis } = await insertDnaHypothesisWithEvidence(db, investorId, {
+    const { hypothesis, version: baseVersion } = await insertDnaHypothesisWithEvidence(db, investorId, {
       statement: "Race base statement.",
       evidence: [{ interviewAnswerId: answerAId, stance: "supporting", description: "d1" }],
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
 
     const makeVersionCall = () =>
       insertDnaHypothesisVersionWithEvidence(db, hypothesis.id, {
+        expectedBaseVersionId: baseVersion.id,
+        expectedBaseCheckCount: 0,
         statementText: "Race extended statement.",
         evidenceStrength: "moderate",
+        independenceBasis: fixtureBasis(),
         supportingEvidenceCount: 2,
         contradictingEvidenceCount: 0,
         newEvidence: [],
@@ -160,11 +169,18 @@ describe("insertDnaHypothesisVersionWithEvidence", () => {
     expect(rejected.length).toBeGreaterThan(0);
     expect(fulfilled.length + rejected.length).toBe(CONCURRENT_CALLS);
 
-    // Every rejection is this exact, classified constraint — never a raw,
-    // uncaught error shape.
+    // Every rejection is a classified outcome — never a raw, uncaught error
+    // shape: either the real unique-constraint collision (two writers on the
+    // same base racing) or the stale-base guard (a writer that arrived after
+    // the winner committed, so its counts no longer describe the latest version).
     for (const r of rejected) {
-      expect(isUniqueViolation(r.reason, "dna_hypothesis_versions_dna_hypothesis_id_version_number_unique")).toBe(true);
+      const classified =
+        isUniqueViolation(r.reason, "dna_hypothesis_versions_dna_hypothesis_id_version_number_unique") ||
+        r.reason instanceof StaleIdentityVersionError;
+      expect(classified).toBe(true);
     }
+    // Every call counted against the SAME base version, so at most one may append.
+    expect(fulfilled).toHaveLength(1);
 
     // No two winners share a version number, and none collide with 1
     // (the base version) — no partial/duplicate state survived.

@@ -28,6 +28,7 @@ import {
 } from "@/db/repositories/evidence";
 import { insertInterviewSession, insertInterviewAnswer } from "@/db/repositories/interview";
 import { isUniqueViolation } from "@/db/errors";
+import { fixtureBasis } from "../helpers/independence";
 
 const client = postgres(process.env.DATABASE_URL!, { max: 5 });
 const db = drizzle(client, { schema });
@@ -91,6 +92,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const rawEvidence = await getEvidenceForStrategyPrinciple(db, principle.id);
 
@@ -114,6 +116,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const rawEvidence = await getEvidenceForStrategyPrinciple(db, principle.id);
     const sameChecks = [{ evidenceId: rawEvidence[0]!.id, verdict: "supported" as const, reason: "matches" }];
@@ -142,6 +145,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
       supportingCount: 2,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const rawEvidence = await getEvidenceForStrategyPrinciple(db, principle.id);
     const survivorId = rawEvidence.find((e) => e.interviewAnswerId === answerAId)!.id;
@@ -154,6 +158,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
         statementText: v1.statementText,
         principleType: "observed",
         evidenceStrength: "insufficient_evidence",
+        independenceBasis: fixtureBasis(),
         supportingEvidenceCount: 1,
         contradictingEvidenceCount: 0,
         changeReason: "test remediation",
@@ -194,6 +199,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
 
     const makeCall = () =>
@@ -204,6 +210,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
           statementText: "Race base statement.",
           principleType: "observed",
           evidenceStrength: "insufficient_evidence",
+          independenceBasis: fixtureBasis(),
           supportingEvidenceCount: 1,
           contradictingEvidenceCount: 0,
           changeReason: "concurrent remediation race",
@@ -239,6 +246,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const { principle: principleB } = await insertObservedPrincipleWithEvidence(db, investorId, {
       statement: "Principle B.",
@@ -246,6 +254,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const evidenceOfB = (await getEvidenceForStrategyPrinciple(db, principleB.id))[0]!;
 
@@ -257,6 +266,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
           statementText: "Principle A, extended.",
           principleType: "observed",
           evidenceStrength: "insufficient_evidence",
+          independenceBasis: fixtureBasis(),
           supportingEvidenceCount: 1,
           contradictingEvidenceCount: 0,
           changeReason: "cross-identity attempt",
@@ -278,6 +288,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const { principle: principleB } = await insertObservedPrincipleWithEvidence(db, investorId, {
       statement: "Principle B2.",
@@ -285,6 +296,7 @@ describe("Strategy Grounding Remediation — version-aware evidence + grounding-
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const evidenceOfB = (await getEvidenceForStrategyPrinciple(db, principleB.id))[0]!;
 

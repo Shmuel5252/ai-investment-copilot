@@ -17,6 +17,7 @@
 import { describe, expect, it } from "vitest";
 import { groundValidatedHypotheses, type GroundingCheckFn } from "@/lib/dna/ground-evidence";
 import type { ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
+import { fixtureBasis, resolverFromCaseKeys } from "../helpers/independence";
 
 const REAL_CAN_ANSWER_TEXT =
   "כי כבר נאסדק נתנה להם יעד לעבור את הדולר תוך תקופת זמן מסוימת והם לא היו בכיוון של עלייה המנייה המשיכה לרדת ולרדת וכבר זה לא השתלם להשאר העדפתי להשתמש בכסף בחברות אחרות";
@@ -30,6 +31,7 @@ function hypothesis(statement: string, evidence: ValidatedHypothesis["evidence"]
     supportingCount: 0, // pre-grounding placeholder — groundValidatedHypotheses always recomputes
     contradictingCount: 0,
     evidenceStrength: "insufficient_evidence",
+    independenceBasis: fixtureBasis(),
   };
 }
 
@@ -43,7 +45,7 @@ describe("groundValidatedHypotheses", () => {
     const { hypotheses, excluded, droppedHypotheses } = await groundValidatedHypotheses(
       [h],
       new Map([["a1", "Real answer text describing holding through a rally."]]),
-      new Map([["a1", "TICK#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "TICK#1"]])),
       checkGrounding
     );
 
@@ -63,7 +65,7 @@ describe("groundValidatedHypotheses", () => {
     const { hypotheses, excluded, droppedHypotheses } = await groundValidatedHypotheses(
       [h],
       new Map([["a1", "The real answer text says something else entirely."]]),
-      new Map([["a1", "TICK#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "TICK#1"]])),
       checkGrounding
     );
 
@@ -91,7 +93,7 @@ describe("groundValidatedHypotheses", () => {
     const { hypotheses } = await groundValidatedHypotheses(
       [h],
       new Map([["a1", "Real text describing an unrelated reason, thesis intact."]]),
-      new Map([["a1", "TICK#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "TICK#1"]])),
       checkGrounding
     );
 
@@ -125,10 +127,10 @@ describe("groundValidatedHypotheses", () => {
         ["can-answer", REAL_CAN_ANSWER_TEXT],
         ["mp-answer", "A genuinely grounded MP answer."],
       ]),
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["can-answer", "CAN#1"],
         ["mp-answer", "MP#1"],
-      ]),
+      ])),
       checkGrounding
     );
 
@@ -150,7 +152,7 @@ describe("groundValidatedHypotheses", () => {
     const { hypotheses, excluded } = await groundValidatedHypotheses(
       [h],
       new Map([["a1", "Some real text."]]),
-      new Map([["a1", "TICK#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "TICK#1"]])),
       checkGrounding
     );
 
@@ -164,8 +166,8 @@ describe("groundValidatedHypotheses", () => {
 
     const { hypotheses, excluded } = await groundValidatedHypotheses(
       [h],
-      new Map(), // no entry for "missing"
-      new Map([["missing", "TICK#1"]]),
+      new Map(), resolverFromCaseKeys(// no entry for "missing"
+      new Map([["missing", "TICK#1"]])),
       checkGrounding
     );
 
@@ -186,10 +188,10 @@ describe("groundValidatedHypotheses", () => {
         ["a1", "text 1"],
         ["a2", "text 2"],
       ]),
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["a1", "TICK#1"],
         ["a2", "TICK#2"],
-      ]),
+      ])),
       checkGrounding
     );
 
@@ -210,7 +212,7 @@ describe("groundValidatedHypotheses", () => {
     await groundValidatedHypotheses(
       [h],
       new Map([["a1", "The real, unedited answer text."]]),
-      new Map([["a1", "TICK#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "TICK#1"]])),
       checkGrounding
     );
 
@@ -228,7 +230,7 @@ describe("groundValidatedHypotheses", () => {
     const { hypotheses } = await groundValidatedHypotheses(
       [h],
       new Map([["a1", "One real answer."]]),
-      new Map([["a1", "TICK#1"]]), // both citations resolve to the SAME case key
+      resolverFromCaseKeys(new Map([["a1", "TICK#1"]])), // both citations resolve to the SAME case key
       checkGrounding
     );
 

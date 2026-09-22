@@ -1,5 +1,9 @@
-import { calculateEvidenceStrength, type EvidenceStrength } from "./evidence-strength";
-import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
+import type { EvidenceStrength } from "./evidence-strength";
+import {
+  assessCitations,
+  type EvidenceIndependenceResolver,
+  type IndependenceBasis,
+} from "@/lib/evidence/resolve-independence";
 import type { ProposedHypothesis } from "@/lib/ai/dna";
 
 export interface ValidatedEvidence {
@@ -14,6 +18,8 @@ export interface ValidatedHypothesis {
   supportingCount: number;
   contradictingCount: number;
   evidenceStrength: EvidenceStrength;
+  /** Why the counts are what they are (Decision Independence V1); persisted as independence_basis_json. */
+  independenceBasis: IndependenceBasis;
 }
 
 // The AI's citations are never trusted blindly (docs principle: AI
@@ -25,21 +31,19 @@ export interface ValidatedHypothesis {
 // computed here in code from the *validated* counts, never taken from
 // the AI's output.
 //
-// `answerCaseKeys` maps each valid interview-answer id to the
-// *underlying* case it's really evidence about — its transaction id if
-// it has one, else the answer's own id. Two different InterviewAnswers
-// about the same transaction (real, reachable: an interview can be
-// re-run in a later session and re-select a transaction already asked
-// about before — select-transactions.ts only dedupes within one
-// session's own selection, not across sessions) must count as one piece
-// of evidence, not two — a real gap found by the user on real data. All
-// validated citations are still kept in the returned `evidence` array
-// for traceability/"View Evidence"; only the counts feeding
-// evidenceStrength are deduped by underlying case
-// (src/lib/evidence/count-independent-cases.ts).
+// `independence` is the ONE shared resolver DNA and Strategy both count
+// through (src/lib/evidence/resolve-independence.ts). Two different
+// InterviewAnswers about the same transaction (real, reachable: an
+// interview can be re-run in a later session and re-select a transaction
+// already asked about before) or about one position episode must count as
+// one piece of evidence, not two; a cross-ticker reallocation the investor
+// described from both ends is a weak dependence edge that lowers the
+// supporting count. All validated citations are still kept in the returned
+// `evidence` array for traceability/"View Evidence" — only the counts
+// feeding evidenceStrength are collapsed.
 export function validateProposedHypotheses(
   proposed: ProposedHypothesis[],
-  answerCaseKeys: ReadonlyMap<string, string>
+  independence: EvidenceIndependenceResolver
 ): ValidatedHypothesis[] {
   const results: ValidatedHypothesis[] = [];
 
@@ -51,7 +55,7 @@ export function validateProposedHypotheses(
       (e): e is ValidatedEvidence =>
         !!e &&
         typeof e.interviewAnswerId === "string" &&
-        answerCaseKeys.has(e.interviewAnswerId) &&
+        independence.hasAnswer(e.interviewAnswerId) &&
         (e.stance === "supporting" || e.stance === "contradicting") &&
         typeof e.description === "string" &&
         e.description.trim() !== ""
@@ -59,17 +63,10 @@ export function validateProposedHypotheses(
 
     if (validEvidence.length === 0) continue;
 
-    const { supportingCount, contradictingCount } = countIndependentCases(
-      validEvidence,
-      (e) => answerCaseKeys.get(e.interviewAnswerId)!
-    );
-
     results.push({
       statement: h.statement.trim(),
       evidence: validEvidence,
-      supportingCount,
-      contradictingCount,
-      evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
+      ...assessCitations(independence, validEvidence),
     });
   }
 

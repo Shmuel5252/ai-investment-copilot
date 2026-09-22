@@ -3,7 +3,8 @@ import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evid
 import { validateProposedHypotheses, type ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
 import { validateProposedObservedPrinciples, type ValidatedObservedPrinciple } from "@/lib/strategy/validate-principles";
 import { validateLearningInsightEvidence } from "@/lib/learning/validate-insight-evidence";
-import { buildAnswerCaseKeys } from "@/lib/evidence/build-answer-case-keys";
+import { createIndependenceResolver } from "@/lib/evidence/resolve-independence";
+import { fixtureBasis, resolverFromCaseKeys } from "../helpers/independence";
 import { resolveHypothesisIdentities } from "@/lib/dna/resolve-hypothesis-identity";
 import { resolveObservedPrincipleIdentities } from "@/lib/strategy/resolve-principle-identity";
 import { planGroundingRemediation } from "@/lib/dna/remediate-grounding";
@@ -37,8 +38,8 @@ const identityKeys = (evidence: { interviewAnswerId: string }[]) =>
 function tiersThroughEveryValidator(s: number, c: number) {
   const evidence = citationsFor(s, c);
   const keys = identityKeys(evidence);
-  const dna = validateProposedHypotheses([{ statement: "claim", evidence }], keys)[0];
-  const strategy = validateProposedObservedPrinciples([{ statement: "claim", evidence }], keys)[0];
+  const dna = validateProposedHypotheses([{ statement: "claim", evidence }], resolverFromCaseKeys(keys))[0];
+  const strategy = validateProposedObservedPrinciples([{ statement: "claim", evidence }], resolverFromCaseKeys(keys))[0];
   const learning = validateLearningInsightEvidence(
     {
       statementText: "claim",
@@ -88,8 +89,8 @@ describe("J. the persisted tier is always RECOMPUTED, never taken from the AI or
     const keys = identityKeys(evidence);
     const withBogusFields = { statement: "claim", evidence, evidenceStrength: "strong", supportingCount: 99, contradictingCount: 0 };
 
-    const dna = validateProposedHypotheses([withBogusFields as never], keys)[0];
-    const strategy = validateProposedObservedPrinciples([withBogusFields as never], keys)[0];
+    const dna = validateProposedHypotheses([withBogusFields as never], resolverFromCaseKeys(keys))[0];
+    const strategy = validateProposedObservedPrinciples([withBogusFields as never], resolverFromCaseKeys(keys))[0];
 
     for (const result of [dna, strategy]) {
       expect(result?.supportingCount).toBe(2);
@@ -115,14 +116,14 @@ describe("J. the persisted tier is always RECOMPUTED, never taken from the AI or
     { interviewAnswerId: "a-mrvl1", stance: "contradicting" as Stance, description: "the new contradicting case" },
   ];
   // Stale/bogus values a previous step (or the AI) might have carried along.
-  const staleTier = { supportingCount: 99, contradictingCount: 0, evidenceStrength: "strong" as const };
+  const staleTier = { supportingCount: 99, contradictingCount: 0, evidenceStrength: "strong" as const, independenceBasis: fixtureBasis(99, 0) };
 
   it("Strategy: a new version whose only new case is contradicting stays insufficient_evidence (S=2, C=1), with only the new row to insert", async () => {
     const proposed: ValidatedObservedPrinciple = { statement: "You hold on based on belief.", evidence: batchEvidence, ...staleTier };
     const resolutions = await resolveObservedPrincipleIdentities(
       [proposed],
-      [{ id: "existing", statementText: "Existing wording.", evidenceForCounting: existingEvidence }],
-      caseKeys,
+      [{ id: "existing", statementText: "Existing wording.", rejectedEvidence: [], evidenceForCounting: existingEvidence }],
+      resolverFromCaseKeys(caseKeys),
       async () => ({ matchedId: "existing", reason: "same claim" })
     );
 
@@ -139,8 +140,8 @@ describe("J. the persisted tier is always RECOMPUTED, never taken from the AI or
     const proposed: ValidatedHypothesis = { statement: "You hold on based on belief.", evidence: batchEvidence, ...staleTier };
     const resolutions = await resolveHypothesisIdentities(
       [proposed],
-      [{ id: "existing", statementText: "Existing wording.", evidenceForCounting: existingEvidence }],
-      caseKeys,
+      [{ id: "existing", statementText: "Existing wording.", rejectedEvidence: [], evidenceForCounting: existingEvidence }],
+      resolverFromCaseKeys(caseKeys),
       async () => ({ matchedId: "existing", reason: "same claim" })
     );
 
@@ -161,10 +162,10 @@ describe("J. the persisted tier is always RECOMPUTED, never taken from the AI or
     const strategy = await resolveObservedPrincipleIdentities(
       [{ statement: "x", evidence, ...staleTier }],
       [],
-      keys,
+      resolverFromCaseKeys(keys),
       noMatch
     );
-    const dna = await resolveHypothesisIdentities([{ statement: "x", evidence, ...staleTier }], [], keys, noMatch);
+    const dna = await resolveHypothesisIdentities([{ statement: "x", evidence, ...staleTier }], [], resolverFromCaseKeys(keys), noMatch);
 
     for (const resolution of [strategy[0], dna[0]]) {
       expect(resolution?.action).toBe("new_identity");
@@ -183,7 +184,7 @@ describe("I. remediation applies the same semantics as generation", () => {
   ];
   const textAndKeys = (rawEvidence: { interviewAnswerId: string }[]) => ({
     answerTextById: new Map(rawEvidence.map((e) => [e.interviewAnswerId, `text ${e.interviewAnswerId}`])),
-    answerCaseKeys: new Map(rawEvidence.map((e) => [e.interviewAnswerId, e.interviewAnswerId])),
+    independence: resolverFromCaseKeys(new Map(rawEvidence.map((e) => [e.interviewAnswerId, e.interviewAnswerId]))),
   });
   const rejecting = (rejectedTexts: string[]) => async (input: { sourceAnswerText: string }) =>
     rejectedTexts.includes(input.sourceAnswerText)
@@ -242,10 +243,17 @@ describe("F/G. independent-case counting still drives S and C", () => {
     { id: "a9", transactionId: "tx-9" },
     { id: "a10", transactionId: null },
   ];
-  const caseKeys = buildAnswerCaseKeys(answers, episodeKeyByTransactionId);
+  const resolverFor = (extraAnswers: { id: string; transactionId: string | null }[] = [], extraEpisodes: [string, string][] = []) =>
+    createIndependenceResolver({
+      episodeKeyByTransactionId: new Map([...episodeKeyByTransactionId, ...extraEpisodes]),
+      transactions: [],
+      answers: [...answers, ...extraAnswers].map((a) => ({ ...a, answerText: "" })),
+      facts: [],
+    });
+  const independence = resolverFor();
   const cite = (id: string, stance: Stance) => ({ interviewAnswerId: id, stance, description: "d" });
   const strategyOf = (evidence: ReturnType<typeof cite>[]) =>
-    validateProposedObservedPrinciples([{ statement: "claim", evidence }], caseKeys)[0];
+    validateProposedObservedPrinciples([{ statement: "claim", evidence }], independence)[0];
 
   it("F. many answers from ONE investment episode count once on their side — they cannot inflate S or C", () => {
     const oneCaseFiveTimes = strategyOf([cite("a1", "supporting"), cite("a2", "supporting"), cite("a3", "supporting")]);
@@ -266,7 +274,7 @@ describe("F/G. independent-case counting still drives S and C", () => {
     // Two extra genuinely independent supporting cases DO raise it.
     const moreSupport = validateProposedObservedPrinciples(
       [{ statement: "claim", evidence: [cite("a1", "supporting"), cite("a9", "supporting"), cite("a10", "supporting"), cite("x1", "contradicting")] }],
-      new Map([...caseKeys, ["x1", "X#1"]])
+      resolverFor([{ id: "x1", transactionId: "tx-x1" }], [["tx-x1", "X#1"]])
     )[0];
     expect(moreSupport?.supportingCount).toBe(3);
     expect(moreSupport?.contradictingCount).toBe(1);

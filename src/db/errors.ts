@@ -16,3 +16,21 @@ export function isUniqueViolation(err: unknown, constraintName: string): boolean
   const cause = (err as { cause?: { code?: string; constraint_name?: string } } | undefined)?.cause;
   return cause?.code === "23505" && cause?.constraint_name === constraintName;
 }
+
+// Thrown by an identity-version append whose counting was computed against a
+// base state that has since changed — the identity's latest version is no
+// longer the one the generation counted against (another generation,
+// remediation or recalculation appended), or that version has gained
+// grounding checks since (a remediation's checked_no_change write, which adds
+// rows without a new version). The counts and the grounding verdicts to carry
+// forward would then describe different states, so nothing is written; the
+// caller re-runs against the current state.
+export class StaleIdentityVersionError extends Error {
+  constructor(
+    public readonly identityId: string,
+    detail: string
+  ) {
+    super(`Identity ${identityId}: ${detail} — refusing to append; re-run against the current state.`);
+    this.name = "StaleIdentityVersionError";
+  }
+}

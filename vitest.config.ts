@@ -19,6 +19,10 @@ export default defineConfig({
     // as the first line of a future component test file to opt back in
     // per-file.
     environment: "node",
+    // Test DB Safety: authorizes TEST_DATABASE_URL (or pins an unreachable
+    // DATABASE_URL) once, before any worker or test file starts. The
+    // application's DATABASE_URL (.env) is never visible to tests.
+    globalSetup: ["./tests/support/global-setup.ts"],
     setupFiles: ["./tests/setup.ts"],
     globals: true,
     exclude: ["node_modules", ".next", "tests/e2e/**"],

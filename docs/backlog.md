@@ -227,9 +227,9 @@ hypothesis-identity resolution — וה-catch המתאים כבר קיים בפ�
 "dna_hypothesis_versions_dna_hypothesis_id_version_number_unique")` →
 `TRPCError({code:"BAD_REQUEST"})`). Autonomous Unit 3 הוסיף נתיב-כתיבה
 שני לאותה טבלה בדיוק (`insertDnaHypothesisVersionWithGroundingChecks`,
-ר' "DNA Grounding Remediation — תשתית" למטה) שמכובד ע"י אותו constraint
-בדיוק, מאומת ב-integration test ייעודי (עדיין ממתין להרצת migration
-0008, ר' שם). ה-constraint הזה, אם כך, כבר לא "הגנה תיאורטית בלבד" —
+ר' "DNA Grounding Remediation" למטה) שמכובד ע"י אותו constraint
+בדיוק, מאומת ב-integration test ייעודי ומ-migration `0008` שמוחלת בפועל
+(ר' שם). ה-constraint הזה, אם כך, כבר לא "הגנה תיאורטית בלבד" —
 הוא constraint פעיל שכבר נבדק אמפירית מול שני נתיבי קוד אמיתיים.
 
 ### עקרון עיצוב עתידי (Market Scanner) — השערות DNA/Strategy מוגזמות עלולות ליצור feedback loop
@@ -273,45 +273,50 @@ hypothesis-identity resolution — וה-catch המתאים כבר קיים בפ�
 all-or-nothing, זו החלטת מוצר נפרדת על שכבת הוולידציה, לא על שכבת
 ה-representation.
 
-### Evidence Strength — גרסאות שכבר נשמרו מפרות את האינווריאנט (דורש remediation append-only נפרד)
+### Evidence Strength — גרסאות שכבר נשמרו הפרו את האינווריאנט (remediation append-only — הושלם)
 **נמצא:** 2026-09-20, אגב תיקון הסמנטיקה (ר' "נבנה"). שתי גרסאות אמיתיות
-נשמרו תחת הכלל הישן ועדיין הגרסה **האחרונה** שלהן: `dna 7c3665ca v1`
+נשמרו תחת הכלל הישן ועדיין היו הגרסה **האחרונה** שלהן: `dna 7c3665ca v1`
 (S=2,C=1, `moderate`) ו-`strategy 3653aeed v2` (S=2,C=1, `moderate`). תחת הכלל
 החדש שתיהן `insufficient_evidence`. **השפעה ממשית, לא רק תווית:**
-`excludeInsufficientEvidence` (cases/decisions/reviews) כולל אותן עכשיו
-בהקשר ה-AI של Personal Fit / הערכה בזמן-אמת. כל שאר 17 הגרסאות עם tier
-תואמות. **לא בוצע על ה-DB האמיתי** — היסטוריה immutable. **מומש (2026-09-20,
-ממתין לאישור אנושי):** מנגנון כללי append-only — `recalculateDnaHypothesisConfidence`/
+`excludeInsufficientEvidence` (cases/decisions/reviews) כלל אותן בהקשר ה-AI
+של Personal Fit / הערכה בזמן-אמת. כל שאר 17 הגרסאות עם tier תואמות. **מומש
+(2026-09-20):** מנגנון כללי append-only — `recalculateDnaHypothesisConfidence`/
 `recalculatePrincipleConfidence`, dry-run read-only
 (`planConfidenceRecalculationsForInvestor`) ו-`applyConfidenceRecalculationsForInvestor`
 — עם `created_by=system_confidence_recalculation` (ערך חדש בשני ה-enums;
-מיגרציה `0010`, שתי פקודות `ALTER TYPE … ADD VALUE`, **נכתבה ולא הופעלה**).
-grounding checks scoped-לגרסה מועתקים קדימה במפורש כדי שהראיה האפקטיבית לא
-תשתנה. אומת על DB scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמיתי:
-בדיוק 2 תיקונים מתוכננים, 0 כתיבות. **נותר:** אישור אנושי ← החלת מיגרציה 0010
-על ה-DB האמיתי ← הרצת apply פעם אחת.
+מיגרציה `0010`, שתי פקודות `ALTER TYPE … ADD VALUE`). grounding checks
+scoped-לגרסה מועתקים קדימה במפורש כדי שהראיה האפקטיבית לא תשתנה. אומת על DB
+scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמיתי: בדיוק 2 תיקונים
+מתוכננים, 0 כתיבות. **בוצע בפועל (2026-09-21T18:58, אומת שוב קריאה-בלבד
+2026-09-22):** מיגרציה `0010` מוחלת על ה-DB האמיתי (11 מיגרציות מוחלות סה"כ
+נכון ל-2026-09-22, לפני `0011`); `applyConfidenceRecalculationsForInvestor`
+רץ עבור המשקיע האמיתי — `dna 7c3665ca` קיבל `v2` ו-`strategy 3653aeed` קיבל
+`v3`, שתיהן `system_confidence_recalculation`, שתיהן `insufficient_evidence`
+כמתוכנן; הגרסאות הישנות (`v1`/`v2` בהתאמה) נשארות בהיסטוריה כפי שהיו
+(immutable) — לא סטייה, זו בדיוק הכוונה. **תוקן במסמך הזה 2026-09-22** —
+הטקסט הקודם כאן ("נכתבה ולא הופעלה") היה שגוי/מיושן: ה-apply כבר בוצע לפני
+תיקון זה — נמצא ותוקן אגב Test DB Safety audit (ר' git history), בבדיקת
+קריאה-בלבד ישירה על ה-DB האמיתי (מיגרציות מוחלות, ערך ה-enum, שורות הגרסה
+עצמן), לא הונח.
 
-### Behavioral/Decision Independence חוצה-tickers — עכשיו מהותי (`a48426b1`)
-**נמצא:** 2026-09-20. `deriveEpisodeKeys` (`positions.ts`) הוא per-ticker מהגדרתו
-("no state crosses tickers"), ולטבלת `transactions` אין שום עמודת קישור בין
-עסקאות (רק `ticker, quantity, price, amount, notes` חופשי, `intra_day_order`).
-במציאות: המכירה הסופית של MP (MP#1) והקנייה של MRVL#3 — שתיהן ב-2026-08-28,
-פדיון MP ≈$506 מול קנייה ≈$1,000 ("חלק מההון") — הן **החלטת הקצאה אחת**, ונספרו
-כשני מקרים (S=2 במקום 1) ב-`a48426b1`. נשאר insufficient כי S<3 (שער ה-tier
-סופר supporting cases בלבד).
-**כיוון אפשרי לבחינה (לא אושר, לא מומשה):** לעגן קישור ב-**transaction ids**
-(immutable), לא ב-episode keys (נגזרים מחדש בכל קריאה): עובדת קישור
-`from_txn/to_txn/kind/origin`; שני episodes מקושרים אם כל עסקה שלהם מקושרת;
-פונקציית ה-case-key ממוטטת רכיבי קשירות. מקור הקישור: מועמדים דטרמיניסטיים בקוד
-(SELL→BUY חוצה-tickers באותו יום או למחרת, עלות ≥ פדיון, ו/או שתי תשובות
-שמזכירות זו את הטיקר של זו) + **אישור משתמש** (AI לא קובע עובדות). נדחו:
-`decision_episode_id` מאוחסן (episodes נגזרים בכוונה, לא מאוחסנים), ו-
-`capital_reallocation_event_id` (צר מדי — עצמאות היא תכונה של ה-*אירוע*, לא של
-סוג ה-claim).
-**מדיניות למקרה שהקישור לא ידוע — לא הוכרעה בכוונה.** ההתנהגות הנוכחית (מקרים
-חוצי-tickers נספרים כעצמאיים) מנפחת S, ולכן היחידה העתידית חייבת להעריך אותה
-במפורש מול האינווריאנט "אי-ודאות / קישור לא ידוע לעולם לא מעלה ביטחון" לפני
-שנקבעת ברירת-מחדל כלשהי.
+### Decision Independence V1 — מומש, נותרו החלה + הרחבות
+**מומש (2026-09-22) — ר' "נבנה".** נותר:
+1. **אישור אנושי ← החלת מיגרציה `0011` על ה-DB האמיתי ← `applyIndependenceRecalculationsForInvestor`
+   פעם אחת.** dry-run אמיתי (קריאה-בלבד על ה-DB האמיתי, ועל clone ממיגרר): בדיוק 2 גרסאות
+   חדשות — Strategy `a48426b1` ו-DNA `699cdb50` (S: 2 → 1, tier נשאר insufficient_evidence).
+2. **Review UI + workflow אישור שיכתוב `TransactionLinkFact`.** כרגע אין דרך לכתוב עובדה
+   (בכוונה — אין mutation procedure). זו גם הדרך היחידה להעלות `S_lb` אחרי dismissal: עלייה
+   אינה נכתבת אוטומטית (`requires_review`).
+3. שדה "funded by" מובנה ב-manual entry (כל 4 העסקאות הידניות בהיסטוריה הן בדיוק אירוע MP→MRVL).
+4. **Claim-scoped release.** קישור מאושר קורס לכל claim שמצטט את שני הקצוות — נכון ל-2/2 claims
+   אמיתיים (הקצאת הון), אך מקטין ספירה ל-claim שרואה את הקצוות כנפרדים. גלוי ב-`basis`, לא שקט.
+5. **Learning Insight** — ה-key שלו `decisionId`, בלי מודעות לתלות בין החלטות. 2 insights אמיתיים
+   נשענים על 3 החלטות BUY מאותו יום (2026-08-15; מקור לא אומת, ייתכן test data). הסכמה מוכנה
+   להרחבה (`decision_id` כעמודת endpoint נוספת — additive).
+6. תלות same-ticker בין episodes שונים (מכירה וקנייה מחדש כהחלטה אחת).
+7. AI reader/proposals — בטבלה נפרדת שה-resolver לא קורא; אף פעם לא משפיע על ספירה.
+8. **חשיפה מתועדת:** תלות בלתי-נצפית (יום rebalance עמוס, בלי isolation ובלי הזכרת ticker) נשארת
+   נספרת כעצמאית. היא נראית ב-`reviewOnly` של ה-basis, לא מוסתרת.
 
 ### Evidence.description — מוצג כראיה עצמה, בלי מקור ובלי תיוג
 **נמצא:** 2026-09-20 (ראיה `2ff448c6`: "למרות האמונה בחברה" — לא בתשובת המקור).
@@ -327,6 +332,26 @@ grounding checks scoped-לגרסה מועתקים קדימה במפורש כדי
 ---
 
 ## נבנה
+- **Decision Independence V1 — עצמאות חוצת-tickers** (2026-09-22; מיגרציה `0011` נכתבה ו**לא
+  הופעלה** על ה-DB האמיתי): החלטה אחת שנפרשת על שני tickers (MP נמכר כדי לממן MRVL) נספרה
+  כשני מקרים. `resolve-independence.ts` — resolver טהור יחיד ל-DNA ו-Strategy (validation,
+  grounding, remediation, identity, recalculation): קבוצות חזקות (episode + `TransactionLinkFact`
+  מאושר) וקשתות **חלשות** רק כשזוג cross-ticker בצדדים הפוכים ב-≤14 ימים מקורבר ע"י
+  *exclusive counterpart* (אין פעילות אחרת בחשבון ±3 ימים) או *named counterpart* (המשקיע הזכיר
+  את ה-ticker של הצד השני בתשובה שלו). קרבה זמנית לבדה = review-only ואינה נספרת (על ההיסטוריה
+  האמיתית ל-84% מהעסקאות יש שותף באותו יום — closure טרנזיטיבי קורס את כל 140 העסקאות לרכיב
+  אחד). `calculateEvidenceStrength(S_lb, C_ub)` = ה-tier המינימלי המדויק (הוכח + brute-force
+  oracle, 40,000/40,000; **תיקון להערכה קודמת** שטענה שה-envelope עלול להיות פסימי מכל עולם
+  אמיתי). נשמר `independence_basis_json` דטרמיניסטי (`NULL` = legacy). **אימות:** DB scratch
+  ממיגרר מאפס (743 טסטים, 0 skipped), ו-clone של הנתונים האמיתיים: dry-run = בדיוק 2 גרסאות
+  (Strategy `a48426b1`, DNA `699cdb50`), `apply` על ה-clone לא שינה אף אחת מ-7,163 שורות
+  ההיסטוריה, וריצה שנייה = no-op; ה-DB האמיתי לא נכתב. פירוט: `docs/data-model.md` §2.
+  **הקשחה (2026-09-22, לפני commit):** זיהוי identity ב-`generate` סופר עכשיו מול ה-effective
+  של הגרסה הנוכחית, לא ה-raw — ראיה ש-remediation דחה לא מעלה S/C/S_ub/C_ub ולא יוצרת
+  גרסה; דחיה מפורשת דביקה; גרסה שנוספת ל-identity עם checks נושאת אותם קדימה
+  (`expectedBaseVersionId` + `expectedBaseCheckCount` מגנים מפני base מיושן, כולל remediation שהוסיף
+  checks לגרסה קיימת בלי גרסה חדשה). אומת על ה-routers האמיתיים (AI ממוקאפ),
+  DNA ו-Strategy.
 - **Evidence Strength — אינווריאנט מונוטוני: סתירה לעולם לא מעלה ביטחון** (2026-09-20): ריצת
   ה-Strategy החיה הראשונה העלתה את `3653aeed` מ-insufficient ל-moderate כשהמקרה
   החדש היחיד היה **סותר** (S=2,C=0 → S=2,C=1). שורש: `calculateEvidenceStrength`
@@ -394,10 +419,13 @@ grounding checks scoped-לגרסה מועתקים קדימה במפורש כדי
   אחרת דפוס observed טרי היה יכול "להתאים" ולגרום לגרסה חדשה על הצהרה
   מילולית של המשתמש או ברירת מחדל קבועה.
 
-  **Remediation infrastructure (טרם הופעל בפועל — אין remediation אמיתי
-  על 4 העקרונות ה-observed הקיימים בהחלטה זו):** טבלה חדשה
-  `strategy_evidence_grounding_checks` (migration `0009_large_jackpot.sql`,
-  **נכתבה בלבד, לא הורצה**) — מקבילה סמנטית מדויקת ל-`dna_evidence_grounding_checks`
+  **Remediation infrastructure (המיגרציה מוחלת; אין עדיין remediation אמיתי
+  על 4 העקרונות ה-observed הקיימים בהחלטה זו — תוקן 2026-09-22, אומת קריאה-בלבד:
+  טבלה `strategy_evidence_grounding_checks` קיימת בפועל על ה-DB האמיתי
+  [`migration 0009_large_jackpot.sql` מוחלת, יש בה שורות אמיתיות מהרצות אחרות —
+  אבל אפס שורות על ה-4 עקרונות observed של המשקיע האמיתי עצמו, כלומר עליהם עצמם
+  עדיין לא רץ remediation אמיתי]):** טבלה חדשה `strategy_evidence_grounding_checks`
+  — מקבילה סמנטית מדויקת ל-`dna_evidence_grounding_checks`
   אך **טבלה נפרדת** (לא reuse — `Evidence.strategy_principle_id`/
   `Evidence.dna_hypothesis_id` הן שתי עמודות subject שונות); `verdict`
   כן עושה reuse ל-enum `grounding_verdict` הקיים (סמנטית גנרי, לא
@@ -422,17 +450,24 @@ grounding checks scoped-לגרסה מועתקים קדימה במפורש כדי
   ה-observed הקיימים (כולל אי-ההסכמה שנמצאה על `d29a3897`); הרצת
   migration 0009; קריאות AI אמיתיות; שינוי ל-`dna.generate` הרגיל;
   Strategy UI; Decision Review; Behavioral/Decision Independence.
-- **DNA Grounding Remediation — תשתית בלבד, לא הופעלה** (2026-09-16,
-  Autonomous Unit 3, בהמשך ל-Autonomous Unit 1 [Evidence Grounding Audit,
-  read-only] ו-Autonomous Unit 2 [architecture design, read-only]): בונה
+- **DNA Grounding Remediation — תשתית (2026-09-16); המיגרציה מוחלת וה-remediation
+  האמיתי רץ בפועל על שתי ההשערות (תוקן במסמך 2026-09-22, אומת קריאה-בלבד)**
+  (2026-09-16, Autonomous Unit 3, בהמשך ל-Autonomous Unit 1 [Evidence Grounding
+  Audit, read-only] ו-Autonomous Unit 2 [architecture design, read-only]): בונה
   את המנגנון האחיד, ניתן-לשימוש-חוזר, שנדרש כדי לתקן גרסאות DNA
   שהראיה שלהן כבר לא עומדת ב-Evidence Grounding (commit `25fe506`) —
-  **בלי לבצע את התיקון בפועל על שתי ההשערות שכבר אובחנו** (`699cdb50`,
-  `e1239589`, ר' Unit 1). זו במפורש **יחידת תשתית**, לא remediation
-  אמיתי — migration טרם הורצה, אין דאטה אמיתי שהשתנה.
+  **ביחידה הזו עצמה, בלי לבצע את התיקון בפועל** על שתי ההשערות שכבר אובחנו
+  (`699cdb50`, `e1239589`, ר' Unit 1); זו הייתה במפורש **יחידת תשתית**, לא
+  remediation אמיתי. **מאז (עדיין ב-2026-09-16, לפי timestamp על ה-DB
+  האמיתי):** migration `0008` הוחלה וה-remediation האמיתי רץ בפועל —
+  `699cdb50` קיבל `v2` (`system_grounding_revalidation`, 3 checks אמיתיים,
+  ציטוט אחד `unsupported` בנימוק אמיתי מצוטט מהתשובה), `e1239589` קיבל `v2`
+  (4 checks, 3 מתוכם `unsupported`) — בדיוק כפי שתואר כ"נדרש" בשורות למטה.
+  התיעוד כאן לא עודכן בזמן אמת; זה תוקן עכשיו בקריאה-בלבד ישירה על ה-DB
+  האמיתי, לא בהנחה.
 
-  **סכימה חדשה (migration `0008_numerous_lily_hollister.sql`, נכתבה
-  בלבד, לא הורצה — ר' Migration rule):** טבלה חדשה
+  **סכימה חדשה (migration `0008_numerous_lily_hollister.sql`, מוחלת על
+  ה-DB האמיתי — ר' Migration rule):** טבלה חדשה
   `dna_evidence_grounding_checks` (`id, dna_hypothesis_version_id FK,
   evidence_id FK, verdict(supported|unsupported), reason, checked_at`,
   `UNIQUE(dna_hypothesis_version_id, evidence_id)` בשם מפורש — לא
@@ -479,9 +514,9 @@ grounding checks scoped-לגרסה מועתקים קדימה במפורש כדי
 
   **תיעוד DNA schema:** ר' `docs/data-model.md` §2 לפירוט המלא.
 
-  **מפורשות לא נבנה/לא בוצע ביחידה הזו:** התיקון האמיתי על `699cdb50`
-  ו-`e1239589` (ממתין ל-unit נפרד, מאושר בנפרד, אחרי הרצת migration
-  0008); הרצת ה-migration עצמה על ה-DB האמיתי; שינוי כלשהו ל-grounding
+  **מפורשות לא נבנה/לא בוצע ביחידה הזו (בוצע מאוחר יותר, ר' העדכון למעלה):**
+  התיקון האמיתי על `699cdb50` ו-`e1239589`; הרצת ה-migration עצמה על ה-DB
+  האמיתי. **עדיין מחוץ ל-scope גם היום:** שינוי כלשהו ל-grounding
   הרגיל בתוך `dna.generate` (ממשיך לא לכתוב ל-`dna_evidence_grounding_checks`
   בכוונה — אינטגרציה עתידית נפרדת, לא "כבר שיש טבלה"); Strategy
   Grounding Hardening; UI redesign ל-DNA page.
@@ -950,3 +985,14 @@ grounding checks scoped-לגרסה מועתקים קדימה במפורש כדי
   `sizeDollars=500`) מוכיחים שהפורמט לא מציג את השניים בצורה שניתנת
   לבלבול. **סוגר רק את המנגנון הקונקרטי הזה** — לא את בעיית ה-precedence
   הרחבה יותר, ר' "פתוח" מעל.
+
+### פתוח — ניקוי משקיעים סינתטיים מה-DB האמיתי (נמצא 2026-09-22)
+- **מה:** לפני ה-guard ב-`tests/support/` (Test DB Safety), `vitest run` רץ מול
+  ה-`DATABASE_URL` מ-`.env` — כלומר ה-DB האמיתי. נמדד (קריאה בלבד): 623 שורות
+  `investors`, מהן ~605 fixtures סינתטיים של טסטים (2026-08-13 ואילך, ~100 ב-2026-09-19
+  לבדו) עם כל ההיסטוריה הכבדה שכתבו. המשקיע האמיתי (`0dc4b076…`) לא מושפע —
+  כל הניתוחים מסוננים לפי `investor_id`.
+- **למה לא נוקה:** הטבלאות immutable (insert-only) ו-DELETE ישיר הוא פעולה הרסנית
+  לפי AGENTS.md — נדרש אישור מפורש + גיבוי; לא בוצע.
+- **החלטה נדרשת:** האם למחוק (ואיך, ב-tx אחד לפי `investor_id` של ה-fixtures בלבד) או להשאיר.
+  ה-guard מונע הצטברות נוספת.

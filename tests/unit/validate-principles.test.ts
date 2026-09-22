@@ -4,6 +4,7 @@ import {
   validateProposedObservedPrinciples,
 } from "@/lib/strategy/validate-principles";
 import type { ProposedDeclaredPrinciple, ProposedObservedPrinciple } from "@/lib/ai/strategy";
+import { resolverFromCaseKeys } from "../helpers/independence";
 
 // Each answer id is its own independent case (id -> id) unless a test
 // explicitly wants two ids to resolve to the same underlying transaction.
@@ -77,7 +78,7 @@ describe("validateProposedObservedPrinciples", () => {
         ],
       },
     ];
-    const result = validateProposedObservedPrinciples(proposed, caseKeys);
+    const result = validateProposedObservedPrinciples(proposed, resolverFromCaseKeys(caseKeys));
     expect(result[0]?.supportingCount).toBe(3);
     expect(result[0]?.evidenceStrength).toBe("moderate"); // 3 total, ratio 1.0, but total<5
   });
@@ -94,13 +95,13 @@ describe("validateProposedObservedPrinciples", () => {
         evidence: [{ interviewAnswerId: "a1", stance: "supporting", description: "x" }],
       },
     ];
-    const result = validateProposedObservedPrinciples(proposed, caseKeys);
+    const result = validateProposedObservedPrinciples(proposed, resolverFromCaseKeys(caseKeys));
     expect(result).toHaveLength(1);
     expect(result[0]?.statement).toBe("Real evidence behind this one.");
   });
 
   it("returns an empty list for an empty proposal", () => {
-    expect(validateProposedObservedPrinciples([], new Map())).toEqual([]);
+    expect(validateProposedObservedPrinciples([], resolverFromCaseKeys(new Map()))).toEqual([]);
   });
 
   // Regression coverage for the same real gap as validate-hypotheses.test.ts:
@@ -122,7 +123,7 @@ describe("validateProposedObservedPrinciples", () => {
         ],
       },
     ];
-    const result = validateProposedObservedPrinciples(proposed, caseKeys);
+    const result = validateProposedObservedPrinciples(proposed, resolverFromCaseKeys(caseKeys));
     expect(result[0]?.evidence).toHaveLength(3);
     expect(result[0]?.supportingCount).toBe(2);
   });

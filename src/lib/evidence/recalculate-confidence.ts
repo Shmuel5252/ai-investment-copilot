@@ -82,6 +82,9 @@ export function buildRecalculatedDnaVersion(base: DnaVersionRow, plan: AppendRec
     supportingEvidenceCount: plan.supportingEvidenceCount,
     contradictingEvidenceCount: plan.contradictingEvidenceCount,
     evidenceStrength: plan.recomputedTier,
+    // Same counts, same evidence: the basis that explains them is carried
+    // forward, so a confidence-only version never reads as "legacy".
+    independenceBasisJson: base.independenceBasisJson,
     createdBy: CONFIDENCE_RECALCULATION_PROVENANCE,
     changeReason: plan.changeReason,
   };
@@ -95,6 +98,7 @@ export function buildRecalculatedStrategyVersion(base: StrategyVersionRow, plan:
     supportingEvidenceCount: plan.supportingEvidenceCount,
     contradictingEvidenceCount: plan.contradictingEvidenceCount,
     evidenceStrength: plan.recomputedTier,
+    independenceBasisJson: base.independenceBasisJson,
     createdBy: CONFIDENCE_RECALCULATION_PROVENANCE,
     changeReason: plan.changeReason,
   };

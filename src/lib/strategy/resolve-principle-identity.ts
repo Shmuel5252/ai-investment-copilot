@@ -1,5 +1,9 @@
-import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evidence-strength";
-import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
+import type { EvidenceStrength } from "@/lib/dna/evidence-strength";
+import {
+  assessCitations,
+  type EvidenceIndependenceResolver,
+  type IndependenceBasis,
+} from "@/lib/evidence/resolve-independence";
 import type { ValidatedObservedPrinciple, ValidatedPrincipleEvidence } from "./validate-principles";
 import type { HypothesisMatchCandidate, HypothesisMatchResult } from "@/lib/ai/dna-identity";
 
@@ -57,8 +61,24 @@ export interface ExistingEvidenceForCounting {
 export interface ExistingObservedPrincipleForMatching {
   id: string;
   statementText: string;
-  /** Every already-persisted Evidence citation for this identity, across all its versions — Evidence rows are keyed by the identity, not the version, so this is naturally cumulative. MUST already be filtered by the caller to identities whose current version has principleType==="observed" — see this module's own header comment. */
+  /**
+   * The EFFECTIVE evidence of the identity's CURRENT version — what its
+   * counts actually reflect (see src/lib/evidence/identity-evidence-for-counting.ts).
+   * Never the raw pool. MUST already be filtered by the caller to identities
+   * whose current version has principleType==="observed" — see this module's
+   * own header comment.
+   */
   evidenceForCounting: ExistingEvidenceForCounting[];
+  /**
+   * Citations the identity's CURRENT version explicitly excluded (grounding
+   * remediation verdict "unsupported", or no verdict on a checked version).
+   * They stay excluded: re-presenting one — even if grounding happens to
+   * accept it this time — neither counts nor mints a version. An explicit
+   * rejection is only ever revisited by an explicit re-grounding (remediation),
+   * never by identity resolution, so AI nondeterminism cannot raise confidence.
+   * Empty for a version with no grounding checks (the approved legacy fallback).
+   */
+  rejectedEvidence: ExistingEvidenceForCounting[];
 }
 
 export type PrincipleIdentityResolution =
@@ -69,6 +89,7 @@ export type PrincipleIdentityResolution =
       supportingCount: number;
       contradictingCount: number;
       evidenceStrength: EvidenceStrength;
+      independenceBasis: IndependenceBasis;
     }
   | {
       action: "new_version";
@@ -80,6 +101,7 @@ export type PrincipleIdentityResolution =
       supportingCount: number;
       contradictingCount: number;
       evidenceStrength: EvidenceStrength;
+      independenceBasis: IndependenceBasis;
     }
   | {
       // Matched an existing identity, but every cited case was already
@@ -107,13 +129,17 @@ interface Group {
   statement: string;
   isExisting: boolean;
   existingEvidenceForCounting: ExistingEvidenceForCounting[];
+  /** "answerId::stance" keys the identity's current version explicitly excluded. */
+  rejected: ReadonlySet<string>;
+  /** A proposal in this batch matched (or created) this group — even if every citation was suppressed. */
+  touched: boolean;
   newEvidence: ValidatedPrincipleEvidence[];
 }
 
 export async function resolveObservedPrincipleIdentities(
   groundedPrinciples: readonly ValidatedObservedPrinciple[],
   existing: readonly ExistingObservedPrincipleForMatching[],
-  answerCaseKeys: ReadonlyMap<string, string>,
+  independence: EvidenceIndependenceResolver,
   classifyMatch: ObservedPrincipleMatchFn
 ): Promise<PrincipleIdentityResolution[]> {
   const pool: HypothesisMatchCandidate[] = existing.map((p) => ({ id: p.id, statementText: p.statementText }));
@@ -124,6 +150,8 @@ export async function resolveObservedPrincipleIdentities(
       statement: p.statementText,
       isExisting: true,
       existingEvidenceForCounting: p.evidenceForCounting,
+      rejected: new Set(p.rejectedEvidence.map((e) => `${e.interviewAnswerId}::${e.stance}`)),
+      touched: false,
       newEvidence: [],
     });
   }
@@ -135,7 +163,10 @@ export async function resolveObservedPrincipleIdentities(
     const target = match.matchedId !== null ? groups.get(match.matchedId) : undefined;
 
     if (target) {
-      target.newEvidence.push(...principle.evidence);
+      target.touched = true;
+      target.newEvidence.push(
+        ...principle.evidence.filter((e) => !target.rejected.has(`${e.interviewAnswerId}::${e.stance}`))
+      );
     } else {
       syntheticCounter += 1;
       const newId = `__new_${syntheticCounter}__`;
@@ -144,6 +175,8 @@ export async function resolveObservedPrincipleIdentities(
         statement: principle.statement,
         isExisting: false,
         existingEvidenceForCounting: [],
+        rejected: new Set(),
+        touched: true,
         newEvidence: [...principle.evidence],
       });
       // Available for later proposals in this SAME batch to match against
@@ -155,34 +188,37 @@ export async function resolveObservedPrincipleIdentities(
   const resolutions: PrincipleIdentityResolution[] = [];
 
   for (const group of groups.values()) {
-    if (group.newEvidence.length === 0) continue; // an existing principle nothing in this batch touched
+    if (!group.touched) continue; // an existing principle nothing in this batch touched
+    if (group.newEvidence.length === 0) {
+      // Matched, but every cited pair is one this identity's current version explicitly rejected.
+      resolutions.push({ action: "no_new_information", principleId: group.id, statement: group.statement });
+      continue;
+    }
 
     const dedupedNewEvidence = dedupeEvidence(group.newEvidence);
 
     if (group.isExisting) {
       // Defensive, same reasoning as resolve-hypothesis-identity.ts: an
       // already-persisted citation's InterviewAnswer isn't guaranteed
-      // resolvable at read time (nothing supersedes one today, but
-      // nothing here should assume it never will) — excluding an
-      // unresolvable old citation is the conservative choice.
+      // resolvable at read time — excluding an unresolvable old citation
+      // is the conservative choice. The genuinely-new gate is the SAME one
+      // DNA uses: a strict increase in the number of STRONG groups (see
+      // resolve-hypothesis-identity.ts) — recording a citation is not
+      // proving a new independent case.
       const resolvableExisting = group.existingEvidenceForCounting.filter((e) =>
-        answerCaseKeys.has(e.interviewAnswerId)
+        independence.hasAnswer(e.interviewAnswerId)
       );
-      const oldCaseKeys = new Set(resolvableExisting.map((e) => answerCaseKeys.get(e.interviewAnswerId)!));
+      const oldGroupCount = independence.resolve(resolvableExisting).groups.length;
       const combinedForCounting = [...resolvableExisting, ...dedupedNewEvidence];
-      const combinedCaseKeys = new Set(combinedForCounting.map((e) => answerCaseKeys.get(e.interviewAnswerId)!));
+      const combined = assessCitations(independence, combinedForCounting);
 
-      const genuinelyNew = combinedCaseKeys.size > oldCaseKeys.size;
+      const genuinelyNew = combined.independenceBasis.groups.length > oldGroupCount;
 
       if (!genuinelyNew) {
         resolutions.push({ action: "no_new_information", principleId: group.id, statement: group.statement });
         continue;
       }
 
-      const { supportingCount, contradictingCount } = countIndependentCases(
-        combinedForCounting,
-        (e) => answerCaseKeys.get(e.interviewAnswerId)!
-      );
       const alreadyPersisted = new Set(
         group.existingEvidenceForCounting.map((e) => `${e.interviewAnswerId}::${e.stance}`)
       );
@@ -194,22 +230,17 @@ export async function resolveObservedPrincipleIdentities(
         principleId: group.id,
         statement: group.statement,
         newEvidence: evidenceToInsert,
-        supportingCount,
-        contradictingCount,
-        evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
+        supportingCount: combined.supportingCount,
+        contradictingCount: combined.contradictingCount,
+        evidenceStrength: combined.evidenceStrength,
+        independenceBasis: combined.independenceBasis,
       });
     } else {
-      const { supportingCount, contradictingCount } = countIndependentCases(
-        dedupedNewEvidence,
-        (e) => answerCaseKeys.get(e.interviewAnswerId)!
-      );
       resolutions.push({
         action: "new_identity",
         statement: group.statement,
         evidence: dedupedNewEvidence,
-        supportingCount,
-        contradictingCount,
-        evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
+        ...assessCitations(independence, dedupedNewEvidence),
       });
     }
   }

@@ -8,6 +8,7 @@ import {
   validateProposedObservedPrinciples,
 } from "@/lib/strategy/validate-principles";
 import { validateProposedHypotheses } from "@/lib/dna/validate-hypotheses";
+import { resolverFromCaseKeys } from "../helpers/independence";
 
 // The only mock is the network boundary (same convention as
 // dna-grounding.test.ts): zero real API calls. Everything under test —
@@ -81,7 +82,7 @@ const CALLERS: CallerConfig[] = [
     domainInvalidItems: evidenceShapedInvalid,
     itemWithHallucinatedCitation: { statement: "claim", evidence: [ev("a1"), ev("hallucinated-id")] },
     citedIdsOf: (v) => (v as { evidence: { interviewAnswerId: string }[] }).evidence.map((e) => e.interviewAnswerId),
-    validate: (p) => validateProposedObservedPrinciples(p as never, CASE_KEYS),
+    validate: (p) => validateProposedObservedPrinciples(p as never, resolverFromCaseKeys(CASE_KEYS)),
     statementOf: (v) => (v as { statement: string }).statement,
   },
   {
@@ -116,7 +117,7 @@ const CALLERS: CallerConfig[] = [
     domainInvalidItems: evidenceShapedInvalid,
     itemWithHallucinatedCitation: { statement: "claim", evidence: [ev("a1"), ev("hallucinated-id")] },
     citedIdsOf: (v) => (v as { evidence: { interviewAnswerId: string }[] }).evidence.map((e) => e.interviewAnswerId),
-    validate: (p) => validateProposedHypotheses(p as never, CASE_KEYS),
+    validate: (p) => validateProposedHypotheses(p as never, resolverFromCaseKeys(CASE_KEYS)),
     statementOf: (v) => (v as { statement: string }).statement,
   },
 ];

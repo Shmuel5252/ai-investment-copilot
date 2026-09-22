@@ -1,5 +1,4 @@
-import { calculateEvidenceStrength } from "@/lib/dna/evidence-strength";
-import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
+import { assessCitations, type EvidenceIndependenceResolver } from "@/lib/evidence/resolve-independence";
 import type { ValidatedObservedPrinciple, ValidatedPrincipleEvidence } from "./validate-principles";
 import type { EvidenceGroundingCheckInput, EvidenceGroundingResult } from "@/lib/ai/dna-grounding";
 
@@ -8,8 +7,8 @@ import type { EvidenceGroundingCheckInput, EvidenceGroundingResult } from "@/lib
 // ValidatedObservedPrinciple (validate-principles.ts) is structurally
 // identical to ValidatedHypothesis (statement/evidence/supportingCount/
 // contradictingCount/evidenceStrength), so this is a near-mechanical
-// port, not a redesign — same reasoning, same production helpers reused
-// (countIndependentCases, calculateEvidenceStrength), same injected
+// port, not a redesign — same reasoning, same shared independence
+// resolver (assessCitations — one algorithm for DNA and Strategy), same injected
 // checkEvidenceGrounding() reused UNMODIFIED (re-verified generic before
 // this task wired it in — its interface carries no DNA-specific types).
 //
@@ -37,8 +36,8 @@ export interface StrategyGroundingRunResult {
 // Runs every (principle, citation) pair through the grounding check,
 // keeps only citations that come back `supported`, then recomputes
 // supportingCount/contradictingCount/evidenceStrength from the SURVIVING
-// citations only, via the exact same shared countIndependentCases()/
-// calculateEvidenceStrength() every other path uses. A principle left
+// citations only, via the exact same shared independence resolver
+// (assessCitations) every other path uses. A principle left
 // with zero surviving citations is dropped entirely — the same "no real
 // evidence, not a thin principle, not an observed principle at all" rule
 // validateProposedObservedPrinciples() already applies to hallucinated
@@ -46,7 +45,7 @@ export interface StrategyGroundingRunResult {
 export async function groundValidatedObservedPrinciples(
   principles: readonly ValidatedObservedPrinciple[],
   answerTextById: ReadonlyMap<string, string>,
-  answerCaseKeys: ReadonlyMap<string, string>,
+  independence: EvidenceIndependenceResolver,
   checkGrounding: StrategyGroundingCheckFn
 ): Promise<StrategyGroundingRunResult> {
   const result: ValidatedObservedPrinciple[] = [];
@@ -100,17 +99,10 @@ export async function groundValidatedObservedPrinciples(
       continue;
     }
 
-    const { supportingCount, contradictingCount } = countIndependentCases(
-      groundedEvidence,
-      (e) => answerCaseKeys.get(e.interviewAnswerId)!
-    );
-
     result.push({
       statement: principle.statement,
       evidence: groundedEvidence,
-      supportingCount,
-      contradictingCount,
-      evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
+      ...assessCitations(independence, groundedEvidence),
     });
   }
 

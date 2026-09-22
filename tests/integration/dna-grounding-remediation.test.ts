@@ -28,6 +28,7 @@ import {
 import { getEvidenceForDnaHypothesis, getEffectiveEvidenceForDnaHypothesisVersion } from "@/db/repositories/evidence";
 import { insertInterviewSession, insertInterviewAnswer } from "@/db/repositories/interview";
 import { isUniqueViolation } from "@/db/errors";
+import { fixtureBasis } from "../helpers/independence";
 
 const client = postgres(process.env.DATABASE_URL!, { max: 5 });
 const db = drizzle(client, { schema });
@@ -92,6 +93,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const rawEvidence = await getEvidenceForDnaHypothesis(db, hypothesis.id);
 
@@ -115,6 +117,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const rawEvidence = await getEvidenceForDnaHypothesis(db, hypothesis.id);
     const sameChecks = [{ evidenceId: rawEvidence[0]!.id, verdict: "supported" as const, reason: "matches" }];
@@ -147,6 +150,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
       supportingCount: 2,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const rawEvidence = await getEvidenceForDnaHypothesis(db, hypothesis.id);
     const survivorId = rawEvidence.find((e) => e.interviewAnswerId === answerAId)!.id;
@@ -158,6 +162,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
       {
         statementText: v1.statementText,
         evidenceStrength: "insufficient_evidence",
+        independenceBasis: fixtureBasis(),
         supportingEvidenceCount: 1,
         contradictingEvidenceCount: 0,
         changeReason: "test remediation",
@@ -201,6 +206,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
 
     const makeCall = () =>
@@ -210,6 +216,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
         {
           statementText: "Race base statement.",
           evidenceStrength: "insufficient_evidence",
+          independenceBasis: fixtureBasis(),
           supportingEvidenceCount: 1,
           contradictingEvidenceCount: 0,
           changeReason: "concurrent remediation race",
@@ -247,6 +254,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const { hypothesis: hypothesisB } = await insertDnaHypothesisWithEvidence(db, investorId, {
       statement: "Hypothesis B.",
@@ -254,6 +262,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const evidenceOfB = (await getEvidenceForDnaHypothesis(db, hypothesisB.id))[0]!;
 
@@ -264,6 +273,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
         {
           statementText: "Hypothesis A, extended.",
           evidenceStrength: "insufficient_evidence",
+          independenceBasis: fixtureBasis(),
           supportingEvidenceCount: 1,
           contradictingEvidenceCount: 0,
           changeReason: "cross-identity attempt",
@@ -289,6 +299,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const { hypothesis: hypothesisB } = await insertDnaHypothesisWithEvidence(db, investorId, {
       statement: "Hypothesis B2.",
@@ -296,6 +307,7 @@ describe("DNA Grounding Remediation — version-aware evidence + grounding-check
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
     const evidenceOfB = (await getEvidenceForDnaHypothesis(db, hypothesisB.id))[0]!;
 

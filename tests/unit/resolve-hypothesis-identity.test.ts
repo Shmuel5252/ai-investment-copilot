@@ -14,6 +14,7 @@ import {
   type HypothesisMatchFn,
 } from "@/lib/dna/resolve-hypothesis-identity";
 import type { ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
+import { fixtureBasis, resolverFromCaseKeys } from "../helpers/independence";
 
 function hypothesis(statement: string, evidence: ValidatedHypothesis["evidence"]): ValidatedHypothesis {
   return {
@@ -22,6 +23,7 @@ function hypothesis(statement: string, evidence: ValidatedHypothesis["evidence"]
     supportingCount: evidence.length,
     contradictingCount: 0,
     evidenceStrength: "insufficient_evidence",
+    independenceBasis: fixtureBasis(),
   };
 }
 
@@ -31,6 +33,7 @@ describe("resolveHypothesisIdentities", () => {
       {
         id: "old-leverage",
         statementText: "You are cautious about using leverage without conviction.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "sqqq-answer", stance: "supporting" }],
       },
     ];
@@ -47,7 +50,7 @@ describe("resolveHypothesisIdentities", () => {
     const resolutions = await resolveHypothesisIdentities(
       proposed,
       existing,
-      new Map([["sqqq-answer", "SQQQ#1"]]),
+      resolverFromCaseKeys(new Map([["sqqq-answer", "SQQQ#1"]])),
       classifyMatch
     );
 
@@ -78,6 +81,7 @@ describe("resolveHypothesisIdentities", () => {
       {
         id: "old-narrative",
         statementText: "You are drawn to high-profile, high-momentum names as major bets.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "spcx-answer", stance: "supporting" }],
       },
     ];
@@ -99,10 +103,10 @@ describe("resolveHypothesisIdentities", () => {
     const resolutions = await resolveHypothesisIdentities(
       proposed,
       existing,
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["spcx-answer", "SPCX#1"],
         ["mp-answer", "MP#1"],
-      ]),
+      ])),
       classifyMatch
     );
 
@@ -143,10 +147,10 @@ describe("resolveHypothesisIdentities", () => {
     const resolutions = await resolveHypothesisIdentities(
       proposed,
       [],
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["mp-1", "MP#1"],
         ["mp-2", "MP#1"], // same episode, same case key — MP's own lifecycle
-      ]),
+      ])),
       classifyMatch
     );
 
@@ -164,6 +168,7 @@ describe("resolveHypothesisIdentities", () => {
       {
         id: "fear-sell",
         statementText: "You tend to sell winning positions out of fear of losing the gain or a pullback.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "other-answer", stance: "supporting" }],
       },
     ];
@@ -182,7 +187,7 @@ describe("resolveHypothesisIdentities", () => {
     const resolutions = await resolveHypothesisIdentities(
       proposed,
       existing,
-      new Map([["mp-answer", "MP#1"]]),
+      resolverFromCaseKeys(new Map([["mp-answer", "MP#1"]])),
       classifyMatch
     );
 
@@ -195,6 +200,7 @@ describe("resolveHypothesisIdentities", () => {
       {
         id: "untouched",
         statementText: "An existing hypothesis about something else entirely.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "x", stance: "supporting" }],
       },
     ];
@@ -204,10 +210,10 @@ describe("resolveHypothesisIdentities", () => {
     const resolutions = await resolveHypothesisIdentities(
       proposed,
       existing,
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["x", "X#1"],
         ["y", "Y#1"],
-      ]),
+      ])),
       classifyMatch
     );
 
@@ -223,6 +229,7 @@ describe("resolveHypothesisIdentities", () => {
       {
         id: "old-1",
         statementText: "Old statement.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "a", stance: "supporting" }],
       },
     ];
@@ -233,10 +240,10 @@ describe("resolveHypothesisIdentities", () => {
     await resolveHypothesisIdentities(
       proposed,
       existing,
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["a", "A#1"],
         ["b", "B#1"],
-      ]),
+      ])),
       classifyMatch
     );
 
@@ -249,6 +256,7 @@ describe("resolveHypothesisIdentities", () => {
         id: "old-1",
         statementText: "Old statement.",
         // Old version was insufficient_evidence at 1 supporting case.
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "a", stance: "supporting" }],
       },
     ];
@@ -267,11 +275,11 @@ describe("resolveHypothesisIdentities", () => {
     const resolutions = await resolveHypothesisIdentities(
       proposed,
       existing,
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["a", "A#1"],
         ["b", "B#1"],
         ["c", "C#1"],
-      ]),
+      ])),
       classifyMatch
     );
 

@@ -1,5 +1,4 @@
-import { calculateEvidenceStrength } from "./evidence-strength";
-import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
+import { assessCitations, type EvidenceIndependenceResolver } from "@/lib/evidence/resolve-independence";
 import type { ValidatedEvidence, ValidatedHypothesis } from "./validate-hypotheses";
 import type { EvidenceGroundingCheckInput, EvidenceGroundingResult } from "@/lib/ai/dna-grounding";
 
@@ -41,8 +40,8 @@ export interface GroundingRunResult {
 // Runs every (hypothesis, citation) pair through the grounding check,
 // keeps only citations that come back `supported`, then recomputes
 // supportingCount/contradictingCount/evidenceStrength from the SURVIVING
-// citations only, via the exact same shared countIndependentCases() /
-// calculateEvidenceStrength() every other path uses — Evidence Strength
+// citations only, via the exact same shared independence resolver
+// (assessCitations) every other path uses — Evidence Strength
 // stays fully deterministic once the accepted-citation set is settled;
 // the AI's role here is strictly a binary include/exclude gate per
 // citation, never a number, never a confidence score fed into strength.
@@ -53,7 +52,7 @@ export interface GroundingRunResult {
 export async function groundValidatedHypotheses(
   hypotheses: readonly ValidatedHypothesis[],
   answerTextById: ReadonlyMap<string, string>,
-  answerCaseKeys: ReadonlyMap<string, string>,
+  independence: EvidenceIndependenceResolver,
   checkGrounding: GroundingCheckFn
 ): Promise<GroundingRunResult> {
   const result: ValidatedHypothesis[] = [];
@@ -114,17 +113,10 @@ export async function groundValidatedHypotheses(
       continue;
     }
 
-    const { supportingCount, contradictingCount } = countIndependentCases(
-      groundedEvidence,
-      (e) => answerCaseKeys.get(e.interviewAnswerId)!
-    );
-
     result.push({
       statement: hypothesis.statement,
       evidence: groundedEvidence,
-      supportingCount,
-      contradictingCount,
-      evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
+      ...assessCitations(independence, groundedEvidence),
     });
   }
 

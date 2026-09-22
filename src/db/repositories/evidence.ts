@@ -2,6 +2,7 @@ import type { InferInsertModel } from "drizzle-orm";
 import type { db as Db } from "@/db/client";
 import { evidence } from "@/db/schema";
 import { selectEffectiveEvidence } from "@/lib/dna/effective-evidence";
+import { partitionEvidenceForCounting } from "@/lib/evidence/identity-evidence-for-counting";
 
 export type NewEvidence = InferInsertModel<typeof evidence>;
 
@@ -19,10 +20,11 @@ export async function insertEvidence(db: typeof Db, values: NewEvidence) {
 // task. Never removed or narrowed: this is the one place the full
 // citation history stays reachable regardless of what any one version's
 // effective evidence looks like (see getEffectiveEvidenceForDnaHypothesisVersion
-// below for the version-aware read). dna.generate's identity-matching
-// step deliberately keeps using this raw form — matching against
-// existing hypotheses must see everything ever cited, not just what the
-// current version currently counts.
+// below for the version-aware read). Audit and remediation read this raw
+// form. dna.generate's identity matching does NOT: it decides "what is
+// already counted" from getCountingEvidenceForDnaVersion (the effective
+// evidence of the CURRENT version), because counting a citation that
+// grounding rejected would re-inflate S/C on the next generation.
 export async function getEvidenceForDnaHypothesis(db: typeof Db, dnaHypothesisId: string) {
   return db.query.evidence.findMany({
     where: (e, { eq }) => eq(e.dnaHypothesisId, dnaHypothesisId),
@@ -33,11 +35,11 @@ export async function getEvidenceForDnaHypothesis(db: typeof Db, dnaHypothesisId
 // Version-aware/"effective" read (DNA Grounding Remediation task): what
 // THIS specific version's own evidenceStrength/counts actually reflect,
 // not the identity's full raw pool. Falls back to the full raw pool for
-// any version with no persisted grounding-check rows (every version that
-// predates this task, and every ordinary dna.generate new_version, which
-// never writes to dna_evidence_grounding_checks) — see
-// selectEffectiveEvidence's own comment for why that fallback is
-// deliberate, not a gap.
+// any version with no persisted grounding-check rows (every legacy /
+// never-remediated version) — see selectEffectiveEvidence's own comment
+// for why that fallback is deliberate. A dna.generate new_version appended
+// to an identity whose current version HAS checks now carries them forward
+// (checksForAppendedVersion), so it never falls back to raw by accident.
 export async function getEffectiveEvidenceForDnaHypothesisVersion(
   db: typeof Db,
   dnaHypothesisId: string,
@@ -48,6 +50,21 @@ export async function getEffectiveEvidenceForDnaHypothesisVersion(
     getGroundingChecksForDnaHypothesisVersion(db, dnaHypothesisVersionId),
   ]);
   return selectEffectiveEvidence(rawEvidence, groundingChecks);
+}
+
+// What dna.generate's identity matching counts against: the effective
+// evidence of the identity's CURRENT version, plus the citations that
+// version explicitly excluded (which must not re-enter counts).
+export async function getCountingEvidenceForDnaVersion(
+  db: typeof Db,
+  dnaHypothesisId: string,
+  dnaHypothesisVersionId: string
+) {
+  const [rawEvidence, groundingChecks] = await Promise.all([
+    getEvidenceForDnaHypothesis(db, dnaHypothesisId),
+    getGroundingChecksForDnaHypothesisVersion(db, dnaHypothesisVersionId),
+  ]);
+  return partitionEvidenceForCounting(rawEvidence, groundingChecks);
 }
 
 export async function getGroundingChecksForDnaHypothesisVersion(
@@ -62,7 +79,8 @@ export async function getGroundingChecksForDnaHypothesisVersion(
 // Raw/historical — Strategy's mirror of getEvidenceForDnaHypothesis
 // above, unchanged in behavior. Every Evidence row ever attached to this
 // Strategy principle identity, unfiltered by version. Never narrowed —
-// generateObserved's identity-matching step keeps using this raw form,
+// audit and remediation read it; generateObserved's identity matching
+// counts against getCountingEvidenceForStrategyPrincipleVersion instead,
 // same reasoning as DNA's.
 export async function getEvidenceForStrategyPrinciple(db: typeof Db, strategyPrincipleId: string) {
   return db.query.evidence.findMany({
@@ -75,9 +93,9 @@ export async function getEvidenceForStrategyPrinciple(db: typeof Db, strategyPri
 // Hardening task) — Strategy's mirror of
 // getEffectiveEvidenceForDnaHypothesisVersion above. Falls back to the
 // full raw pool for any version with no persisted grounding-check rows
-// (every version that predates this task, and every ordinary
-// generateObserved new_version from identity matching, which never
-// writes to strategy_evidence_grounding_checks).
+// (every legacy / never-remediated version). A generateObserved
+// new_version appended to a principle whose current version HAS checks
+// carries them forward, so it never falls back to raw by accident.
 export async function getEffectiveEvidenceForStrategyPrincipleVersion(
   db: typeof Db,
   strategyPrincipleId: string,
@@ -88,6 +106,19 @@ export async function getEffectiveEvidenceForStrategyPrincipleVersion(
     getGroundingChecksForStrategyPrincipleVersion(db, strategyPrincipleVersionId),
   ]);
   return selectEffectiveEvidence(rawEvidence, groundingChecks);
+}
+
+// Strategy's mirror of getCountingEvidenceForDnaVersion.
+export async function getCountingEvidenceForStrategyPrincipleVersion(
+  db: typeof Db,
+  strategyPrincipleId: string,
+  strategyPrincipleVersionId: string
+) {
+  const [rawEvidence, groundingChecks] = await Promise.all([
+    getEvidenceForStrategyPrinciple(db, strategyPrincipleId),
+    getGroundingChecksForStrategyPrincipleVersion(db, strategyPrincipleVersionId),
+  ]);
+  return partitionEvidenceForCounting(rawEvidence, groundingChecks);
 }
 
 export async function getGroundingChecksForStrategyPrincipleVersion(

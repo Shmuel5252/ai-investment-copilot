@@ -1,11 +1,15 @@
-import { calculateEvidenceStrength, type EvidenceStrength } from "./evidence-strength";
-import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
+import type { EvidenceStrength } from "./evidence-strength";
+import {
+  assessCitations,
+  type EvidenceIndependenceResolver,
+  type IndependenceBasis,
+} from "@/lib/evidence/resolve-independence";
 import type { EvidenceGroundingCheckInput, EvidenceGroundingResult } from "@/lib/ai/dna-grounding";
 
 // DNA Grounding Remediation — a SEPARATE orchestration from
 // groundValidatedHypotheses() (ground-evidence.ts), even though both
 // call the same injected grounding function and both recompute counts
-// via the same countIndependentCases()/calculateEvidenceStrength(). That
+// via the same shared independence resolver (assessCitations). That
 // one runs BEFORE anything is persisted, over AI-proposed evidence that
 // has no database row yet (ValidatedEvidence has no `id`). This one runs
 // AFTER persistence, re-checking evidence that already has a real
@@ -45,6 +49,7 @@ export interface RemediationNewVersion {
   evidenceStrength: EvidenceStrength;
   supportingEvidenceCount: number;
   contradictingEvidenceCount: number;
+  independenceBasis: IndependenceBasis;
   changeReason: string;
 }
 
@@ -75,8 +80,8 @@ export interface PlanGroundingRemediationInput {
   rawEvidence: readonly PersistedEvidenceForRemediation[];
   /** answer.id -> real, persisted answerText — the sole source of truth for grounding, exactly as checkEvidenceGrounding requires. Never the evidence row's own AI-written description. */
   answerTextById: ReadonlyMap<string, string>;
-  /** answer.id -> independent case key — the SAME buildAnswerCaseKeys()/deriveEpisodeKeys() output dna.generate uses; never a second construction of it here. */
-  answerCaseKeys: ReadonlyMap<string, string>;
+  /** The SAME shared independence resolver dna.generate counts through — never a second construction of it here. */
+  independence: EvidenceIndependenceResolver;
   /**
    * Evidence ids already logged "supported" against currentVersion.id via
    * a prior dna_evidence_grounding_checks pass. `null` means this version
@@ -125,7 +130,7 @@ export async function planGroundingRemediation(
   input: PlanGroundingRemediationInput,
   checkGrounding: RemediationGroundingFn
 ): Promise<RemediationPlan> {
-  const { currentVersion, rawEvidence, answerTextById, answerCaseKeys, alreadyGroundedEvidenceIds } = input;
+  const { currentVersion, rawEvidence, answerTextById, independence, alreadyGroundedEvidenceIds } = input;
 
   const checks: RemediationCheckResult[] = [];
   const freshSupportedIds = new Set<string>();
@@ -191,9 +196,9 @@ export async function planGroundingRemediation(
   }
 
   const survivingEvidence = rawEvidence.filter((e) => freshSupportedIds.has(e.id));
-  const { supportingCount, contradictingCount } = countIndependentCases(
-    survivingEvidence,
-    (e) => (e.interviewAnswerId !== null ? answerCaseKeys.get(e.interviewAnswerId)! : e.id)
+  const assessed = assessCitations(
+    independence,
+    survivingEvidence.map((e) => ({ interviewAnswerId: e.interviewAnswerId, stance: e.stance, evidenceId: e.id }))
   );
 
   return {
@@ -201,9 +206,10 @@ export async function planGroundingRemediation(
     checks,
     version: {
       statementText: currentVersion.statementText,
-      evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
-      supportingEvidenceCount: supportingCount,
-      contradictingEvidenceCount: contradictingCount,
+      evidenceStrength: assessed.evidenceStrength,
+      supportingEvidenceCount: assessed.supportingCount,
+      contradictingEvidenceCount: assessed.contradictingCount,
+      independenceBasis: assessed.independenceBasis,
       changeReason: buildChangeReason(checks, baselineIds),
     },
   };

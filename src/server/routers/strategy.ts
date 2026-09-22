@@ -14,7 +14,7 @@ import {
   getLatestStrategyPrincipleVersion,
 } from "@/db/repositories/strategy";
 import {
-  getEvidenceForStrategyPrinciple,
+  getCountingEvidenceForStrategyPrincipleVersion,
   getEffectiveEvidenceForStrategyPrincipleVersion,
 } from "@/db/repositories/evidence";
 import { extractDeclaredPrinciples, proposeObservedPrinciples } from "@/lib/ai/strategy";
@@ -30,9 +30,8 @@ import {
   filterToObservedCandidates,
   type ExistingObservedPrincipleForMatching,
 } from "@/lib/strategy/resolve-principle-identity";
-import { isUniqueViolation } from "@/db/errors";
-import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
-import { buildAnswerCaseKeys } from "@/lib/evidence/build-answer-case-keys";
+import { isUniqueViolation, StaleIdentityVersionError } from "@/db/errors";
+import { loadIndependenceResolver } from "@/lib/evidence/load-independence-resolver";
 
 export const strategyRouter = router({
   // Fixed baseline risk principles (docs/architecture.md §2.4) — code
@@ -120,15 +119,13 @@ export const strategyRouter = router({
     const proposed = await proposeObservedPrinciples(
       answers.map((a) => ({ id: a.id, questionText: a.questionText, answerText: a.answerText }))
     );
-    // Same shared fix as dna.ts's generate (Investment Episode
-    // Independence design, this session): dedupe evidence by underlying
-    // investment EPISODE, not raw answer id or raw transaction id, before
-    // it feeds evidenceStrength — the exact same shared function and the
-    // exact same episode derivation dna.ts uses, never a second
-    // implementation of either.
-    const positions = await computePositionsForInvestor(db, ctx.investorId);
-    const answerCaseKeys = buildAnswerCaseKeys(answers, positions.episodeKeyByTransactionId);
-    const structurallyValidated = validateProposedObservedPrinciples(proposed, answerCaseKeys);
+    // Same shared resolver as dna.ts's generate (Decision Independence
+    // V1): evidence is collapsed by independent decision — position
+    // episode, confirmed link, or a corroborated cross-ticker weak edge —
+    // before it feeds evidenceStrength. One algorithm for DNA and
+    // Strategy, never a second implementation.
+    const independence = await loadIndependenceResolver(db, ctx.investorId, answers);
+    const structurallyValidated = validateProposedObservedPrinciples(proposed, independence);
 
     // Evidence Grounding — same real gap class DNA had, never checked for
     // Strategy before this task: a citation can reference a real answer,
@@ -140,7 +137,7 @@ export const strategyRouter = router({
     const { principles: grounded } = await groundValidatedObservedPrinciples(
       structurallyValidated,
       answerTextById,
-      answerCaseKeys,
+      independence,
       checkEvidenceGrounding
     );
 
@@ -153,17 +150,25 @@ export const strategyRouter = router({
     // freshly-observed pattern (see resolve-principle-identity.ts's own
     // header comment for why: strategyPrinciples is a heterogeneous
     // identity table DNA's dnaHypotheses has no equivalent split of).
+    //
+    // Same rule as dna.ts: an existing principle's "already counted" set is
+    // the EFFECTIVE evidence of its CURRENT version, never its raw Evidence
+    // pool (which includes citations grounding remediation rejected).
     const allExisting = await listStrategyPrinciplesForInvestor(db, ctx.investorId);
     const existingObserved = filterToObservedCandidates(allExisting);
+    const baseState = new Map<string, { versionId: string | undefined; checkCount: number }>();
     const existingForMatching: ExistingObservedPrincipleForMatching[] = await Promise.all(
       existingObserved.map(async (p) => {
-        const ev = await getEvidenceForStrategyPrinciple(db, p.id);
+        const latest = p.versions[0];
+        const { effective, rejected, checkCount } = latest
+          ? await getCountingEvidenceForStrategyPrincipleVersion(db, p.id, latest.id)
+          : { effective: [], rejected: [], checkCount: 0 };
+        baseState.set(p.id, { versionId: latest?.id, checkCount });
         return {
           id: p.id,
-          statementText: p.versions[0]?.statementText ?? "",
-          evidenceForCounting: ev
-            .filter((e): e is typeof e & { interviewAnswerId: string } => e.interviewAnswerId !== null)
-            .map((e) => ({ interviewAnswerId: e.interviewAnswerId, stance: e.stance })),
+          statementText: latest?.statementText ?? "",
+          evidenceForCounting: effective,
+          rejectedEvidence: rejected,
         };
       })
     );
@@ -171,7 +176,7 @@ export const strategyRouter = router({
     const resolutions = await resolveObservedPrincipleIdentities(
       grounded,
       existingForMatching,
-      answerCaseKeys,
+      independence,
       classifyHypothesisMatch
     );
 
@@ -188,21 +193,28 @@ export const strategyRouter = router({
             supportingCount: resolution.supportingCount,
             contradictingCount: resolution.contradictingCount,
             evidenceStrength: resolution.evidenceStrength,
+            independenceBasis: resolution.independenceBasis,
           })
         );
       } else if (resolution.action === "new_version") {
         try {
           const { version } = await insertObservedPrincipleVersionWithEvidence(db, resolution.principleId, {
+            expectedBaseVersionId: baseState.get(resolution.principleId)!.versionId!,
+            expectedBaseCheckCount: baseState.get(resolution.principleId)!.checkCount,
             statementText: resolution.statement,
             evidenceStrength: resolution.evidenceStrength,
             supportingEvidenceCount: resolution.supportingCount,
             contradictingEvidenceCount: resolution.contradictingCount,
+            independenceBasis: resolution.independenceBasis,
             newEvidence: resolution.newEvidence,
             changeReason: "New evidence from a later interview extended this existing pattern.",
           });
           newVersions.push({ principleId: resolution.principleId, version });
         } catch (err) {
-          if (isUniqueViolation(err, "strategy_principle_versions_strategy_principle_id_version_numbe")) {
+          if (
+            err instanceof StaleIdentityVersionError ||
+            isUniqueViolation(err, "strategy_principle_versions_strategy_principle_id_version_numbe")
+          ) {
             throw new TRPCError({
               code: "BAD_REQUEST",
               message: "Another generation just updated this principle — please try again.",
@@ -239,8 +251,8 @@ export const strategyRouter = router({
   // Evidence" must agree with the CURRENT version's own counts, not show
   // the identity's full raw citation pool unconditionally — mirrors
   // dna.ts's evidence query exactly. Raw/historical access itself is
-  // untouched (getEvidenceForStrategyPrinciple, used as-is by
-  // generateObserved's identity matching above).
+  // untouched (getEvidenceForStrategyPrinciple, used by audit and
+  // remediation).
   evidence: protectedProcedure
     .input(z.object({ strategyPrincipleId: z.string().uuid() }))
     .query(async ({ input }) => {

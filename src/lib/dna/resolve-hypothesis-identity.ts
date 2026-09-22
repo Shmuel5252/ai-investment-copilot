@@ -1,5 +1,9 @@
-import { calculateEvidenceStrength, type EvidenceStrength } from "./evidence-strength";
-import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
+import type { EvidenceStrength } from "./evidence-strength";
+import {
+  assessCitations,
+  type EvidenceIndependenceResolver,
+  type IndependenceBasis,
+} from "@/lib/evidence/resolve-independence";
 import type { ValidatedEvidence, ValidatedHypothesis } from "./validate-hypotheses";
 import type { HypothesisMatchCandidate, HypothesisMatchResult } from "@/lib/ai/dna-identity";
 
@@ -36,8 +40,23 @@ export interface ExistingEvidenceForCounting {
 export interface ExistingHypothesisForMatching {
   id: string;
   statementText: string;
-  /** Every already-persisted Evidence citation for this identity, across all its versions — Evidence rows are keyed by the identity, not the version, so this is naturally cumulative. */
+  /**
+   * The EFFECTIVE evidence of the identity's CURRENT version — what its
+   * counts actually reflect (see src/lib/evidence/identity-evidence-for-counting.ts).
+   * Never the raw pool: raw Evidence is immutable provenance and includes
+   * citations a grounding remediation rejected.
+   */
   evidenceForCounting: ExistingEvidenceForCounting[];
+  /**
+   * Citations the identity's CURRENT version explicitly excluded (grounding
+   * remediation verdict "unsupported", or no verdict on a checked version).
+   * They stay excluded: re-presenting one — even if grounding happens to
+   * accept it this time — neither counts nor mints a version. An explicit
+   * rejection is only ever revisited by an explicit re-grounding (remediation),
+   * never by identity resolution, so AI nondeterminism cannot raise confidence.
+   * Empty for a version with no grounding checks (the approved legacy fallback).
+   */
+  rejectedEvidence: ExistingEvidenceForCounting[];
 }
 
 export type IdentityResolution =
@@ -48,6 +67,7 @@ export type IdentityResolution =
       supportingCount: number;
       contradictingCount: number;
       evidenceStrength: EvidenceStrength;
+      independenceBasis: IndependenceBasis;
     }
   | {
       action: "new_version";
@@ -59,6 +79,7 @@ export type IdentityResolution =
       supportingCount: number;
       contradictingCount: number;
       evidenceStrength: EvidenceStrength;
+      independenceBasis: IndependenceBasis;
     }
   | {
       // Matched an existing identity, but every cited case was already
@@ -89,13 +110,17 @@ interface Group {
   statement: string;
   isExisting: boolean;
   existingEvidenceForCounting: ExistingEvidenceForCounting[];
+  /** "answerId::stance" keys the identity's current version explicitly excluded. */
+  rejected: ReadonlySet<string>;
+  /** A proposal in this batch matched (or created) this group — even if every citation was suppressed. */
+  touched: boolean;
   newEvidence: ValidatedEvidence[];
 }
 
 export async function resolveHypothesisIdentities(
   groundedHypotheses: readonly ValidatedHypothesis[],
   existing: readonly ExistingHypothesisForMatching[],
-  answerCaseKeys: ReadonlyMap<string, string>,
+  independence: EvidenceIndependenceResolver,
   classifyMatch: HypothesisMatchFn
 ): Promise<IdentityResolution[]> {
   const pool: HypothesisMatchCandidate[] = existing.map((h) => ({ id: h.id, statementText: h.statementText }));
@@ -106,6 +131,8 @@ export async function resolveHypothesisIdentities(
       statement: h.statementText,
       isExisting: true,
       existingEvidenceForCounting: h.evidenceForCounting,
+      rejected: new Set(h.rejectedEvidence.map((e) => `${e.interviewAnswerId}::${e.stance}`)),
+      touched: false,
       newEvidence: [],
     });
   }
@@ -117,7 +144,10 @@ export async function resolveHypothesisIdentities(
     const target = match.matchedId !== null ? groups.get(match.matchedId) : undefined;
 
     if (target) {
-      target.newEvidence.push(...hypothesis.evidence);
+      target.touched = true;
+      target.newEvidence.push(
+        ...hypothesis.evidence.filter((e) => !target.rejected.has(`${e.interviewAnswerId}::${e.stance}`))
+      );
     } else {
       syntheticCounter += 1;
       const newId = `__new_${syntheticCounter}__`;
@@ -126,6 +156,8 @@ export async function resolveHypothesisIdentities(
         statement: hypothesis.statement,
         isExisting: false,
         existingEvidenceForCounting: [],
+        rejected: new Set(),
+        touched: true,
         newEvidence: [...hypothesis.evidence],
       });
       // Available for later proposals in this SAME batch to match against
@@ -137,53 +169,57 @@ export async function resolveHypothesisIdentities(
   const resolutions: IdentityResolution[] = [];
 
   for (const group of groups.values()) {
-    if (group.newEvidence.length === 0) continue; // an existing hypothesis nothing in this batch touched
+    if (!group.touched) continue; // an existing hypothesis nothing in this batch touched
+    if (group.newEvidence.length === 0) {
+      // Matched, but every cited pair is one this identity's current version explicitly rejected.
+      resolutions.push({ action: "no_new_information", hypothesisId: group.id, statement: group.statement });
+      continue;
+    }
 
     const dedupedNewEvidence = dedupeEvidence(group.newEvidence);
 
     if (group.isExisting) {
       // Defensive: every CURRENTLY-proposed citation is already
       // guaranteed resolvable (validateProposedHypotheses only lets
-      // through ids answerCaseKeys.has()), but an already-PERSISTED
+      // through ids independence.hasAnswer()), but an already-PERSISTED
       // citation from an earlier round has no such guarantee at read
       // time — if its InterviewAnswer were ever superseded (no code path
       // does this today, but nothing here should assume it never will),
-      // it would no longer appear in answerCaseKeys at all. Excluding an
-      // unresolvable old citation from this round's comparison — rather
-      // than trusting a non-null assertion into an incorrect `undefined`
-      // key — is the conservative choice: at worst it very slightly
-      // undercounts how much was already known, never invents a case
-      // that doesn't exist.
+      // it would no longer be resolvable at all. Excluding an
+      // unresolvable old citation from this round's comparison is the
+      // conservative choice: at worst it very slightly undercounts how
+      // much was already known, never invents a case that doesn't exist.
       const resolvableExisting = group.existingEvidenceForCounting.filter((e) =>
-        answerCaseKeys.has(e.interviewAnswerId)
+        independence.hasAnswer(e.interviewAnswerId)
       );
-      const oldCaseKeys = new Set(resolvableExisting.map((e) => answerCaseKeys.get(e.interviewAnswerId)!));
+      const oldGroupCount = independence.resolve(resolvableExisting).groups.length;
       const combinedForCounting = [...resolvableExisting, ...dedupedNewEvidence];
-      const combinedCaseKeys = new Set(combinedForCounting.map((e) => answerCaseKeys.get(e.interviewAnswerId)!));
+      const combined = assessCitations(independence, combinedForCounting);
 
-      // combinedForCounting always includes every old citation, so this
-      // set can never shrink relative to oldCaseKeys — a strict size
-      // increase is both necessary and sufficient for "at least one
-      // genuinely new independent case arrived this round".
-      const genuinelyNew = combinedCaseKeys.size > oldCaseKeys.size;
+      // Recording a new citation is NOT proving a new independent case. A
+      // citation that lands in an already-counted STRONG group (same
+      // position episode, or joined by a confirmed LinkFact) adds nothing
+      // and must not mint a version. A citation that only a WEAK edge ties
+      // to an existing group is still a possibly-independent case: it is
+      // recorded (evidence is never dropped on a maybe) and S_lb simply
+      // does not rise for it. The strong-group count can only grow when new
+      // evidence adds a group; it can shrink only if a new citation bridges
+      // two existing groups, which is likewise not "a new case".
+      const genuinelyNew = combined.independenceBasis.groups.length > oldGroupCount;
 
       if (!genuinelyNew) {
         resolutions.push({ action: "no_new_information", hypothesisId: group.id, statement: group.statement });
         continue;
       }
 
-      const { supportingCount, contradictingCount } = countIndependentCases(
-        combinedForCounting,
-        (e) => answerCaseKeys.get(e.interviewAnswerId)!
-      );
       // What actually gets INSERTED excludes any (answer, stance) pair
       // already persisted for this identity in an earlier round — a
       // re-citation of the same answer with the same stance contributes
       // no new information and must not appear twice in "View Evidence".
-      // This never affects the count above: countIndependentCases already
-      // collapses by case key regardless of how many raw citations map to
-      // it, so removing an exact-duplicate raw citation before insertion
-      // changes nothing about the case-key set already computed.
+      // This never affects the count above: the resolver already collapses
+      // by group regardless of how many raw citations map to it, so
+      // removing an exact-duplicate raw citation before insertion changes
+      // nothing about the groups already computed.
       const alreadyPersisted = new Set(
         group.existingEvidenceForCounting.map((e) => `${e.interviewAnswerId}::${e.stance}`)
       );
@@ -195,22 +231,17 @@ export async function resolveHypothesisIdentities(
         hypothesisId: group.id,
         statement: group.statement,
         newEvidence: evidenceToInsert,
-        supportingCount,
-        contradictingCount,
-        evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
+        supportingCount: combined.supportingCount,
+        contradictingCount: combined.contradictingCount,
+        evidenceStrength: combined.evidenceStrength,
+        independenceBasis: combined.independenceBasis,
       });
     } else {
-      const { supportingCount, contradictingCount } = countIndependentCases(
-        dedupedNewEvidence,
-        (e) => answerCaseKeys.get(e.interviewAnswerId)!
-      );
       resolutions.push({
         action: "new_identity",
         statement: group.statement,
         evidence: dedupedNewEvidence,
-        supportingCount,
-        contradictingCount,
-        evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
+        ...assessCitations(independence, dedupedNewEvidence),
       });
     }
   }

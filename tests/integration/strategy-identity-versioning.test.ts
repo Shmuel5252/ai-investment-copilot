@@ -17,7 +17,8 @@ import {
   getLatestStrategyPrincipleVersion,
 } from "@/db/repositories/strategy";
 import { insertInterviewSession, insertInterviewAnswer } from "@/db/repositories/interview";
-import { isUniqueViolation } from "@/db/errors";
+import { isUniqueViolation, StaleIdentityVersionError } from "@/db/errors";
+import { fixtureBasis } from "../helpers/independence";
 
 const client = postgres(process.env.DATABASE_URL!, { max: 5 });
 const db = drizzle(client, { schema });
@@ -74,11 +75,15 @@ describe("insertObservedPrincipleVersionWithEvidence", () => {
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
 
     const { version: v2 } = await insertObservedPrincipleVersionWithEvidence(db, principle.id, {
+      expectedBaseVersionId: v1.id,
+      expectedBaseCheckCount: 0,
       statementText: "Original observed statement.",
       evidenceStrength: "moderate",
+      independenceBasis: fixtureBasis(),
       supportingEvidenceCount: 3,
       contradictingEvidenceCount: 0,
       newEvidence: [
@@ -114,18 +119,22 @@ describe("insertObservedPrincipleVersionWithEvidence", () => {
   });
 
   it("a genuine concurrent race on the same identity: exactly the winners get distinct versions, every loser's real Postgres error is classified as this exact constraint", async () => {
-    const { principle } = await insertObservedPrincipleWithEvidence(db, investorId, {
+    const { principle, version: baseVersion } = await insertObservedPrincipleWithEvidence(db, investorId, {
       statement: "Race base statement.",
       evidence: [{ interviewAnswerId: answerAId, stance: "supporting", description: "d1" }],
       supportingCount: 1,
       contradictingCount: 0,
       evidenceStrength: "insufficient_evidence",
+      independenceBasis: fixtureBasis(),
     });
 
     const makeVersionCall = () =>
       insertObservedPrincipleVersionWithEvidence(db, principle.id, {
+        expectedBaseVersionId: baseVersion.id,
+        expectedBaseCheckCount: 0,
         statementText: "Race extended statement.",
         evidenceStrength: "moderate",
+        independenceBasis: fixtureBasis(),
         supportingEvidenceCount: 2,
         contradictingEvidenceCount: 0,
         newEvidence: [],
@@ -141,11 +150,17 @@ describe("insertObservedPrincipleVersionWithEvidence", () => {
     expect(rejected.length).toBeGreaterThan(0);
     expect(fulfilled.length + rejected.length).toBe(CONCURRENT_CALLS);
 
+    // Every rejection is a classified outcome: the real unique-constraint
+    // collision (writers on the same base racing) or the stale-base guard (a
+    // writer arriving after the winner committed).
     for (const r of rejected) {
-      expect(
-        isUniqueViolation(r.reason, "strategy_principle_versions_strategy_principle_id_version_numbe")
-      ).toBe(true);
+      const classified =
+        isUniqueViolation(r.reason, "strategy_principle_versions_strategy_principle_id_version_numbe") ||
+        r.reason instanceof StaleIdentityVersionError;
+      expect(classified).toBe(true);
     }
+    // Every call counted against the SAME base version, so at most one may append.
+    expect(fulfilled).toHaveLength(1);
 
     const versionNumbers = fulfilled.map((r) => r.value.version.versionNumber);
     expect(new Set(versionNumbers).size).toBe(versionNumbers.length);

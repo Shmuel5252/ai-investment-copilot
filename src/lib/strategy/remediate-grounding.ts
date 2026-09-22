@@ -1,5 +1,9 @@
-import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evidence-strength";
-import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
+import type { EvidenceStrength } from "@/lib/dna/evidence-strength";
+import {
+  assessCitations,
+  type EvidenceIndependenceResolver,
+  type IndependenceBasis,
+} from "@/lib/evidence/resolve-independence";
 import type { EvidenceGroundingCheckInput, EvidenceGroundingResult } from "@/lib/ai/dna-grounding";
 import type { PersistedEvidenceForRemediation } from "@/lib/dna/remediate-grounding";
 
@@ -36,6 +40,7 @@ export interface RemediationNewPrincipleVersion {
   evidenceStrength: EvidenceStrength;
   supportingEvidenceCount: number;
   contradictingEvidenceCount: number;
+  independenceBasis: IndependenceBasis;
   changeReason: string;
 }
 
@@ -49,7 +54,8 @@ export interface PlanPrincipleGroundingRemediationInput {
   /** Every Evidence row currently persisted for this principle IDENTITY — raw and unfiltered, since Evidence has no version scoping of its own. */
   rawEvidence: readonly PersistedEvidenceForRemediation[];
   answerTextById: ReadonlyMap<string, string>;
-  answerCaseKeys: ReadonlyMap<string, string>;
+  /** The SAME shared independence resolver DNA counts through. */
+  independence: EvidenceIndependenceResolver;
   /** Evidence ids already logged "supported" against currentVersion.id, or null if this version has never been checked at all. */
   alreadyGroundedEvidenceIds: ReadonlySet<string> | null;
 }
@@ -92,7 +98,7 @@ export async function planPrincipleGroundingRemediation(
   input: PlanPrincipleGroundingRemediationInput,
   checkGrounding: StrategyRemediationGroundingFn
 ): Promise<PrincipleRemediationPlan> {
-  const { currentVersion, rawEvidence, answerTextById, answerCaseKeys, alreadyGroundedEvidenceIds } = input;
+  const { currentVersion, rawEvidence, answerTextById, independence, alreadyGroundedEvidenceIds } = input;
 
   const checks: RemediationCheckResult[] = [];
   const freshSupportedIds = new Set<string>();
@@ -148,9 +154,9 @@ export async function planPrincipleGroundingRemediation(
   }
 
   const survivingEvidence = rawEvidence.filter((e) => freshSupportedIds.has(e.id));
-  const { supportingCount, contradictingCount } = countIndependentCases(
-    survivingEvidence,
-    (e) => (e.interviewAnswerId !== null ? answerCaseKeys.get(e.interviewAnswerId)! : e.id)
+  const assessed = assessCitations(
+    independence,
+    survivingEvidence.map((e) => ({ interviewAnswerId: e.interviewAnswerId, stance: e.stance, evidenceId: e.id }))
   );
 
   return {
@@ -159,9 +165,10 @@ export async function planPrincipleGroundingRemediation(
     version: {
       statementText: currentVersion.statementText,
       principleType: currentVersion.principleType,
-      evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
-      supportingEvidenceCount: supportingCount,
-      contradictingEvidenceCount: contradictingCount,
+      evidenceStrength: assessed.evidenceStrength,
+      supportingEvidenceCount: assessed.supportingCount,
+      contradictingEvidenceCount: assessed.contradictingCount,
+      independenceBasis: assessed.independenceBasis,
       changeReason: buildChangeReason(checks, baselineIds),
     },
   };

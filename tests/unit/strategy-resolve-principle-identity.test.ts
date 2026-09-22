@@ -11,6 +11,7 @@ import {
   type ObservedPrincipleMatchFn,
 } from "@/lib/strategy/resolve-principle-identity";
 import type { ValidatedObservedPrinciple } from "@/lib/strategy/validate-principles";
+import { fixtureBasis, resolverFromCaseKeys } from "../helpers/independence";
 
 function principle(statement: string, evidence: ValidatedObservedPrinciple["evidence"]): ValidatedObservedPrinciple {
   return {
@@ -19,6 +20,7 @@ function principle(statement: string, evidence: ValidatedObservedPrinciple["evid
     supportingCount: evidence.length,
     contradictingCount: 0,
     evidenceStrength: "insufficient_evidence",
+    independenceBasis: fixtureBasis(),
   };
 }
 
@@ -51,6 +53,7 @@ describe("resolveObservedPrincipleIdentities", () => {
       {
         id: "old-leverage",
         statementText: "You are cautious about using leverage without conviction.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "sqqq-answer", stance: "supporting" }],
       },
     ];
@@ -68,10 +71,10 @@ describe("resolveObservedPrincipleIdentities", () => {
     const resolutions = await resolveObservedPrincipleIdentities(
       proposed,
       existing,
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["sqqq-answer", "SQQQ#1"],
         ["new-answer", "NEW#1"],
-      ]),
+      ])),
       classifyMatch
     );
 
@@ -89,6 +92,7 @@ describe("resolveObservedPrincipleIdentities", () => {
       {
         id: "old-1",
         statementText: "Old statement.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "a1", stance: "supporting" }],
       },
     ];
@@ -102,7 +106,7 @@ describe("resolveObservedPrincipleIdentities", () => {
     const resolutions = await resolveObservedPrincipleIdentities(
       proposed,
       existing,
-      new Map([["a1", "X#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "X#1"]])),
       classifyMatch
     );
 
@@ -130,10 +134,10 @@ describe("resolveObservedPrincipleIdentities", () => {
     const resolutions = await resolveObservedPrincipleIdentities(
       proposed,
       [],
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["mp-1", "MP#1"],
         ["mp-2", "MP#1"],
-      ]),
+      ])),
       classifyMatch
     );
 
@@ -150,6 +154,7 @@ describe("resolveObservedPrincipleIdentities", () => {
       {
         id: "fear-sell",
         statementText: "You tend to sell winning positions out of fear of losing the gain.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "other-answer", stance: "supporting" }],
       },
     ];
@@ -166,7 +171,7 @@ describe("resolveObservedPrincipleIdentities", () => {
     const resolutions = await resolveObservedPrincipleIdentities(
       proposed,
       existing,
-      new Map([["mp-answer", "MP#1"]]),
+      resolverFromCaseKeys(new Map([["mp-answer", "MP#1"]])),
       classifyMatch
     );
 
@@ -179,6 +184,7 @@ describe("resolveObservedPrincipleIdentities", () => {
       {
         id: "existing-1",
         statementText: "Some existing observed pattern.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "x", stance: "supporting" }],
       },
     ];
@@ -194,10 +200,10 @@ describe("resolveObservedPrincipleIdentities", () => {
     const resolutions = await resolveObservedPrincipleIdentities(
       proposed,
       existing,
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["x", "X#1"],
         ["y", "Y#1"],
-      ]),
+      ])),
       classifyMatch
     );
 
@@ -210,6 +216,7 @@ describe("resolveObservedPrincipleIdentities", () => {
       {
         id: "old-1",
         statementText: "Old statement.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "a", stance: "supporting" }],
       },
     ];
@@ -224,11 +231,11 @@ describe("resolveObservedPrincipleIdentities", () => {
     const resolutions = await resolveObservedPrincipleIdentities(
       proposed,
       existing,
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["a", "A#1"],
         ["b", "B#1"],
         ["c", "C#1"],
-      ]),
+      ])),
       classifyMatch
     );
 
@@ -244,6 +251,7 @@ describe("resolveObservedPrincipleIdentities", () => {
       {
         id: "old-1",
         statementText: "Old statement.",
+        rejectedEvidence: [],
         evidenceForCounting: [{ interviewAnswerId: "a", stance: "supporting" }],
       },
     ];
@@ -254,10 +262,10 @@ describe("resolveObservedPrincipleIdentities", () => {
     await resolveObservedPrincipleIdentities(
       proposed,
       existing,
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["a", "A#1"],
         ["b", "B#1"],
-      ]),
+      ])),
       classifyMatch
     );
 

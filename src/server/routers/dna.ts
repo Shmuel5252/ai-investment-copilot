@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../trpc";
 import { db } from "@/db/client";
-import { isUniqueViolation } from "@/db/errors";
+import { isUniqueViolation, StaleIdentityVersionError } from "@/db/errors";
 import { getAllAnswersForInvestor } from "@/db/repositories/interview";
 import {
   listActiveDnaHypothesesForInvestor,
@@ -11,7 +11,7 @@ import {
   setDnaHypothesisStatus,
   getLatestDnaHypothesisVersion,
 } from "@/db/repositories/dna";
-import { getEvidenceForDnaHypothesis, getEffectiveEvidenceForDnaHypothesisVersion } from "@/db/repositories/evidence";
+import { getCountingEvidenceForDnaVersion, getEffectiveEvidenceForDnaHypothesisVersion } from "@/db/repositories/evidence";
 import { proposeDnaHypotheses } from "@/lib/ai/dna";
 import { checkEvidenceGrounding } from "@/lib/ai/dna-grounding";
 import { classifyHypothesisMatch } from "@/lib/ai/dna-identity";
@@ -21,8 +21,7 @@ import {
   resolveHypothesisIdentities,
   type ExistingHypothesisForMatching,
 } from "@/lib/dna/resolve-hypothesis-identity";
-import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
-import { buildAnswerCaseKeys } from "@/lib/evidence/build-answer-case-keys";
+import { loadIndependenceResolver } from "@/lib/evidence/load-independence-resolver";
 
 export const dnaRouter = router({
   // AI proposes hypotheses + evidence citations from InterviewAnswers
@@ -42,23 +41,17 @@ export const dnaRouter = router({
       answers.map((a) => ({ id: a.id, questionText: a.questionText, answerText: a.answerText }))
     );
 
-    // Evidence Strength must count independent investment EPISODES, not
-    // raw transactions or raw Evidence rows (Investment Episode
-    // Independence design, this session) — a real gap found on real data:
-    // two different InterviewAnswers about the same transaction (the
-    // interview can be re-run in a later session and re-select a
-    // transaction already asked about before), AND several different
-    // transactions belonging to the same continuous position lifecycle
-    // (e.g. MP's BUY, partial SELL, final SELL), must all collapse to one
-    // independent case — never one-per-answer or one-per-transaction.
-    // buildAnswerCaseKeys is the exact same shared function
-    // strategy.ts's generateObserved uses, fed by the exact same
-    // deriveEpisodeKeys computation computePositionsForInvestor already
-    // exposes (src/lib/portfolio/positions.ts) — never a second,
-    // parallel implementation of either.
-    const positions = await computePositionsForInvestor(db, ctx.investorId);
-    const answerCaseKeys = buildAnswerCaseKeys(answers, positions.episodeKeyByTransactionId);
-    const structurallyValidated = validateProposedHypotheses(proposed, answerCaseKeys);
+    // Evidence Strength must count independent DECISIONS, not raw
+    // transactions or raw Evidence rows: several answers about one position
+    // episode (e.g. MP's BUY, partial SELL, final SELL) are one case, and a
+    // cross-ticker reallocation the investor described from both ends
+    // (MP sold to fund MRVL) is a weak dependence edge that lowers the
+    // supporting count. The resolver is loaded from persisted rows only and
+    // is the exact same one strategy.ts's generateObserved counts through
+    // (src/lib/evidence/resolve-independence.ts) — never a second,
+    // parallel implementation.
+    const independence = await loadIndependenceResolver(db, ctx.investorId, answers);
+    const structurallyValidated = validateProposedHypotheses(proposed, independence);
 
     // Evidence Grounding (Evidence Grounding + Hypothesis Identity
     // Hardening task) — a SEPARATE gate from the structural checks above.
@@ -70,14 +63,14 @@ export const dnaRouter = router({
     // every citation against the REAL persisted answerText — never the
     // AI's own description — and recomputes supportingCount/
     // contradictingCount/evidenceStrength from only what survives, via
-    // the exact same countIndependentCases()/calculateEvidenceStrength()
-    // used everywhere else. Fails closed: any grounding-check failure
+    // the exact same shared independence resolver used everywhere else.
+    // Fails closed: any grounding-check failure
     // excludes the citation, never includes it by default.
     const answerTextById = new Map(answers.map((a) => [a.id, a.answerText]));
     const { hypotheses: grounded } = await groundValidatedHypotheses(
       structurallyValidated,
       answerTextById,
-      answerCaseKeys,
+      independence,
       checkEvidenceGrounding
     );
 
@@ -93,16 +86,28 @@ export const dnaRouter = router({
     // do (matched an existing identity but added no new independent
     // case). Existing identities/versions/evidence are never edited —
     // only ever added to.
+    //
+    // What an existing identity has "already counted" is the EFFECTIVE
+    // evidence of its CURRENT version — never its raw Evidence pool. Raw
+    // rows are immutable provenance and include citations a grounding
+    // remediation rejected; counting those would re-inflate S/C, the
+    // independence groups and the "genuinely new" test, and let a rejected
+    // citation mint a version. The version this is counted against is
+    // remembered so the append can prove nothing moved underneath it.
     const existingActive = await listActiveDnaHypothesesForInvestor(db, ctx.investorId);
+    const baseState = new Map<string, { versionId: string | undefined; checkCount: number }>();
     const existingForMatching: ExistingHypothesisForMatching[] = await Promise.all(
       existingActive.map(async (h) => {
-        const ev = await getEvidenceForDnaHypothesis(db, h.id);
+        const latest = h.versions[0];
+        const { effective, rejected, checkCount } = latest
+          ? await getCountingEvidenceForDnaVersion(db, h.id, latest.id)
+          : { effective: [], rejected: [], checkCount: 0 };
+        baseState.set(h.id, { versionId: latest?.id, checkCount });
         return {
           id: h.id,
-          statementText: h.versions[0]?.statementText ?? "",
-          evidenceForCounting: ev
-            .filter((e): e is typeof e & { interviewAnswerId: string } => e.interviewAnswerId !== null)
-            .map((e) => ({ interviewAnswerId: e.interviewAnswerId, stance: e.stance })),
+          statementText: latest?.statementText ?? "",
+          evidenceForCounting: effective,
+          rejectedEvidence: rejected,
         };
       })
     );
@@ -110,7 +115,7 @@ export const dnaRouter = router({
     const resolutions = await resolveHypothesisIdentities(
       grounded,
       existingForMatching,
-      answerCaseKeys,
+      independence,
       classifyHypothesisMatch
     );
 
@@ -127,21 +132,28 @@ export const dnaRouter = router({
             supportingCount: resolution.supportingCount,
             contradictingCount: resolution.contradictingCount,
             evidenceStrength: resolution.evidenceStrength,
+            independenceBasis: resolution.independenceBasis,
           })
         );
       } else if (resolution.action === "new_version") {
         try {
           const { version } = await insertDnaHypothesisVersionWithEvidence(db, resolution.hypothesisId, {
+            expectedBaseVersionId: baseState.get(resolution.hypothesisId)!.versionId!,
+            expectedBaseCheckCount: baseState.get(resolution.hypothesisId)!.checkCount,
             statementText: resolution.statement,
             evidenceStrength: resolution.evidenceStrength,
             supportingEvidenceCount: resolution.supportingCount,
             contradictingEvidenceCount: resolution.contradictingCount,
+            independenceBasis: resolution.independenceBasis,
             newEvidence: resolution.newEvidence,
             changeReason: "New evidence from a later interview extended this existing pattern.",
           });
           newVersions.push({ hypothesisId: resolution.hypothesisId, version });
         } catch (err) {
-          if (isUniqueViolation(err, "dna_hypothesis_versions_dna_hypothesis_id_version_number_unique")) {
+          if (
+            err instanceof StaleIdentityVersionError ||
+            isUniqueViolation(err, "dna_hypothesis_versions_dna_hypothesis_id_version_number_unique")
+          ) {
             // A genuine concurrent generate() race on the same identity —
             // recoverable by simply retrying the whole generate call,
             // same as strategy.ts's approveVersion.
@@ -178,8 +190,8 @@ export const dnaRouter = router({
   // getEffectiveEvidenceForDnaHypothesisVersion falls back to the exact
   // previous (raw, unfiltered) behavior for every version that hasn't
   // been. Raw/historical access itself is untouched and still exported
-  // (getEvidenceForDnaHypothesis, used as-is by dna.generate's identity
-  // matching) — nothing about the underlying data becomes unreachable.
+  // (getEvidenceForDnaHypothesis, used by audit and remediation) — nothing
+  // about the underlying data becomes unreachable.
   evidence: protectedProcedure
     .input(z.object({ dnaHypothesisId: z.string().uuid() }))
     .query(async ({ input }) => {

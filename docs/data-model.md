@@ -85,7 +85,8 @@ user_correction|system_grounding_revalidation|system_confidence_recalculation), 
   ה-identity (`FOR UPDATE`) + `UNIQUE(parent, version_number)` כ-backstop. Bundles
   ו-DecisionSnapshots לא נוגעים. (מימוש: `src/lib/evidence/recalculate-confidence.ts`,
   `recalculateDnaHypothesisConfidence`/`recalculatePrincipleConfidence`;
-  מיגרציה 0010 — נכתבה, טרם הופעלה על ה-DB האמיתי.)
+  מיגרציה 0010 מוחלת על ה-DB האמיתי ו-`applyConfidenceRecalculationsForInvestor`
+  רץ עבור המשקיע האמיתי — 2026-09-21, אומת קריאה-בלבד 2026-09-22 ר' `docs/backlog.md`.)
 
 **DNAEvidenceGroundingCheck** (append-only, `dna_evidence_grounding_checks`
 — DNA Grounding Remediation, Autonomous Unit 3) — `id,
@@ -97,11 +98,15 @@ evidence_id)` (שם מפורש, לא auto-generated — ר' ההערה על שמ
 לא ל-identity, כי Evidence עצמה (למטה) לא scoped לגרסה בכלל, וללא
 הטבלה הזו אין דרך לדעת אילו citations ספציפית סופרים לאיזו גרסה. תמיד
 נוסף, אף פעם לא נערך — אין כאן flag "נוכחי"; "הגרסה הנוכחית" נשארת
-`MAX(version_number)` בדיוק כמו קודם. **`dna.generate`'s מסלול ה-grounding
-הרגיל אינו כותב לטבלה הזו** (בכוונה, מחוץ ל-scope של Autonomous Unit 3
-— אינטגרציה עתידית נפרדת). גרסה בלי אף שורת check כאן = מעולם לא
-נבדקה מול grounding (כל גרסה שקיימת נכון ל-2026-09-16) — לא "נבדקה
-ועברה".
+`MAX(version_number)` בדיוק כמו קודם. **`dna.generate` אינו כותב check rows עבור identity חדש** (כל ראיה שלו עברה
+grounding בזמן היצירה, וגרסה בלי אף שורת check נופלת ל-raw — ה-fallback
+המאושר). **אבל גרסה חדשה שנוספת ל-identity שהגרסה הנוכחית שלו *כבר* כוללת
+checks נושאת אותם קדימה** (`checksForAppendedVersion`,
+`src/lib/evidence/append-version-checks.ts`): כל verdict קודם — כולל דחיות —
+מועתק כמות שהוא, והראיה שהגרסה מוסיפה נרשמת `supported` (היא זה עתה עברה
+grounding). בלי זה גרסה כזו הייתה נופלת בשקט ל-raw ומחזירה כל citation
+ש-remediation דחה. גרסה בלי אף שורת check = מעולם לא נבדקה מול grounding —
+לא "נבדקה ועברה".
 
 **Evidence** — `id`, בדיוק אחד מ-
 `{dna_hypothesis_id, strategy_principle_id, learning_insight_id}` (CHECK,
@@ -122,6 +127,23 @@ source_learning_insight_id}` + `manual_note_text?` (CHECK, מקור),
   — מסננת לפי `DNAEvidenceGroundingCheck` (למעלה) כשקיימות שורות check
   לגרסה, ונופלת אוטומטית לכל-הראיה-הגולמית כשאין (כל גרסה שלא עברה
   remediation — ההתנהגות המקורית, ללא שינוי).
+
+- **ספירת identity ב-`generate` (DNA ו-Strategy) מתבססת על ה-effective של
+  הגרסה *הנוכחית*, לא על ה-raw.** `getCountingEvidenceForDnaVersion` /
+  `getCountingEvidenceForStrategyPrincipleVersion` מחזירות `{effective, rejected}`
+  (`partitionEvidenceForCounting` — אותו `selectEffectiveEvidence`; ב-check-set קיים
+  שורה בלי verdict = rejected, fail-closed; ללא checks כלל = הכול effective, ה-fallback
+  המאושר). ראיה ב-raw ש-remediation דחה **אינה** נספרת: לא מעלה `S`/`C`/`S_ub`/`C_ub`,
+  לא יוצרת קשת חלשה, ולא יוצרת גרסה חדשה. **דחייה מפורשת דביקה:** הצגה חוזרת של
+  אותו זוג (תשובה + stance) לאותו identity — גם אם grounding במקרה מקבל אותו הפעם —
+  אינה נספרת ואינה מוסיפה Evidence (`no_new_information`); רק re-grounding מפורש
+  (remediation) שופט מחדש, כך שאי-דטרמיניזם של ה-AI לעולם לא מעלה confidence. הדחייה
+  ספציפית ל-stance. הכתיבה (`insert…VersionWithEvidence`) דורשת `expectedBaseVersionId` **ו-`expectedBaseCheckCount`**
+  (כמה checks היו לגרסה שנספרה מולה) וזורקת `StaleIdentityVersionError` (מתורגם ל"נסה שוב")
+  אם הגרסה שנספרה מולה כבר אינה האחרונה **או** שנוספו לה checks מאז — remediation
+  (`checked_no_change`) מוסיף verdicts לגרסה קיימת *בלי* גרסה חדשה, ולכן גארד על ה-id לבדו לא היה
+  מזהה אותו. כך ה-counts וה-verdicts שנישאים קדימה מתארים תמיד אותו מצב. הכתיבה נעולה על שורת
+  ה-identity (`FOR UPDATE`), כמו ה-recalculations.
 - **`source_learning_insight_id` (תיקון, התגלה בזמן מימוש Learning
   Insight task):** נדרש בפועל כדי לממש את "סגירת הלולאה ל-DNA" ב-§8 —
   `learning_insight_id` הקיים הוא **subject בלבד** (לא יכול להיות
@@ -170,14 +192,67 @@ Moderate"), אלא `episodeKey` — כל העסקאות של אותו רצף פ�
 `computePositions()` (`src/lib/portfolio/positions.ts`, שדה נוסף
 `episodeKeyByTransactionId` על ה-return שלו — לא נשמר, לא זכרון קבוע,
 לא נכנס לשום snapshot), ומוזן ל-`dna.generate`/`strategy.generateObserved`
-דרך פונקציה משותפת אחת, `buildAnswerCaseKeys`
-(`src/lib/evidence/build-answer-case-keys.ts`) — שני הראוטרים קוראים
-לאותה פונקציה, לא מימוש כפול. `InterviewAnswer` עם `transaction_id=null`
+דרך ה-resolver המשותף `createIndependenceResolver`
+(`src/lib/evidence/resolve-independence.ts`, ר' "Decision Independence
+V1" מיד אחרי; `buildAnswerCaseKeys` הוחלף ונמחק) — שני הראוטרים קוראים
+לאותו resolver, לא מימוש כפול. `InterviewAnswer` עם `transaction_id=null`
 ממשיך להשתמש ב-`answer.id` כ-case key, בדיוק כמו קודם — לא נגע. תשתית
 מלאה (חוזה סדר תוך-יומי, מודל ceiling/exactKnown, retrospective
 run-based key assignment) בתיעוד התכנון של ה-session; אין טבלה חדשה
 (`investmentEpisode` **לא** נוסף לסכמה) — episode תמיד מחושב, לא
 מאוחסן, באותה רוח כמו `computePositions()` עצמו.
+
+**Decision Independence V1 — עצמאות חוצת-tickers (מומש 2026-09-22;
+מיגרציה `0011` נכתבה ו**לא הופעלה** על ה-DB האמיתי).** ה-episode הוא
+per-ticker בכוונה, ולכן החלטה אחת שנפרשת על שני tickers (מכירת MP כדי
+לממן קניית MRVL — `a48426b1`) נספרה פעמיים. `createIndependenceResolver`
+(טהור: בלי DB ובלי AI) הוא **האלגוריתם היחיד** ש-DNA ו-Strategy סופרים
+דרכו — validation, grounding, remediation, identity resolution ו-recalculation;
+Learning Insight מחוץ ל-scope וממשיך ב-`countIndependentCases`.
+- **קבוצות חזקות:** לכל citation קבוצת labels — ה-episode שלו + מזהה כל
+  `TransactionLinkFact` אפקטיבי מסוג `linked` שמכיל את העסקה; קבוצה = רכיב
+  קשירות תחת "חולקים label". בלי facts זו בדיוק ההתנהגות הקודמת (ללא עסקה →
+  `answer.id`, ובנוסף `unanchoredCitations` נרשם ב-basis). תלות אף פעם לא
+  מתפשטת דרך פריט שלא צוטט.
+- **קשת חלשה (UNRESOLVED)** בין שתי קבוצות: זוג עסקאות **מצוטטות**, cross-ticker,
+  בצדדים הפוכים, ב-≤14 ימים (`maxGapDays`), **וגם** אחד מ: (א) *exclusive
+  counterpart* — אין שום buy/sell אחר בחשבון ב-[המוקדם−3d, המאוחר+3d]
+  (`isolationMarginDays`) מחוץ ל-episodes של שתי העסקאות; (ב) *named counterpart*
+  — המשקיע הזכיר את ה-ticker של הצד השני בטקסט התשובה **שלו** (token לטיני
+  case-sensitive; לא שאלת האפליקציה; לא ה-ticker העצמי). **קרבה זמנית בלבד =
+  review-only:** מדווחת ולעולם לא נספרת — על ההיסטוריה האמיתית 6–13% מכל זוגות
+  ה-cross-ticker נראים כך, וכלל כזה היה מפיץ תלות על כל העסקאות. same-day-any-side
+  והתאמת סכומים נדחו.
+- **Envelope סגור (בלי enumeration):** `S_lb` = רכיבי קשתות-חלשות ללא קבוצה
+  סותרת; `C_ub` = מספר הקבוצות הסותרות (קשת חלשה **לעולם** לא מקטינה אותה);
+  `S_ub` = קבוצות תומכות בלבד (תצוגה/audit). **`calculateEvidenceStrength(S_lb, C_ub)`**
+  שווה בדיוק ל-tier המינימלי מעל כל פתרון אפשרי של הקשתות (הוכח, ונבדק brute-force
+  כ-oracle בטסטים בלבד). אין `C_lb` בחוזה.
+- **נשמר:** `supporting/contradicting_evidence_count` = `S_lb`/`C_ub`, בתוספת
+  `independence_basis_json` (nullable `jsonb` ב-`dna_hypothesis_versions` וב-
+  `strategy_principle_versions`; `NULL` = נספר לפני V1, episode-only, ללא backfill):
+  policy version, קבוצות וסיבותיהן, קשתות חלשות, review-only, facts שנוצלו.
+  סידור דטרמיניסטי; byte-identity מוגדר מעל `serializeIndependenceBasis` (מפתחות
+  ממוינים — `jsonb` ממיין מחדש).
+- **`TransactionLinkFact` / `TransactionLinkFactMember`** — ההצהרה המחייבת
+  היחידה של המשקיע (`verdict` = `linked` | `independent`); append-only +
+  `supersedes_fact_id` (יורש אחד לכל היותר; עובדה אפקטיבית = ראש השרשרת). אין
+  `origin`/`ai_*`/`kind`/`channel`/`role` — רק פקודה של משקיע כותבת. אכיפה ב-repository:
+  ≥2 עסקאות של אותו משקיע, כולן buy/sell עם ticker; `linked` דורש sell, buy ו-≥2
+  tickers; verdicts סותרים על אותו זוג נדחים אלא אם superseding. **אין mutation
+  procedure** — הכתיבה מחכה ל-workflow אישור. `linked` קורס את הקצוות לשני ה-stances;
+  `independent` מדכא קשת חלשה לזוג (ולא מפצל episode). ל-AI אין שום סמכות והשפעה על ספירה.
+- **Identity resolution:** "genuinely new" = עלייה ב**מספר הקבוצות החזקות**.
+  citation שנופל בקבוצה שכבר נספרה (אותו episode / fact) לא יוצר גרסה; citation
+  שרק קשת חלשה קושרת אותו נרשם (ראיה לא נזרקת על "אולי") ו-`S_lb` לא עולה.
+  "כבר נספר" = ה-effective של הגרסה הנוכחית (ר' Raw vs. Effective למעלה), לא ה-raw.
+- **Recalculation (`created_by = system_independence_recalculation`):**
+  `planIndependenceRecalculationsForInvestor` (dry-run) /
+  `applyIndependenceRecalculationsForInvestor` מוסיפים גרסה רק כש-`(S_lb, C_ub)` **לא
+  גבוהים** מהשמורים (הגנה כיוונית); **עלייה** (קשת שנעלמה, backfill שהרס isolation,
+  שינוי policy) מדווחת ל-review ואינה נכתבת. counts זהים ⇒ no-op גם כש-basis הישן NULL.
+- **מחוץ ל-scope:** Review UI, שדה "funded by", claim-scoped release, Learning
+  Insight, same-ticker cross-episode, AI proposals (ר' `docs/backlog.md`).
 
 ---
 
@@ -468,7 +543,8 @@ Append-only. `transaction_id` נשאר עמודה יחידה (לא junction/מע
   `DecisionSnapshot`, `DecisionReview`, `ReviewDimension`, `Thesis`,
   `LaterContext`, `Evidence`, `DNAHypothesisVersion`,
   `StrategyPrincipleVersion`, `StrategyVersion`, `LearningInsightVersion`,
-  `InterviewAnswer`, `DNAEvidenceGroundingCheck`, `StrategyEvidenceGroundingCheck`.
+  `InterviewAnswer`, `DNAEvidenceGroundingCheck`, `StrategyEvidenceGroundingCheck`,
+  `TransactionLinkFact`, `TransactionLinkFactMember`.
 - **`ON DELETE RESTRICT`**: `strategy_version_id`, `market_context_id`,
   `dna_hypothesis_version_id` (דרך `DecisionSnapshotDNAReference`),
   `thesis_id` — כל FK שיוצא מ-`DecisionSnapshot`.

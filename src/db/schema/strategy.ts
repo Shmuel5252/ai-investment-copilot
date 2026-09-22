@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, integer, primaryKey, unique } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, integer, jsonb, primaryKey, unique } from "drizzle-orm/pg-core";
 import { investors } from "./identity";
 import { principleTypeEnum, principleCreatedByEnum, evidenceStrengthEnum } from "./enums";
 
@@ -58,6 +58,13 @@ export const strategyPrincipleVersions = pgTable(
     evidenceStrength: evidenceStrengthEnum("evidence_strength"),
     supportingEvidenceCount: integer("supporting_evidence_count"),
     contradictingEvidenceCount: integer("contradicting_evidence_count"),
+    // Decision Independence V1 — the deterministic record of WHY the counts
+    // above are what they are (policy version, strong groups, weak edges,
+    // S_lb/S_ub/C_ub, ...). supporting/contradicting_evidence_count store
+    // S_lb and C_ub — the confidence inputs — so calculateEvidenceStrength
+    // over the stored counts always reproduces the stored tier. NULL =
+    // counted before this existed (episode-only, legacy); never backfilled.
+    independenceBasisJson: jsonb("independence_basis_json"),
   },
   // Defense-in-depth swept across every identity+version table after a
   // real duplicate was found on strategy_principles — see that migration.

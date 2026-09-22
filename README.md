@@ -48,13 +48,35 @@ A personal AI copilot that learns how you invest — not what to buy. See
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
-| `npm run test` | Unit/integration tests (Vitest) |
+| `npm run test` | All tests (Vitest). DB-backed tests need `TEST_DATABASE_URL` (see "Testing") and fail closed without it |
+| `npm run test:unit` | Pure unit tests only — no database needed |
+| `npm run db:test:create` | Create an authorized, empty test database (`-- <name>` optional) |
+| `npm run db:test:drop` | Drop a test database — refuses anything without the test marker (`-- <name>`) |
 | `npm run test:e2e` | End-to-end tests (Playwright) |
 | `npm run db:generate` | Generate a SQL migration from `src/db/schema` |
 | `npm run db:migrate` | Apply pending migrations |
 | `npm run db:push` | Push schema directly (dev convenience, skips migration files) |
 | `npm run db:studio` | Open Drizzle Studio against your DB |
 | `npm run db:seed` | Create/update the single investor account |
+
+## Testing
+
+DB-backed tests (`tests/integration/**`) create synthetic investors and write to
+insert-only history tables, so they can **never** run against your real
+database. They run only against a database created for tests:
+
+1. `npm run db:test:create` — creates an empty database and marks it (a
+   marker in the database's own metadata; the name means nothing).
+2. Set `TEST_DATABASE_URL` (env or `.env`) to your `DATABASE_URL` with that
+   database's name.
+3. `npm test` — pending migrations are applied to the test database
+   automatically; the application `DATABASE_URL` is never used.
+
+Without `TEST_DATABASE_URL`, unit tests still run and DB-backed tests **fail
+before writing anything**. A `TEST_DATABASE_URL` that points at the same
+database as `DATABASE_URL`, or at a database without the marker, aborts the
+run. Error messages never contain connection strings. Details:
+`tests/support/test-database.ts`.
 
 ## Resolved environment issue: OneDrive + node_modules
 

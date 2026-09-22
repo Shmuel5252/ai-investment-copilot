@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { groundValidatedObservedPrinciples } from "@/lib/strategy/ground-evidence";
 import type { ValidatedObservedPrinciple } from "@/lib/strategy/validate-principles";
+import { fixtureBasis, resolverFromCaseKeys } from "../helpers/independence";
 
 function principle(statement: string, evidence: ValidatedObservedPrinciple["evidence"]): ValidatedObservedPrinciple {
   return {
@@ -16,6 +17,7 @@ function principle(statement: string, evidence: ValidatedObservedPrinciple["evid
     supportingCount: evidence.length,
     contradictingCount: 0,
     evidenceStrength: "insufficient_evidence",
+    independenceBasis: fixtureBasis(),
   };
 }
 
@@ -31,7 +33,7 @@ describe("groundValidatedObservedPrinciples", () => {
     const result = await groundValidatedObservedPrinciples(
       principles,
       new Map([["a1", "text"]]),
-      new Map([["a1", "X#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "X#1"]])),
       checkGrounding
     );
 
@@ -54,7 +56,7 @@ describe("groundValidatedObservedPrinciples", () => {
     const result = await groundValidatedObservedPrinciples(
       principles,
       new Map([["a1", "declining stock text"]]),
-      new Map([["a1", "X#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "X#1"]])),
       checkGrounding
     );
 
@@ -99,7 +101,7 @@ describe("groundValidatedObservedPrinciples", () => {
     const result = await groundValidatedObservedPrinciples(
       principles,
       new Map([["a1", "I didn't wait for a target or signal; I stayed as long as it rose because I believe in the company."]]),
-      new Map([["a1", "X#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "X#1"]])),
       checkGrounding
     );
 
@@ -122,7 +124,7 @@ describe("groundValidatedObservedPrinciples", () => {
     const result = await groundValidatedObservedPrinciples(
       principles,
       new Map([["a1", "text"]]),
-      new Map([["a1", "X#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "X#1"]])),
       checkGrounding
     );
 
@@ -141,7 +143,7 @@ describe("groundValidatedObservedPrinciples", () => {
     const result = await groundValidatedObservedPrinciples(
       principles,
       new Map([["a1", "text"]]),
-      new Map([["a1", "X#1"]]),
+      resolverFromCaseKeys(new Map([["a1", "X#1"]])),
       checkGrounding
     );
 
@@ -164,10 +166,10 @@ describe("groundValidatedObservedPrinciples", () => {
         ["a1", "t1"],
         ["a2", "t2"],
       ]),
-      new Map([
+      resolverFromCaseKeys(new Map([
         ["a1", "X#1"],
         ["a2", "Y#1"],
-      ]),
+      ])),
       checkGrounding
     );
 
@@ -191,11 +193,11 @@ describe("groundValidatedObservedPrinciples", () => {
         ["a1", "t1"],
         ["a2", "t2"],
       ]),
-      // Both citations resolve to the SAME independent case.
+      resolverFromCaseKeys(// Both citations resolve to the SAME independent case.
       new Map([
         ["a1", "MP#1"],
         ["a2", "MP#1"],
-      ]),
+      ])),
       checkGrounding
     );
 

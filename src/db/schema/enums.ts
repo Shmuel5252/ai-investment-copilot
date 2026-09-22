@@ -47,11 +47,18 @@ export const dnaHypothesisStatusEnum = pgEnum("dna_hypothesis_status", [
 // truthful. Mirrored in principle_created_by below (enum values cannot
 // be shared across enum types). This enum is also what
 // learning_insight_versions.created_by uses.
+//
+// "system_independence_recalculation" (Decision Independence V1): a
+// version appended because the deterministic independence resolver now
+// counts the SAME effective evidence differently (a cross-ticker weak
+// dependence edge, or a confirmed LinkFact). No new evidence, no AI, no
+// investor action at write time — same truthfulness reasoning as above.
 export const dnaCreatedByEnum = pgEnum("dna_created_by", [
   "ai_generated",
   "user_correction",
   "system_grounding_revalidation",
   "system_confidence_recalculation",
+  "system_independence_recalculation",
 ]);
 
 export const principleTypeEnum = pgEnum("principle_type", [
@@ -81,7 +88,15 @@ export const principleCreatedByEnum = pgEnum("principle_created_by", [
   "system_default",
   "system_grounding_revalidation",
   "system_confidence_recalculation",
+  "system_independence_recalculation",
 ]);
+
+// A LinkFact is an investor-authored assertion about which transactions
+// were (or were not) one capital-reallocation decision — the only
+// authoritative source of KNOWN_LINKED / KNOWN_INDEPENDENT. There is
+// deliberately no origin/AI column: nothing but an investor-facing command
+// may ever write one (src/db/repositories/link-facts.ts).
+export const linkFactVerdictEnum = pgEnum("link_fact_verdict", ["linked", "independent"]);
 
 export const caseStatusEnum = pgEnum("case_status", ["researching", "decided", "archived"]);
 

@@ -10,6 +10,7 @@ import {
   type PersistedEvidenceForRemediation,
   type StrategyRemediationGroundingFn,
 } from "@/lib/strategy/remediate-grounding";
+import { resolverFromCaseKeys } from "../helpers/independence";
 
 function currentVersion(statementText: string) {
   return { id: "version-1", statementText, principleType: "observed" as const };
@@ -37,11 +38,11 @@ describe("planPrincipleGroundingRemediation", () => {
           ["answer-mrvl", "MRVL text"],
           ["answer-can", "CAN text"],
         ]),
-        answerCaseKeys: new Map([
+        independence: resolverFromCaseKeys(new Map([
           ["answer-mp", "MP#1"],
           ["answer-mrvl", "MRVL#3"],
           ["answer-can", "CAN#1"],
-        ]),
+        ])),
         alreadyGroundedEvidenceIds: null,
       },
       checkGrounding
@@ -75,10 +76,10 @@ describe("planPrincipleGroundingRemediation", () => {
           ["a1", "t1"],
           ["a2", "t2"],
         ]),
-        answerCaseKeys: new Map([
+        independence: resolverFromCaseKeys(new Map([
           ["a1", "X#1"],
           ["a2", "Y#1"],
-        ]),
+        ])),
         alreadyGroundedEvidenceIds: null,
       },
       checkGrounding
@@ -102,7 +103,7 @@ describe("planPrincipleGroundingRemediation", () => {
         currentVersion: currentVersion("Some claim."),
         rawEvidence,
         answerTextById: new Map([["a1", "t1"]]),
-        answerCaseKeys: new Map([["a1", "X#1"]]),
+        independence: resolverFromCaseKeys(new Map([["a1", "X#1"]])),
         alreadyGroundedEvidenceIds: null,
       },
       checkGrounding
@@ -129,10 +130,10 @@ describe("planPrincipleGroundingRemediation", () => {
           ["a1", "t1"],
           ["a2", "t2"],
         ]),
-        answerCaseKeys: new Map([
+        independence: resolverFromCaseKeys(new Map([
           ["a1", "X#1"],
           ["a2", "Y#1"],
-        ]),
+        ])),
         // Already remediated once: only ev-1 logged supported.
         alreadyGroundedEvidenceIds: new Set(["ev-1"]),
       },
@@ -154,7 +155,7 @@ describe("planPrincipleGroundingRemediation", () => {
         currentVersion: currentVersion("Some claim."),
         rawEvidence,
         answerTextById: new Map([["a1", "t1"]]),
-        answerCaseKeys: new Map([["a1", "X#1"]]),
+        independence: resolverFromCaseKeys(new Map([["a1", "X#1"]])),
         alreadyGroundedEvidenceIds: null,
       },
       checkGrounding
@@ -180,7 +181,7 @@ describe("planPrincipleGroundingRemediation", () => {
         currentVersion: currentVersion("Some claim."),
         rawEvidence,
         answerTextById: new Map([["a1", "t1"]]),
-        answerCaseKeys: new Map([["a1", "X#1"]]),
+        independence: resolverFromCaseKeys(new Map([["a1", "X#1"]])),
         alreadyGroundedEvidenceIds: null,
       },
       checkGrounding

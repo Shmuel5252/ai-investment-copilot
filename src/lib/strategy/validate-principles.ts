@@ -1,5 +1,9 @@
-import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evidence-strength";
-import { countIndependentCases } from "@/lib/evidence/count-independent-cases";
+import type { EvidenceStrength } from "@/lib/dna/evidence-strength";
+import {
+  assessCitations,
+  type EvidenceIndependenceResolver,
+  type IndependenceBasis,
+} from "@/lib/evidence/resolve-independence";
 import type { ProposedDeclaredPrinciple, ProposedObservedPrinciple } from "@/lib/ai/strategy";
 
 // The AI's citations are never trusted blindly here either (same trust
@@ -55,19 +59,17 @@ export interface ValidatedObservedPrinciple {
   supportingCount: number;
   contradictingCount: number;
   evidenceStrength: EvidenceStrength;
+  /** Why the counts are what they are (Decision Independence V1); persisted as independence_basis_json. */
+  independenceBasis: IndependenceBasis;
 }
 
-// `answerCaseKeys` maps each valid interview-answer id to the underlying
-// case it's really evidence about (its transaction id, or its own id if
-// it isn't about a specific transaction) — same real gap and same fix as
-// src/lib/dna/validate-hypotheses.ts: two answers about the same
-// transaction must count as one independent case, not two, when
-// computing evidenceStrength. All validated citations still stay in the
-// returned `evidence` array for traceability; only the strength-driving
-// counts are deduped.
+// `independence` is the SAME shared resolver src/lib/dna/validate-hypotheses.ts
+// counts through — never a Strategy-specific algorithm. All validated
+// citations still stay in the returned `evidence` array for traceability;
+// only the strength-driving counts are collapsed.
 export function validateProposedObservedPrinciples(
   proposed: ProposedObservedPrinciple[],
-  answerCaseKeys: ReadonlyMap<string, string>
+  independence: EvidenceIndependenceResolver
 ): ValidatedObservedPrinciple[] {
   const results: ValidatedObservedPrinciple[] = [];
 
@@ -79,7 +81,7 @@ export function validateProposedObservedPrinciples(
       (e): e is ValidatedPrincipleEvidence =>
         !!e &&
         typeof e.interviewAnswerId === "string" &&
-        answerCaseKeys.has(e.interviewAnswerId) &&
+        independence.hasAnswer(e.interviewAnswerId) &&
         (e.stance === "supporting" || e.stance === "contradicting") &&
         typeof e.description === "string" &&
         e.description.trim() !== ""
@@ -87,17 +89,10 @@ export function validateProposedObservedPrinciples(
 
     if (validEvidence.length === 0) continue;
 
-    const { supportingCount, contradictingCount } = countIndependentCases(
-      validEvidence,
-      (e) => answerCaseKeys.get(e.interviewAnswerId)!
-    );
-
     results.push({
       statement: p.statement.trim(),
       evidence: validEvidence,
-      supportingCount,
-      contradictingCount,
-      evidenceStrength: calculateEvidenceStrength(supportingCount, contradictingCount),
+      ...assessCitations(independence, validEvidence),
     });
   }
 

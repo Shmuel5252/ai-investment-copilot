@@ -5,13 +5,23 @@ import type { InferInsertModel } from "drizzle-orm";
 import type { ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
 import { calculateEvidenceStrength } from "@/lib/dna/evidence-strength";
 import type { RemediationCheckResult, RemediationNewVersion } from "@/lib/dna/remediate-grounding";
-import { isUniqueViolation } from "@/db/errors";
+import type { IndependenceBasis } from "@/lib/evidence/resolve-independence";
+import { isUniqueViolation, StaleIdentityVersionError } from "@/db/errors";
+import { checksForAppendedVersion } from "@/lib/evidence/append-version-checks";
 import {
   planConfidenceRecalculation,
   buildRecalculatedDnaVersion,
   carryForwardGroundingChecks,
   type ConfidenceRecalculationOutcome,
 } from "@/lib/evidence/recalculate-confidence";
+import {
+  planIndependenceRecalculation,
+  buildIndependenceRecalculatedDnaVersion,
+  citationsFromEvidence,
+  type IndependenceRecalculationOutcome,
+} from "@/lib/evidence/recalculate-independence";
+import { selectEffectiveEvidence } from "@/lib/dna/effective-evidence";
+import type { EvidenceIndependenceResolver } from "@/lib/evidence/resolve-independence";
 
 export type NewDnaHypothesis = InferInsertModel<typeof dnaHypotheses>;
 export type NewDnaHypothesisVersion = InferInsertModel<typeof dnaHypothesisVersions>;
@@ -70,6 +80,7 @@ export async function insertDnaHypothesisWithEvidence(
         evidenceStrength: hypothesis.evidenceStrength,
         supportingEvidenceCount: hypothesis.supportingCount,
         contradictingEvidenceCount: hypothesis.contradictingCount,
+        independenceBasisJson: hypothesis.independenceBasis,
         createdBy: "ai_generated",
       })
       .returning();
@@ -139,28 +150,53 @@ export async function insertDnaHypothesisFromLearningInsight(
 // plus the genuinely-new Evidence rows that justified it — never touches
 // the identity's earlier versions or earlier Evidence rows (both stay
 // exactly as persisted; this only ever adds). versionNumber is looked up
-// fresh, inside the same transaction as the insert, and the table's own
-// UNIQUE(dna_hypothesis_id, version_number) constraint is the real
-// backstop against a genuine concurrent-write race (the same pattern
-// strategy.ts's approveVersion already relies on for
-// strategy_versions_investor_id_version_number_unique) — the caller is
-// expected to catch that constraint name via isUniqueViolation() and
-// translate it to a clear, retryable error, not treat it as unexpected.
+// fresh, inside the same transaction as the insert, under a FOR UPDATE lock on
+// the identity row. The caller passes the base version (and its grounding-check
+// count) it COUNTED against; if either moved, StaleIdentityVersionError is
+// thrown and nothing is written. The table's own UNIQUE(…, version_number)
+// constraint stays as the last backstop — the caller translates either error
+// to a clear, retryable one rather than treating it as unexpected.
 export async function insertDnaHypothesisVersionWithEvidence(
   db: typeof Db,
   dnaHypothesisId: string,
   version: {
+    /** The version this generation COUNTED against (the identity's latest when it read the evidence). */
+    expectedBaseVersionId: string;
+    /** How many grounding checks that version had when it was read. */
+    expectedBaseCheckCount: number;
     statementText: string;
     evidenceStrength: ValidatedHypothesis["evidenceStrength"];
     supportingEvidenceCount: number;
     contradictingEvidenceCount: number;
+    independenceBasis: IndependenceBasis;
     newEvidence: ValidatedHypothesis["evidence"];
     changeReason: string;
   }
 ) {
   return db.transaction(async (tx) => {
+    // Serialize with the recalculation executors, which append under the same lock.
+    await tx.select({ id: dnaHypotheses.id }).from(dnaHypotheses).where(eq(dnaHypotheses.id, dnaHypothesisId)).for("update");
+
     const latest = await getLatestDnaHypothesisVersion(tx, dnaHypothesisId);
-    const nextVersionNumber = (latest?.versionNumber ?? 0) + 1;
+    // The counts were computed from the effective evidence of THIS base
+    // version, and its grounding verdicts are what gets carried forward. If
+    // another writer appended a version — or added grounding checks to this
+    // one — since the generation read it, the two would describe different
+    // states: write nothing.
+    if (!latest || latest.id !== version.expectedBaseVersionId) {
+      throw new StaleIdentityVersionError(
+        dnaHypothesisId,
+        `counted against version ${version.expectedBaseVersionId} but the latest is ${latest?.id ?? "(none)"}`
+      );
+    }
+    const baseChecks = await tx.select().from(dnaEvidenceGroundingChecks).where(eq(dnaEvidenceGroundingChecks.dnaHypothesisVersionId, latest.id));
+    if (baseChecks.length !== version.expectedBaseCheckCount) {
+      throw new StaleIdentityVersionError(
+        dnaHypothesisId,
+        `counted against ${version.expectedBaseCheckCount} grounding check(s) on version ${latest.id} but it now has ${baseChecks.length}`
+      );
+    }
+    const nextVersionNumber = latest.versionNumber + 1;
 
     const [newVersion] = await tx
       .insert(dnaHypothesisVersions)
@@ -171,18 +207,47 @@ export async function insertDnaHypothesisVersionWithEvidence(
         evidenceStrength: version.evidenceStrength,
         supportingEvidenceCount: version.supportingEvidenceCount,
         contradictingEvidenceCount: version.contradictingEvidenceCount,
+        independenceBasisJson: version.independenceBasis,
         createdBy: "ai_generated",
         changeReason: version.changeReason,
       })
       .returning();
 
-    if (version.newEvidence.length > 0) {
-      await tx.insert(evidence).values(
-        version.newEvidence.map((e) => ({
-          dnaHypothesisId,
-          stance: e.stance,
-          interviewAnswerId: e.interviewAnswerId,
-          description: e.description,
+    const insertedEvidence =
+      version.newEvidence.length > 0
+        ? await tx
+            .insert(evidence)
+            .values(
+              version.newEvidence.map((e) => ({
+                dnaHypothesisId,
+                stance: e.stance,
+                interviewAnswerId: e.interviewAnswerId,
+                description: e.description,
+              }))
+            )
+            .returning({ id: evidence.id })
+        : [];
+
+    // Version-scoped grounding verdicts must not be dropped by appending a
+    // version: without rows here this version would fall back to "every raw
+    // citation is effective" and re-admit whatever a remediation rejected.
+    const checks = checksForAppendedVersion(
+      latest.id,
+      baseChecks,
+      insertedEvidence.map((row) => row.id)
+    );
+    if (checks.length > 0) {
+      await assertEvidenceBelongsToHypothesis(
+        tx,
+        dnaHypothesisId,
+        checks.map((c) => c.evidenceId)
+      );
+      await tx.insert(dnaEvidenceGroundingChecks).values(
+        checks.map((c) => ({
+          dnaHypothesisVersionId: newVersion!.id,
+          evidenceId: c.evidenceId,
+          verdict: c.verdict,
+          reason: c.reason,
         }))
       );
     }
@@ -318,6 +383,7 @@ export async function insertDnaHypothesisVersionWithGroundingChecks(
         evidenceStrength: version.evidenceStrength,
         supportingEvidenceCount: version.supportingEvidenceCount,
         contradictingEvidenceCount: version.contradictingEvidenceCount,
+        independenceBasisJson: version.independenceBasis,
         createdBy: "system_grounding_revalidation",
         changeReason: version.changeReason,
       })
@@ -387,6 +453,77 @@ export async function recalculateDnaHypothesisConfidence(
           dnaHypothesisId,
           versionNumber: latest.versionNumber + 1,
           ...buildRecalculatedDnaVersion(latest, plan),
+        })
+        .returning();
+
+      if (carried.length > 0) {
+        await tx.insert(dnaEvidenceGroundingChecks).values(
+          carried.map((c) => ({
+            dnaHypothesisVersionId: version!.id,
+            evidenceId: c.evidenceId,
+            verdict: c.verdict,
+            reason: c.reason,
+          }))
+        );
+      }
+
+      return { action: "appended" as const, plan, version: version!, carriedForwardChecks: carried.length };
+    });
+  } catch (err) {
+    if (isUniqueViolation(err, "dna_hypothesis_versions_dna_hypothesis_id_version_number_unique")) {
+      return { action: "no_op", reason: "superseded_concurrently" };
+    }
+    throw err;
+  }
+}
+
+// Decision Independence V1 (DNA): if the resolver now counts this
+// identity's LATEST version's effective evidence lower than the version
+// stored, append ONE new version — same statement, same evidence, the
+// resolver's counts and basis, provenance system_independence_recalculation.
+// Never an UPDATE; the old version stays untouched. A confidence RISE is
+// never appended here (directional guard): it comes back as
+// "requires_review". Locking and concurrency are identical to
+// recalculateDnaHypothesisConfidence above.
+export async function recalculateDnaHypothesisIndependence(
+  db: typeof Db,
+  dnaHypothesisId: string,
+  independence: EvidenceIndependenceResolver
+): Promise<IndependenceRecalculationOutcome<typeof dnaHypothesisVersions.$inferSelect>> {
+  try {
+    return await db.transaction(async (tx) => {
+      await tx
+        .select({ id: dnaHypotheses.id })
+        .from(dnaHypotheses)
+        .where(eq(dnaHypotheses.id, dnaHypothesisId))
+        .for("update");
+
+      const latest = await getLatestDnaHypothesisVersion(tx, dnaHypothesisId);
+      if (!latest) throw new Error(`recalculateDnaHypothesisIndependence: DNA hypothesis ${dnaHypothesisId} has no versions.`);
+
+      const [rawEvidence, baseChecks] = await Promise.all([
+        tx.select().from(evidence).where(eq(evidence.dnaHypothesisId, dnaHypothesisId)),
+        tx.select().from(dnaEvidenceGroundingChecks).where(eq(dnaEvidenceGroundingChecks.dnaHypothesisVersionId, latest.id)),
+      ]);
+      const effective = selectEffectiveEvidence(rawEvidence, baseChecks);
+
+      const plan = planIndependenceRecalculation(latest, citationsFromEvidence(effective), independence);
+      if (plan.action === "no_op") return { action: "no_op" as const, reason: plan.reason };
+      if (plan.action === "requires_review") return { action: "requires_review" as const, plan };
+
+      const carried = carryForwardGroundingChecks(latest.id, baseChecks);
+      await assertEvidenceBelongsToHypothesis(
+        tx,
+        dnaHypothesisId,
+        carried.map((c) => c.evidenceId)
+      );
+
+      const [version] = await tx
+        .insert(dnaHypothesisVersions)
+        .values({
+          dnaHypothesisId,
+          versionNumber: latest.versionNumber + 1,
+          ...buildIndependenceRecalculatedDnaVersion(latest, plan),
         })
         .returning();
 

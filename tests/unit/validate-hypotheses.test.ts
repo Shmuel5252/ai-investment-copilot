@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { validateProposedHypotheses } from "@/lib/dna/validate-hypotheses";
 import type { ProposedHypothesis } from "@/lib/ai/dna";
 import { computePositions, type TransactionInput } from "@/lib/portfolio/positions";
-import { buildAnswerCaseKeys } from "@/lib/evidence/build-answer-case-keys";
+import { createIndependenceResolver } from "@/lib/evidence/resolve-independence";
+import { resolverFromCaseKeys } from "../helpers/independence";
 
 // Helper: each answer id is its own independent case (id -> id) unless a
 // test explicitly wants two answer ids to resolve to the *same*
@@ -24,7 +25,7 @@ describe("validateProposedHypotheses", () => {
         ],
       },
     ];
-    const result = validateProposedHypotheses(proposed, caseKeys);
+    const result = validateProposedHypotheses(proposed, resolverFromCaseKeys(caseKeys));
     expect(result).toHaveLength(1);
     expect(result[0]?.supportingCount).toBe(2);
     expect(result[0]?.contradictingCount).toBe(0);
@@ -42,7 +43,7 @@ describe("validateProposedHypotheses", () => {
         ],
       },
     ];
-    const result = validateProposedHypotheses(proposed, caseKeys);
+    const result = validateProposedHypotheses(proposed, resolverFromCaseKeys(caseKeys));
     expect(result[0]?.evidence).toHaveLength(1);
     expect(result[0]?.evidence[0]?.interviewAnswerId).toBe("a1");
   });
@@ -59,7 +60,7 @@ describe("validateProposedHypotheses", () => {
         evidence: [{ interviewAnswerId: "a1", stance: "supporting", description: "Real." }],
       },
     ];
-    const result = validateProposedHypotheses(proposed, caseKeys);
+    const result = validateProposedHypotheses(proposed, resolverFromCaseKeys(caseKeys));
     expect(result).toHaveLength(1);
     expect(result[0]?.statement).toBe("A hypothesis with real evidence.");
   });
@@ -79,7 +80,7 @@ describe("validateProposedHypotheses", () => {
       },
     ];
     // 5 citations claimed, but only 3 are real -> strength computed from 3, not 5.
-    const result = validateProposedHypotheses(proposed, caseKeys);
+    const result = validateProposedHypotheses(proposed, resolverFromCaseKeys(caseKeys));
     expect(result[0]?.supportingCount).toBe(3);
     expect(result[0]?.evidenceStrength).toBe("moderate"); // 3 total, ratio 1.0, but total<5
   });
@@ -97,7 +98,7 @@ describe("validateProposedHypotheses", () => {
         ],
       },
     ];
-    const result = validateProposedHypotheses(proposed, caseKeys);
+    const result = validateProposedHypotheses(proposed, resolverFromCaseKeys(caseKeys));
     expect(result[0]?.contradictingCount).toBe(1);
     expect(result[0]?.evidenceStrength).toBe("moderate"); // 4 total, ratio 0.75, but total<5
   });
@@ -107,11 +108,11 @@ describe("validateProposedHypotheses", () => {
     const proposed = [
       { statement: "", evidence: [{ interviewAnswerId: "a1", stance: "supporting", description: "x" }] },
     ] as ProposedHypothesis[];
-    expect(validateProposedHypotheses(proposed, caseKeys)).toEqual([]);
+    expect(validateProposedHypotheses(proposed, resolverFromCaseKeys(caseKeys))).toEqual([]);
   });
 
   it("returns an empty list for an empty proposal", () => {
-    expect(validateProposedHypotheses([], new Map())).toEqual([]);
+    expect(validateProposedHypotheses([], resolverFromCaseKeys(new Map()))).toEqual([]);
   });
 
   // Regression coverage for a real gap the user found: Evidence Strength
@@ -137,7 +138,7 @@ describe("validateProposedHypotheses", () => {
         ],
       },
     ];
-    const result = validateProposedHypotheses(proposed, caseKeys);
+    const result = validateProposedHypotheses(proposed, resolverFromCaseKeys(caseKeys));
     // All 3 raw citations are kept for traceability...
     expect(result[0]?.evidence).toHaveLength(3);
     // ...but the strength-driving count reflects only 2 independent cases.
@@ -145,9 +146,9 @@ describe("validateProposedHypotheses", () => {
     expect(result[0]?.evidenceStrength).toBe("insufficient_evidence");
   });
 
-  // The full Investment Episode Independence pipeline, end to end, with
-  // no DB and no AI call: real computePositions() -> real
-  // buildAnswerCaseKeys() -> real validateProposedHypotheses(). Proves
+  // The full independence pipeline, end to end, with no DB and no AI
+  // call: real computePositions() -> real createIndependenceResolver() ->
+  // real validateProposedHypotheses(). Proves
   // the ORIGINAL bug this whole design fixes is actually fixed at the
   // point DNA/Strategy consume it, not just inside the episode-derivation
   // module in isolation — the real MP shape (BUY, partial SELL, final
@@ -183,12 +184,21 @@ describe("validateProposedHypotheses", () => {
     };
     const { episodeKeyByTransactionId } = computePositions([buy, sell1, sell2], []);
 
-    const answers = [
-      { id: "answer-buy", transactionId: "txn-buy" },
-      { id: "answer-sell-1", transactionId: "txn-sell-1" },
-      { id: "answer-sell-2", transactionId: "txn-sell-2" },
-    ];
-    const caseKeys = buildAnswerCaseKeys(answers, episodeKeyByTransactionId);
+    const independence = createIndependenceResolver({
+      episodeKeyByTransactionId,
+      transactions: [buy, sell1, sell2].map((t) => ({
+        id: t.id!,
+        ticker: t.ticker,
+        transactionType: t.transactionType,
+        transactionDate: t.transactionDate,
+      })),
+      answers: [
+        { id: "answer-buy", transactionId: "txn-buy", answerText: "" },
+        { id: "answer-sell-1", transactionId: "txn-sell-1", answerText: "" },
+        { id: "answer-sell-2", transactionId: "txn-sell-2", answerText: "" },
+      ],
+      facts: [],
+    });
 
     const proposed: ProposedHypothesis[] = [
       {
@@ -200,7 +210,7 @@ describe("validateProposedHypotheses", () => {
         ],
       },
     ];
-    const result = validateProposedHypotheses(proposed, caseKeys);
+    const result = validateProposedHypotheses(proposed, independence);
 
     // All three raw citations are kept for traceability ("View Evidence")...
     expect(result[0]?.evidence).toHaveLength(3);

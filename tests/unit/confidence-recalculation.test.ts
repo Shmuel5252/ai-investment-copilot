@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fixtureBasis } from "../helpers/independence";
 import { describe, expect, it } from "vitest";
 import { dnaCreatedByEnum, principleCreatedByEnum } from "@/db/schema";
 import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evidence-strength";
@@ -30,6 +31,7 @@ const dnaBase = {
   createdAt: new Date("2026-08-01T00:00:00Z"),
   createdBy: "ai_generated" as const,
   changeReason: null,
+  independenceBasisJson: null,
 };
 const strategyBase = {
   id: "st-v2",
@@ -44,6 +46,7 @@ const strategyBase = {
   evidenceStrength: "moderate" as EvidenceStrength,
   supportingEvidenceCount: 2,
   contradictingEvidenceCount: 1,
+  independenceBasisJson: null,
 };
 
 function appendPlanFor(v: { id: string; evidenceStrength: EvidenceStrength | null; supportingEvidenceCount: number | null; contradictingEvidenceCount: number | null }): AppendRecalculatedVersionPlan {
@@ -75,8 +78,30 @@ describe("what a recalculated version preserves (D, E, F) and what it may change
     expect(built.supportingEvidenceCount).toBe(dnaBase.supportingEvidenceCount);
     expect(built.contradictingEvidenceCount).toBe(dnaBase.contradictingEvidenceCount);
     expect(Object.keys(built).sort()).toEqual(
-      ["changeReason", "contradictingEvidenceCount", "createdBy", "evidenceStrength", "statementText", "supportingEvidenceCount"]
+      [
+        "changeReason",
+        "contradictingEvidenceCount",
+        "createdBy",
+        "evidenceStrength",
+        "independenceBasisJson",
+        "statementText",
+        "supportingEvidenceCount",
+      ]
     );
+  });
+
+  it("D. DNA: the independence basis of the base version is carried forward unchanged (a confidence-only version never reads as legacy)", () => {
+    const basis = fixtureBasis(2, 1);
+    const base = { ...dnaBase, independenceBasisJson: basis };
+    expect(buildRecalculatedDnaVersion(base, appendPlanFor(base)).independenceBasisJson).toEqual(basis);
+    expect(buildRecalculatedDnaVersion(dnaBase, appendPlanFor(dnaBase)).independenceBasisJson).toBeNull(); // legacy stays legacy
+  });
+
+  it("E. Strategy: the independence basis of the base version is carried forward unchanged", () => {
+    const basis = fixtureBasis(2, 1);
+    const base = { ...strategyBase, independenceBasisJson: basis };
+    expect(buildRecalculatedStrategyVersion(base, appendPlanFor(base)).independenceBasisJson).toEqual(basis);
+    expect(buildRecalculatedStrategyVersion(strategyBase, appendPlanFor(strategyBase)).independenceBasisJson).toBeNull();
   });
 
   it("D/E/F. Strategy: statement, principleType, rationale, S and C are carried over exactly", () => {
@@ -91,6 +116,7 @@ describe("what a recalculated version preserves (D, E, F) and what it may change
       "contradictingEvidenceCount",
       "createdBy",
       "evidenceStrength",
+      "independenceBasisJson",
       "principleType",
       "rationaleText",
       "statementText",

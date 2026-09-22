@@ -134,6 +134,18 @@ SESSION_SECRET=          # חתימת cookie session
   (למשל `sellTrace`), לא כותבים לולאת avg-cost מקבילה. תוקן בפועל אחרי
   שגרסה מוקדמת של `select-transactions.ts` מימשה חישוב מקביל וסטתה
   ממנו — נתפס ע"י קריאת AI חיה, ר' git history.
+- **Test DB Safety (מחייב):** טסטים מבוססי-DB (`tests/integration/**`) יוצרים
+  משקיעים סינתטיים וכותבים לטבלאות history שאי אפשר לנקות — לכן הם רצים
+  **רק** מול DB שהוסמך במפורש לטסטים: `TEST_DATABASE_URL` (לעולם לא
+  `DATABASE_URL` של האפליקציה; `.env` לבדו לא מסמיך כלום), שונה ממנו, ונושא
+  marker בתוך ה-DB עצמו (`COMMENT ON DATABASE`, נכתב רק ע"י
+  `npm run db:test:create`; **השם לא קובע**, ולכן "test"/"scratch" בשם לא
+  מסמיכים). אין הרשאה → נכשל **לפני כתיבה**, בלי warning-and-continue ובלי
+  fallback ל-`DATABASE_URL` (`tests/support/test-database.ts`,
+  `tests/support/global-setup.ts`, `tests/setup.ts`; ההודעות לא חושפות
+  connection string). טסטים טהורים בלי DB: `npm run test:unit`. תוקן בפועל
+  אחרי שנמצאו ב-DB האמיתי ~600 משקיעים סינתטיים מהרצות `vitest` ללא הגנה
+  (2026-08-13 ואילך) — ר' `docs/backlog.md`.
 
 ---
 
