@@ -137,6 +137,41 @@ export const decisionsListPage = {
   noDecisionsYet: "עדיין לא נרשמו החלטות.",
 };
 
+// --- Open-Decision Monitoring V1 (src/app/page.tsx) — derived on read,
+// never persisted. Reason labels are neutral facts, never judgments
+// (docs/architecture.md §2.9): never "executed", "contradiction", "mistake". ---
+export const decisionAttention = {
+  title: "החלטות שדורשות תשומת לב",
+  loading: "בודק...",
+  empty: "אין החלטות שדורשות תשומת לב כרגע",
+  historyThroughPrefix: "ההיסטוריה מעודכנת עד",
+  noHistory: "אין עדיין היסטוריית עסקאות",
+  reason: {
+    REVIEW_DUE: "הגיע מועד ה-Review",
+    PREDICTION_DUE: "תחזיות שניתן לבדוק",
+    NEW_EXECUTION_AFTER_DECISION: "עסקאות אחרי ההחלטה",
+    HISTORY_BACKFILLED: "היסטוריה שנוספה בדיעבד",
+  } as Record<string, string>,
+  txnType: { buy: "קנייה", sell: "מכירה" } as Record<string, string>,
+  reviewDueFact: "תאריך ה-Review שקבעת:",
+  predictionDueFact: "תחזיות ממתינות שהגיע מועד בדיקתן",
+  newExecutionFactMiddle: "עסקאות ב-",
+  newExecutionFactSuffix: "אחרי ההחלטה נוספו להיסטוריה ב-",
+  backfilledFactMiddle: "עסקאות ב-",
+  backfilledFactSuffix: "מלפני ההחלטה נוספו להיסטוריה אחרי שהרשומה הוקפאה, ב-",
+  backfilledNote: "רשומת ההחלטה עצמה אינה משתנה.",
+  sameDayFact: "עסקאות ביום ההחלטה (הסדר ביחס להחלטה לא ידוע)",
+  executionUnavailablePrefix: "היסטוריית העסקאות זמינה רק עד",
+  heldPrefix: "מוחזק כעת:",
+  flat: "לא מוחזק כעת",
+  frozenHoldingPrefix: "החזקה ברשומת ההחלטה:",
+  positionUnavailable: "מצב הפוזיציה לא זמין (אזהרות חישוב או כשל) — מוצגות עובדות עסקה בלבד.",
+  openDecision: "פתח החלטה",
+  addContext: "הוסף הקשר",
+  runReview: "הרץ Review",
+  withoutHorizonSuffix: "החלטות במעקב ללא תאריך Review",
+};
+
 // --- Decision Snapshot (src/app/decisions/[id]/page.tsx) ---
 
 export const decisionSnapshot = {
@@ -156,6 +191,12 @@ export const decisionSnapshot = {
   marketContextTitle: "הקשר שוק במועד ההחלטה",
   onThatDay: "באותו יום",
   dnaHypothesesTitle: "השערות DNA בתוקף במועד ההחלטה",
+  // Open-Decision Monitoring V1 — the review horizon line.
+  reviewByLabel: "Review עד",
+  noReviewDate: "לא נקבע תאריך Review",
+  setReviewDateButton: "קבע תאריך Review (פעם אחת)",
+  settingReviewDateButton: "קובע...",
+  reviewDateSetOnceNote: "ניתן לקבוע פעם אחת בלבד; לא ניתן לשנות אחר כך.",
 };
 
 export const laterContext = {
@@ -562,6 +603,11 @@ export const caseDetailPage = {
   reasoningPlaceholder: "הנימוק והתזה שלך — למה ההחלטה הזו, מה אתה מאמין שיקרה?",
   risksPlaceholder: "סיכונים ששקלת (אופציונלי)",
   exitConditionsPlaceholder: "תנאי יציאה — מה היה משנה את דעתך? (אופציונלי)",
+  // Open-Decision Monitoring V1 — explicit review-horizon choice.
+  reviewHorizonLabel: "מועד Review להחלטה הזו",
+  reviewHorizonDateOption: "לקבוע תאריך Review",
+  reviewHorizonNoneOption: "ללא תאריך Review (בחירה מפורשת)",
+  reviewHorizonRequired: "בחר תאריך Review או 'ללא תאריך' לפני הרישום.",
   recordPrefix: "רשום",
   recordSuffix: "— לצמיתות",
   recordingButton: "רושם...",

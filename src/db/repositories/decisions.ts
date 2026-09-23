@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { InferInsertModel } from "drizzle-orm";
 import type { db as Db, DbOrTx } from "@/db/client";
 import {
@@ -66,6 +66,23 @@ export async function getDecisionByCaseId(db: typeof Db, investmentCaseId: strin
   return db.query.decisions.findFirst({
     where: (d, { eq }) => eq(d.investmentCaseId, investmentCaseId),
   });
+}
+
+// Open-Decision Monitoring V1 — the legacy write-once review horizon. The
+// DB predicate IS the guard: ownership + `review_by_date IS NULL` in the
+// same UPDATE, so two concurrent calls cannot both win and there is no
+// read-then-write window. Returns null when nothing was updated (not owned
+// or already set) — the caller decides which message that deserves.
+export async function setReviewByDateIfUnset(
+  db: typeof Db,
+  params: { decisionId: string; investorId: string; reviewByDate: Date }
+) {
+  const [row] = await db
+    .update(decisions)
+    .set({ reviewByDate: params.reviewByDate })
+    .where(and(eq(decisions.id, params.decisionId), eq(decisions.investorId, params.investorId), isNull(decisions.reviewByDate)))
+    .returning();
+  return row ?? null;
 }
 
 // The single write path for freezing a Decision Snapshot — this is the

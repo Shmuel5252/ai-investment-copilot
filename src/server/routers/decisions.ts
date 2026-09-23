@@ -14,6 +14,7 @@ import {
   getDecisionByCaseId,
   insertLaterContext,
   getLaterContextsForDecision,
+  setReviewByDateIfUnset,
 } from "@/db/repositories/decisions";
 import { getInvestmentCase, updateInvestmentCase } from "@/db/repositories/ideas-cases";
 import { getLatestStrategyVersion, getStrategyVersionPrinciples } from "@/db/repositories/strategy";
@@ -26,6 +27,9 @@ import { computePortfolioFit, type TickerClassification } from "@/lib/portfolio/
 import { synthesizeDecisionContext } from "@/lib/ai/decision";
 import { isUniqueViolation } from "@/db/errors";
 import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
+import { loadDecisionAttention } from "@/lib/monitoring/load-decision-attention";
+import { InvalidTimeZoneError } from "@/lib/monitoring/decision-attention";
+import { resolveReviewByDate, reviewHorizonChoiceSchema, ReviewHorizonError } from "@/lib/monitoring/review-horizon";
 
 // Decision types that add exposure — the only ones a hypothetical size
 // meaningfully projects onto computePortfolioFit(), which always models
@@ -53,6 +57,10 @@ export const decisionsRouter = router({
         reasoningText: z.string().min(1),
         risksConsideredText: z.string().optional(),
         exitConditionsText: z.string().optional(),
+        // Open-Decision Monitoring V1: an EXPLICIT choice — a review date or a
+        // deliberate "none". A missing field is a validation error, never a
+        // silent no-horizon; the date is the investor's, never generated.
+        reviewHorizon: reviewHorizonChoiceSchema,
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -65,6 +73,16 @@ export const decisionsRouter = router({
           code: "BAD_REQUEST",
           message: "This case already has a recorded decision — start a new Idea/Case to decide again.",
         });
+      }
+
+      // Resolved before any external call so an invalid horizon fails fast.
+      const decisionDate = input.decisionDate ? new Date(input.decisionDate) : new Date();
+      let reviewByDate: Date | null;
+      try {
+        reviewByDate = resolveReviewByDate(input.reviewHorizon, decisionDate);
+      } catch (err) {
+        if (err instanceof ReviewHorizonError) throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+        throw err;
       }
 
       const latestStrategyVersion = await getLatestStrategyVersion(db, ctx.investorId);
@@ -206,7 +224,8 @@ export const decisionsRouter = router({
             investmentCaseId: investmentCase.id,
             ticker: investmentCase.ticker,
             decisionType: input.decisionType,
-            decisionDate: input.decisionDate ? new Date(input.decisionDate) : new Date(),
+            decisionDate,
+            reviewByDate,
           });
         } catch (err) {
           if (isUniqueViolation(err, "decisions_investment_case_id_unique")) {
@@ -268,6 +287,44 @@ export const decisionsRouter = router({
       });
 
       return { decision, snapshot };
+    }),
+
+  // Open-Decision Monitoring V1 (docs/architecture.md §2.9) — derived on
+  // read through the one wrapper; nothing is persisted, no AI, no prices.
+  // `timeZone` is the IANA zone the client renders dates in: instants
+  // (decision, review, prediction deadline, today) are placed on the
+  // investor's calendar, never on a defaulted server zone.
+  attention: protectedProcedure.input(z.object({ timeZone: z.string().min(1).max(64) })).query(async ({ ctx, input }) => {
+    try {
+      return await loadDecisionAttention(db, ctx.investorId, input.timeZone);
+    } catch (err) {
+      if (err instanceof InvalidTimeZoneError) throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+      throw err;
+    }
+  }),
+
+  // Legacy write-once horizon: NULL -> date only. The repository's UPDATE
+  // predicate (ownership + IS NULL) is the guard; a zero-row result is
+  // explained afterwards, never retried or overridden.
+  setReviewByDate: protectedProcedure
+    .input(z.object({ decisionId: z.string().uuid(), reviewByDate: z.coerce.date() }))
+    .mutation(async ({ ctx, input }) => {
+      const decision = await getDecision(db, input.decisionId);
+      if (!decision || decision.investorId !== ctx.investorId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Decision not found." });
+      }
+      let reviewByDate: Date;
+      try {
+        reviewByDate = resolveReviewByDate({ choice: "date", reviewByDate: input.reviewByDate }, decision.decisionDate)!;
+      } catch (err) {
+        if (err instanceof ReviewHorizonError) throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+        throw err;
+      }
+      const updated = await setReviewByDateIfUnset(db, { decisionId: decision.id, investorId: ctx.investorId, reviewByDate });
+      if (!updated) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This decision already has a review date — it can be set only once." });
+      }
+      return updated;
     }),
 
   get: protectedProcedure

@@ -56,6 +56,11 @@ export const decisions = pgTable(
     ticker: text("ticker").notNull(),
     decisionType: decisionTypeEnum("decision_type").notNull(),
     decisionDate: timestamp("decision_date", { withTimezone: true }).notNull(),
+    // Open-Decision Monitoring V1 — the investor's own review horizon
+    // (docs/data-model.md §5). NULL = "no review date set" (legacy rows stay
+    // NULL, never backfilled). Write-once: the only allowed transition is
+    // NULL -> date (setReviewByDateIfUnset), never date -> other or -> NULL.
+    reviewByDate: timestamp("review_by_date", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   // Enforces "at most one Decision per Case" — already the app-level

@@ -1,0 +1,1 @@
+ALTER TABLE "decisions" ADD COLUMN "review_by_date" timestamp with time zone;

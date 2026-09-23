@@ -60,6 +60,10 @@ export default function CaseDetailPage() {
   const [reasoningText, setReasoningText] = useState("");
   const [risksConsideredText, setRisksConsideredText] = useState("");
   const [exitConditionsText, setExitConditionsText] = useState("");
+  // Open-Decision Monitoring V1 — the review horizon is an EXPLICIT choice
+  // ("" = not chosen yet, which blocks recording); never defaulted.
+  const [reviewHorizon, setReviewHorizon] = useState<"" | "date" | "none">("");
+  const [reviewByDate, setReviewByDate] = useState("");
 
   if (caseQuery.isLoading) return <main className="p-12 text-sm">Loading...</main>;
   if (!caseQuery.data) return <main className="p-12 text-sm text-red-600">Case not found.</main>;
@@ -340,6 +344,28 @@ export default function CaseDetailPage() {
               placeholder={t.exitConditionsPlaceholder}
               className="min-h-16 rounded border border-journal-rule bg-journal-surface p-2 text-sm"
             />
+            <fieldset className="flex flex-col gap-1 rounded border border-journal-rule p-2 text-xs">
+              <legend className="px-1">{t.reviewHorizonLabel}</legend>
+              <label className="flex flex-wrap items-center gap-2">
+                <input type="radio" name="review-horizon" checked={reviewHorizon === "date"} onChange={() => setReviewHorizon("date")} />
+                {t.reviewHorizonDateOption}
+                <input
+                  type="date"
+                  aria-label="review-by-date"
+                  value={reviewByDate}
+                  onChange={(e) => {
+                    setReviewByDate(e.target.value);
+                    setReviewHorizon("date");
+                  }}
+                  className="rounded border border-journal-rule bg-journal-surface px-2 py-1"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="radio" name="review-horizon" checked={reviewHorizon === "none"} onChange={() => setReviewHorizon("none")} />
+                {t.reviewHorizonNoneOption}
+              </label>
+              {reviewHorizon === "" && <p className="text-journal-muted">{t.reviewHorizonRequired}</p>}
+            </fieldset>
             <button
               onClick={() =>
                 guard(
@@ -351,11 +377,20 @@ export default function CaseDetailPage() {
                       reasoningText,
                       risksConsideredText: risksConsideredText.trim() || undefined,
                       exitConditionsText: exitConditionsText.trim() || undefined,
+                      reviewHorizon:
+                        reviewHorizon === "date"
+                          ? { choice: "date" as const, reviewByDate: new Date(reviewByDate) }
+                          : { choice: "none" as const },
                     }),
                   "recordDecision"
                 )
               }
-              disabled={reasoningText.trim() === "" || recordDecision.isPending}
+              disabled={
+                reasoningText.trim() === "" ||
+                reviewHorizon === "" ||
+                (reviewHorizon === "date" && reviewByDate === "") ||
+                recordDecision.isPending
+              }
               className="w-fit rounded bg-journal-accent px-3 py-2 text-sm text-white disabled:opacity-50"
             >
               {recordDecision.isPending

@@ -348,8 +348,34 @@ scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמי�
 להציג את קטע התשובה המקורית לצד התיאור, או לתייג כ"סיכום AI".
 
 ---
+### Decision Review — אין הגנה מפני הגשה כפולה, ו-Review+פתרון Predictions אינם טרנזקציה אחת (נמצא 2026-09-23)
+**נמצא:** ב-architecture review של Open-Decision Monitoring V1: להחלטת LLY שני Review-ים זהים
+(06.09 ו-07.09, אותו outcome) — `reviews.generate` ללא guard בצד שרת; בנוסף `insertDecisionReview`
+ואז `resolvePrediction` לכל prediction רצים מחוץ לטרנזקציה אחת ובלי נעילת שורה (check-then-update),
+כך ש-Review מקבילי שני יכול להשאיר Review שפתרון ה-predictions שלו נכשל. **מחוץ ל-scope של
+Monitoring V1 בכוונה** (לא חסם את נכונותו). לתקן ביחידה נפרדת: טרנזקציה אחת + `FOR UPDATE` על
+ה-predictions + הגנת double-submit.
 
 ## נבנה
+- **Open-Decision Monitoring V1 — "החלטות שדורשות תשומת לב", נגזר בקריאה** (2026-09-23):
+  שכבת תשומת-לב דטרמיניסטית מעל ההחלטות הקפואות (ר' `docs/architecture.md` §2.9,
+  `docs/data-model.md` §5 "Decision Monitoring"). **הוחלט (3 הכרעות אנושיות):** `review_by_date`
+  אופציונלי אך בחירה מפורשת בהחלטה חדשה, כתיבה פעם אחת להחלטה ישנה; `HISTORY_BACKFILLED` היא
+  סיבת V1 (מנוסחת ניטרלית); עסקה ביום ההחלטה מוצגת ולעולם לא נספרת כ"אחרי". **נבנה:** מיגרציה
+  `0013` (`decisions.review_by_date` NULL, בלי backfill — **הוחלה על DB scratch בלבד, לא על
+  ה-DB האמיתי**); `src/lib/monitoring/decision-attention.ts` (טהור) + `load-decision-attention.ts`
+  (ה-wrapper היחיד) + `review-horizon.ts`; `decisions.attention`, `decisions.create` עם
+  `reviewHorizon` מפורש, `decisions.setReviewByDate` (UPDATE אטומי `IS NULL` + בעלות);
+  מקטע אחד בדשבורד; שורת אופק ב-Decision Snapshot; בחירת אופק בטופס ההחלטה. ללא AI, ללא מחירי
+  שוק, ללא טבלת attention, ללא קישור החלטה↔עסקה. **replay קריאה-בלבד על הנתונים האמיתיים:** SNDK
+  PASS 20.08 → `NEW_EXECUTION_AFTER_DECISION` (3 עסקאות שנוספו 23.09 אחרי ה-Review מ-06.09); AVGO
+  BUY 08.09 → `HISTORY_BACKFILLED` (מכירה 05.08 וקנייה 02.09 שנוספו 23.09 אחרי הקפאת ה-Snapshot;
+  4 predictions ללא תאריך → לא due); LLY BUY 19.08 → settled (נסקרה, ללא עובדה חדשה). MU = case
+  במחקר, לא החלטה. **final review (2026-09-23):** נמצא ותוקן — הימים חושבו לפי UTC, כך שהחלטה
+  שנרשמה ב-00:00–03:00 שעון ישראל נפלה ליום ה-UTC הקודם ועסקה מאותו יום מקומי הייתה נספרת
+  כ"אחרי" (סיבת attention כוזבת), ו-Review ב-00:30 ביום האופק לא סיפק אותו; עכשיו רגעים ממוקמים
+  על לוח השנה של המשקיע לפי אזור הזמן שהלקוח שולח (`decisions.attention({ timeZone })`, מאומת,
+  ללא ברירת מחדל), ותאריכי-בלבד נקראים לפי רכיבי UTC. בדיקות גבול סביב חצות ירושלים נוספו.
 - **Import Blockers V1 — `tax_refund` + פיצולי מניה כאירוע הון בלתי ניתן לשינוי** (2026-09-23):
   ה-dry run של הרענון האמיתי הראשון (211 תנועות מקובץ ברוקר מותאם) נחסם על שניים: (1) שורת
   "זיכוי מס אוגוסט" (+$26.65, 01.09) נדחתה כ-`unrecognized transaction type` — ואסור היה למפות

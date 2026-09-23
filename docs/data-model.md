@@ -389,7 +389,25 @@ Decision Review שפותר אותם.
   ע"י מבנה נתונים).
 
 **Decision** (זהות דקה) — `id, investor_id, investment_case_id, ticker,
-decision_type(BUY|PASS|HOLD|ADD|REDUCE|SELL), decision_date, created_at`.
+decision_type(BUY|PASS|HOLD|ADD|REDUCE|SELL), decision_date, review_by_date?,
+created_at`. `review_by_date` (Open-Decision Monitoring V1, 2026-09-23):
+מועד ה-Review שהמשקיע בחר — date-only 00:00Z; NULL = "לא נקבע תאריך
+Review" (רשומות ישנות נשארות NULL, אין backfill); בהחלטה חדשה הבחירה
+**מפורשת** (תאריך או "ללא", שדה חסר = שגיאת ולידציה); **כתיבה פעם אחת**
+— המעבר היחיד המותר NULL→תאריך, ב-UPDATE אטומי עם תנאי בעלות ו-`IS NULL`
+(`setReviewByDateIfUnset`), לעולם לא תאריך→תאריך אחר ולא →NULL. לא לפני
+יום ההחלטה.
+
+**Decision Monitoring (נגזר, לא נשמר; Open-Decision Monitoring V1)** — אין
+טבלה ואין enum: `deriveDecisionAttention()` מחשבת בקריאה לכל Decision
+מצב `attention | monitoring | settled`, baseline (Review אחרון או תאריך
+ההחלטה), מצב אופק (`not_set | upcoming | due | satisfied`), Predictions
+ממתינים/שהגיע מועדם, עובדות ביצוע מקובצות (ידועות לפני ההחלטה / נוספו
+בדיעבד לפני ההחלטה / ביום ההחלטה / אחרי ההחלטה — `transaction_date` הוא
+תאריך קלנדרי (00:00Z, רכיבי UTC) מול היום הקלנדרי של `decision_date` באזור
+הזמן שהלקוח שולח (IANA, זה שבו ה-UI מרנדר תאריכים), ו-`transactions.created_at`
+כשעון החידוש — השוואת רגעים, בלי ימים) ומצב פוזיציה מ-`computePositionsForInvestor()` בלבד. ארבע סיבות
+בדיוק (ר' `docs/architecture.md` §2.9). שום דבר מזה לא נכתב.
 
 **DecisionSnapshot** — `id, decision_id (1:1), price_at_decision, size?,
 user_reasoning_text, ai_realtime_assessment_text, risks_considered_text,

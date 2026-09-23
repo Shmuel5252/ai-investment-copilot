@@ -132,6 +132,7 @@ export default function DecisionDetailPage() {
               </>
             ) : null}
           </p>
+          <ReviewHorizonLine decisionId={id} reviewByDate={decision.reviewByDate ? new Date(decision.reviewByDate) : null} />
         </div>
 
         <section className="flex flex-col gap-4 rounded border border-journal-rule bg-journal-surface p-5 text-sm">
@@ -245,7 +246,7 @@ export default function DecisionDetailPage() {
             into Decision Review's AI reasoning as an authoritative
             correction wherever it conflicts with the frozen text. */}
         <section className="flex flex-col gap-3 border-t border-journal-rule pt-6">
-          <h2 className="text-sm font-semibold">{tLater.title}</h2>
+          <h2 id="later-context" className="text-sm font-semibold">{tLater.title}</h2>
           <p className="text-xs text-journal-muted">{tLater.explanation}</p>
           {laterContexts.data?.map((lc) => (
             <div key={lc.id} className="rounded border border-journal-rule bg-journal-bg p-3 text-sm">
@@ -281,7 +282,7 @@ export default function DecisionDetailPage() {
           global token change, without touching a single line inside. */}
       <div dir="ltr" lang="en" className="legacy-scope">
         <section className="flex flex-col gap-4 border-t border-neutral-200 pt-6">
-          <h2 className="text-sm font-semibold">Decision Review</h2>
+          <h2 id="review" className="text-sm font-semibold">Decision Review</h2>
 
           {(pendingPredictions.data?.length ?? 0) > 0 && (
             <div className="flex flex-col gap-3 rounded border border-amber-200 bg-amber-50 p-4">
@@ -466,6 +467,46 @@ function OutcomeView({ outcome }: { outcome: DecisionOutcome }) {
 }
 
 // Decision Snapshot only (Later Context/Review sections don't use this).
+// Open-Decision Monitoring V1 — the review horizon: shown when set; for a
+// legacy decision without one the investor may set it exactly once
+// (decisions.setReviewByDate; the DB predicate allows NULL -> date only).
+function ReviewHorizonLine({ decisionId, reviewByDate }: { decisionId: string; reviewByDate: Date | null }) {
+  const utils = trpc.useUtils();
+  const guard = useSubmitGuard();
+  const [draft, setDraft] = useState("");
+  const set = trpc.decisions.setReviewByDate.useMutation({
+    onSuccess: () => utils.decisions.get.invalidate({ decisionId }),
+  });
+  if (reviewByDate) {
+    return (
+      <p className="text-xs text-journal-muted">
+        {t.reviewByLabel} <Num>{reviewByDate.toLocaleDateString("he-IL")}</Num>
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-journal-muted">
+      <span>{t.noReviewDate}</span>
+      <input
+        type="date"
+        aria-label="review-by-date"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        className="rounded border border-journal-rule bg-journal-surface px-2 py-1"
+      />
+      <button
+        onClick={() => guard(() => set.mutateAsync({ decisionId, reviewByDate: new Date(draft) }), "set-review-date")}
+        disabled={draft === "" || set.isPending}
+        className="rounded border border-journal-rule px-2 py-1 disabled:opacity-50"
+      >
+        {set.isPending ? t.settingReviewDateButton : t.setReviewDateButton}
+      </button>
+      <span>{t.reviewDateSetOnceNote}</span>
+      {set.isError && <span className="text-red-600">{set.error.message}</span>}
+    </div>
+  );
+}
+
 function TextBlock({ label, text }: { label: string; text: string | null }) {
   if (!text) return null;
   return (
