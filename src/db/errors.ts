@@ -17,6 +17,18 @@ export function isUniqueViolation(err: unknown, constraintName: string): boolean
   return cause?.code === "23505" && cause?.constraint_name === constraintName;
 }
 
+// Decision Review Integrity V1 (persistDecisionReviewAtomic). Thrown inside
+// the persistence transaction, so nothing is written when they escape:
+//   ReviewStateChangedError — the locked prediction state no longer matches
+//     what the review was prepared/generated against (fail closed; the AI is
+//     never re-run automatically);
+//   ReviewIdempotencyConflictError — this submission key already belongs to a
+//     review created from a DIFFERENT request;
+//   ReviewDecisionNotFoundError — the decision is gone or not the investor's.
+export class ReviewStateChangedError extends Error {}
+export class ReviewIdempotencyConflictError extends Error {}
+export class ReviewDecisionNotFoundError extends Error {}
+
 // Thrown by an identity-version append whose counting was computed against a
 // base state that has since changed — the identity's latest version is no
 // longer the one the generation counted against (another generation,

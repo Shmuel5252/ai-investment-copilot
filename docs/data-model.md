@@ -428,8 +428,20 @@ Append-only.
 (שכבה 1, AI), decision_quality_overall (ר' טבלת Rollup למטה),
 thesis_accuracy(confirmed|partially_confirmed|refuted|inconclusive|
 insufficient_evidence, AI נתמך ע"י Prediction resolutions), outcome_json
-(P/L, %-תשואה — קוד טהור), created_at`. Immutable; review חוזר = שורה
-חדשה.
+(P/L, %-תשואה — קוד טהור), idempotency_key?, request_fingerprint?,
+input_state_fingerprint?, created_at`. Immutable; review חוזר = שורה
+חדשה. **Decision Review Integrity V1 (2026-09-24):** `idempotency_key` = UUID
+שהלקוח יוצר לכל הגשת Review מפורשת (כל retry של אותה הגשה משתמש בו, Review
+מכוון מאוחר יותר מקבל מפתח חדש); `request_fingerprint` = מה הוגש (החלטה +
+כל resolution: id, status, note כפי שנכתב); `input_state_fingerprint` = מצב
+ה-Predictions (id + status, ממוין) שה-AI קיבל. `UNIQUE (decision_id,
+idempotency_key) WHERE idempotency_key IS NOT NULL` הוא הסמכות הסופית: אותו
+מפתח + אותה בקשה → ה-Review הקיים מוחזר (בלי AI, בלי כתיבה), אותו מפתח +
+בקשה אחרת → CONFLICT. השמירה היא טרנזקציה קצרה אחת **אחרי** קריאת ה-AI
+(`persistDecisionReviewAtomic`): נעילת שורת ההחלטה ואז כל ה-Predictions לפי
+id (`FOR UPDATE`), חישוב מחדש של `input_state_fingerprint` — שינוי → rollback
+מלא בלי הרצת AI חוזרת — ואז Review + 7 ממדים + כל ה-resolutions יחד או כלום.
+שורות ישנות: שלושת השדות NULL, לא משוחזרים.
 
 **ReviewDimension** — `id, decision_review_id,
 dimension(thesis_quality|evidence_quality|risk_awareness|

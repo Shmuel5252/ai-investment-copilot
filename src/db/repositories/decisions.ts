@@ -1,4 +1,6 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { isUniqueViolation, ReviewDecisionNotFoundError, ReviewIdempotencyConflictError, ReviewStateChangedError } from "@/db/errors";
+import { computeReviewInputStateFingerprint } from "@/lib/review/review-fingerprint";
 import type { InferInsertModel } from "drizzle-orm";
 import type { db as Db, DbOrTx } from "@/db/client";
 import {
@@ -145,6 +147,128 @@ export async function insertDecisionReview(
     );
     return review!;
   });
+}
+
+// Decision Review Integrity V1 — replay lookup by (decision, submission key).
+export async function findReviewByIdempotencyKey(db: DbOrTx, decisionId: string, idempotencyKey: string) {
+  const [review] = await db
+    .select()
+    .from(decisionReviews)
+    .where(and(eq(decisionReviews.decisionId, decisionId), eq(decisionReviews.idempotencyKey, idempotencyKey)));
+  if (!review) return null;
+  const dimensions = await db.select().from(reviewDimensions).where(eq(reviewDimensions.decisionReviewId, review.id));
+  return { review, dimensions };
+}
+
+export type ReviewResolutionInput = {
+  predictionId: string;
+  status: "confirmed" | "refuted" | "inconclusive";
+  note: string;
+};
+
+// Decision Review Integrity V1 — THE write path for a review: one short
+// transaction, entered only after the AI call has returned (never around
+// it). Locks, in this fixed order, the owned decision row and then every
+// prediction of its thesis ordered by id; under those locks it
+//   1. replays or refuses a submission key that already has a review
+//      (same request fingerprint → the existing review, different → CONFLICT),
+//   2. recomputes the input-state fingerprint and fails closed if it differs
+//      from the one the review was generated against,
+//   3. re-checks that every submitted prediction belongs to this thesis and is
+//      still pending and that no pending prediction is left unresolved,
+//   4. inserts the review, its dimensions and every resolution together.
+// Nothing is written on any failure. The partial unique index on
+// (decision_id, idempotency_key) stays the final authority: a violation is
+// resolved by re-reading the committed review (replay) or CONFLICT, never a
+// raw 500 and never a second row.
+export async function persistDecisionReviewAtomic(
+  db: typeof Db,
+  params: {
+    investorId: string;
+    decisionId: string;
+    idempotencyKey: string;
+    requestFingerprint: string;
+    inputStateFingerprint: string;
+    review: Omit<NewDecisionReview, "decisionId" | "idempotencyKey" | "requestFingerprint" | "inputStateFingerprint">;
+    dimensions: Omit<NewReviewDimension, "decisionReviewId">[];
+    resolutions: readonly ReviewResolutionInput[];
+  }
+) {
+  const replayOrConflict = (existing: NonNullable<Awaited<ReturnType<typeof findReviewByIdempotencyKey>>>) => {
+    if (existing.review.requestFingerprint !== params.requestFingerprint) {
+      throw new ReviewIdempotencyConflictError("This review submission id was already used with different input.");
+    }
+    return { ...existing, replayed: true as const };
+  };
+  try {
+    return await db.transaction(async (tx) => {
+      const [decision] = await tx
+        .select({ id: decisions.id })
+        .from(decisions)
+        .where(and(eq(decisions.id, params.decisionId), eq(decisions.investorId, params.investorId)))
+        .for("update");
+      if (!decision) throw new ReviewDecisionNotFoundError("Decision not found.");
+
+      const existing = await findReviewByIdempotencyKey(tx, params.decisionId, params.idempotencyKey);
+      if (existing) return replayOrConflict(existing);
+
+      const [snapshot] = await tx
+        .select({ thesisId: decisionSnapshots.thesisId })
+        .from(decisionSnapshots)
+        .where(eq(decisionSnapshots.decisionId, params.decisionId));
+      if (!snapshot) throw new ReviewStateChangedError("This decision has no snapshot to review.");
+
+      const locked = await tx
+        .select({ id: predictions.id, status: predictions.status })
+        .from(predictions)
+        .where(eq(predictions.thesisId, snapshot.thesisId))
+        .orderBy(asc(predictions.id))
+        .for("update");
+      if (computeReviewInputStateFingerprint(locked) !== params.inputStateFingerprint) {
+        throw new ReviewStateChangedError("Prediction state changed since this review was prepared.");
+      }
+      const statusById = new Map(locked.map((p) => [p.id, p.status]));
+      const submitted = new Set(params.resolutions.map((r) => r.predictionId));
+      if (submitted.size !== params.resolutions.length) throw new ReviewStateChangedError("A prediction was resolved more than once.");
+      for (const r of params.resolutions) {
+        if (statusById.get(r.predictionId) !== "pending") throw new ReviewStateChangedError("A submitted prediction is not a pending prediction of this decision.");
+      }
+      for (const [id, status] of statusById) {
+        if (status === "pending" && !submitted.has(id)) throw new ReviewStateChangedError("A pending prediction was left unresolved.");
+      }
+
+      const [review] = await tx
+        .insert(decisionReviews)
+        .values({
+          ...params.review,
+          decisionId: params.decisionId,
+          idempotencyKey: params.idempotencyKey,
+          requestFingerprint: params.requestFingerprint,
+          inputStateFingerprint: params.inputStateFingerprint,
+        })
+        .returning();
+      const dimensions = await tx
+        .insert(reviewDimensions)
+        .values(params.dimensions.map((d) => ({ ...d, decisionReviewId: review!.id })))
+        .returning();
+      const resolvedAt = new Date();
+      for (const r of params.resolutions) {
+        const updated = await tx
+          .update(predictions)
+          .set({ status: r.status, resolvedAt, resolvedByReviewId: review!.id, resolutionNote: r.note })
+          .where(and(eq(predictions.id, r.predictionId), eq(predictions.status, "pending")))
+          .returning({ id: predictions.id });
+        if (updated.length !== 1) throw new ReviewStateChangedError("A submitted prediction is no longer pending.");
+      }
+      return { review: review!, dimensions, replayed: false as const };
+    });
+  } catch (err) {
+    if (isUniqueViolation(err, "decision_reviews_decision_idempotency_key_unique")) {
+      const existing = await findReviewByIdempotencyKey(db, params.decisionId, params.idempotencyKey);
+      if (existing) return replayOrConflict(existing);
+    }
+    throw err;
+  }
 }
 
 export async function getDecisionReviewsForDecision(db: typeof Db, decisionId: string) {

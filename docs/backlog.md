@@ -348,7 +348,7 @@ scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמי�
 להציג את קטע התשובה המקורית לצד התיאור, או לתייג כ"סיכום AI".
 
 ---
-### Decision Review — אין הגנה מפני הגשה כפולה, ו-Review+פתרון Predictions אינם טרנזקציה אחת (נמצא 2026-09-23)
+### ~~Decision Review — אין הגנה מפני הגשה כפולה, ו-Review+פתרון Predictions אינם טרנזקציה אחת (נמצא 2026-09-23)~~ — נבנה (Decision Review Integrity V1, 2026-09-24; ר' "נבנה")
 **נמצא:** ב-architecture review של Open-Decision Monitoring V1: להחלטת LLY שני Review-ים זהים
 (06.09 ו-07.09, אותו outcome) — `reviews.generate` ללא guard בצד שרת; בנוסף `insertDecisionReview`
 ואז `resolvePrediction` לכל prediction רצים מחוץ לטרנזקציה אחת ובלי נעילת שורה (check-then-update),
@@ -357,6 +357,17 @@ Monitoring V1 בכוונה** (לא חסם את נכונותו). לתקן ביח�
 ה-predictions + הגנת double-submit.
 
 ## נבנה
+- **Decision Review Integrity V1 — מפתח הגשה, טביעות אצבע, שמירה אטומית** (2026-09-24):
+  ה-architecture review שחזר על DB scratch דרך `reviews.generate` האמיתי (AI mocked): (1) Prediction
+  שנפתר בזמן קריאת ה-AI → Review נשמר, רק חלק מה-Predictions נפתרו ממנו, והבקשה החזירה שגיאה;
+  (2) שתי הגשות מקבילות → שני Reviews; (3) בלי Predictions ממתינים כל הגשה חוזרת יוצרת Review.
+  **הוחלט:** Review חוזר מכוון חוקי גם בלי Predictions ממתינים; שינוי מצב → fail closed בלי AI חוזר;
+  UUID מהלקוח לכל הגשה + `request_fingerprint` + `input_state_fingerprint` על ה-Review, unique חלקי
+  כסמכות סופית. **נבנה:** מיגרציה `0014` (שלוש עמודות NULL + unique חלקי, בלי backfill — scratch
+  בלבד, לא ה-DB האמיתי); `persistDecisionReviewAtomic` (נעילות החלטה → Predictions לפי id, אימות
+  מחדש, Review + ממדים + resolutions בטרנזקציה אחת; unique violation → replay/CONFLICT);
+  `review-fingerprint.ts`; `reviews.generate` עם replay לפני AI; מפתח הגשה בעמוד ההחלטה. שני
+  ה-Reviews הקיימים של LLY לא נגעו ולא סווגו (אין ראיה אם השני היה מכוון).
 - **Open-Decision Monitoring V1 — "החלטות שדורשות תשומת לב", נגזר בקריאה** (2026-09-23):
   שכבת תשומת-לב דטרמיניסטית מעל ההחלטות הקפואות (ר' `docs/architecture.md` §2.9,
   `docs/data-model.md` §5 "Decision Monitoring"). **הוחלט (3 הכרעות אנושיות):** `review_by_date`

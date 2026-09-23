@@ -72,11 +72,23 @@ export default function DecisionDetailPage() {
   const reviews = trpc.reviews.listForDecision.useQuery({ decisionId: id });
   const laterContexts = trpc.decisions.listLaterContext.useQuery({ decisionId: id });
 
+  // Decision Review Integrity V1 — one UUID per explicit review submission:
+  // kept across failed/retried attempts of the same submission (the server
+  // replays an already-saved one), replaced only after a confirmed success
+  // so the next deliberate review is a new submission.
+  const [reviewSubmissionKey, setReviewSubmissionKey] = useState(() => crypto.randomUUID());
   const generateReview = trpc.reviews.generate.useMutation({
     onSuccess: () => {
       utils.reviews.listForDecision.invalidate({ decisionId: id });
       utils.reviews.pendingPredictions.invalidate({ decisionId: id });
       setResolutions({});
+      setReviewSubmissionKey(crypto.randomUUID());
+    },
+    // A conflict means the stored state moved (or this submission was already
+    // saved) — show the current reviews/predictions; nothing was written.
+    onError: () => {
+      utils.reviews.listForDecision.invalidate({ decisionId: id });
+      utils.reviews.pendingPredictions.invalidate({ decisionId: id });
     },
   });
   const submitCorrection = trpc.reviews.correct.useMutation({
@@ -339,6 +351,7 @@ export default function DecisionDetailPage() {
               guard(() =>
                 generateReview.mutateAsync({
                   decisionId: id,
+                  idempotencyKey: reviewSubmissionKey,
                   predictionResolutions: Object.entries(resolutions)
                     .filter(([, v]) => v.status && v.note.trim() !== "")
                     .map(([predictionId, v]) => ({ predictionId, status: v.status, note: v.note.trim() })),

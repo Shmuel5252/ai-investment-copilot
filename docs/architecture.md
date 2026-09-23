@@ -195,6 +195,13 @@ Architecture). `CLAUDE.md` מצביע לכאן לפרטים; המקור הרעי
   PASS — כי שם המספר הזה *הוא* בדיוק ה-Counterfactual; לשאר סוגי
   ההחלטה (BUY/ADD/HOLD/REDUCE/SELL) זו תוצאה עובדתית ישירה של פעולה
   שבוצעה בפועל, לא קאונטרפקטואל, ומוצגת ללא הסתרה.
+  **שלמות (Decision Review Integrity V1, 2026-09-24):** שלושה שלבים — (1)
+  קריאה/אימות מחוץ לטרנזקציה, כולל replay לפי מפתח ההגשה לפני AI; (2) AI
+  מחוץ לכל טרנזקציה; (3) טרנזקציה קצרה אחת עם נעילות (החלטה → Predictions
+  לפי id) שמאמתת מחדש את מצב ה-Predictions ושומרת Review + ממדים + כל
+  ה-resolutions יחד. שינוי מצב בין (1) ל-(3) → נכשל סגור, בלי הרצת AI
+  חוזרת. Review חוזר מכוון נשאר חוקי (מפתח חדש), גם בלי Predictions
+  ממתינים. אין יצירת Learning/DNA/Strategy מ-Review.
 - **Done:** מחזור Review מלא, Quality/Accuracy/Outcome מופרדים,
   traceable.
 

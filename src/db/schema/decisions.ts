@@ -6,8 +6,10 @@ import {
   numeric,
   jsonb,
   unique,
+  uniqueIndex,
   primaryKey,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { investors } from "./identity";
 import { investmentCases } from "./ideas-cases";
 import { dnaHypothesisVersions } from "./dna";
@@ -150,8 +152,24 @@ export const decisionReviews = pgTable("decision_reviews", {
   decisionQualityOverall: decisionQualityEnum("decision_quality_overall").notNull(),
   thesisAccuracy: thesisAccuracyEnum("thesis_accuracy").notNull(),
   outcomeJson: jsonb("outcome_json").notNull(),
+  // Decision Review Integrity V1 (docs/data-model.md §5). All three NULL on
+  // legacy rows (never backfilled). idempotency_key: the client-generated
+  // UUID of ONE explicit review submission (every retry reuses it);
+  // request_fingerprint: what was submitted (decision + resolutions);
+  // input_state_fingerprint: the prediction state the AI review was
+  // generated against (src/lib/review/review-fingerprint.ts).
+  idempotencyKey: text("idempotency_key"),
+  requestFingerprint: text("request_fingerprint"),
+  inputStateFingerprint: text("input_state_fingerprint"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  // The final authority for idempotency: one review per (decision, key).
+  // Partial: legacy NULL-key rows never participate, and repeated reviews
+  // with different keys stay legal.
+  uniqueIndex("decision_reviews_decision_idempotency_key_unique")
+    .on(table.decisionId, table.idempotencyKey)
+    .where(sql`${table.idempotencyKey} IS NOT NULL`),
+]);
 
 // Layer 2 (drill-down) of the two-layer review. cited_snapshot_fields
 // must be non-empty unless verdict = insufficient_evidence — enforced in

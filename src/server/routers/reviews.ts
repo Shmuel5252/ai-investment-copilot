@@ -6,11 +6,13 @@ import {
   getDecision,
   getDecisionSnapshotByDecisionId,
   getPredictionsForThesis,
-  insertDecisionReview,
   getDecisionReviewsForDecision,
-  resolvePrediction,
   getLaterContextsForDecision,
+  findReviewByIdempotencyKey,
+  persistDecisionReviewAtomic,
 } from "@/db/repositories/decisions";
+import { ReviewDecisionNotFoundError, ReviewIdempotencyConflictError, ReviewStateChangedError } from "@/db/errors";
+import { computeReviewInputStateFingerprint, computeReviewRequestFingerprint } from "@/lib/review/review-fingerprint";
 import { getStrategyVersionPrinciples } from "@/db/repositories/strategy";
 import { getMarketContextById } from "@/db/repositories/market-context";
 import { insertCorrection } from "@/db/repositories/corrections";
@@ -39,6 +41,8 @@ interface FrozenPortfolioState {
   cash: number;
   positions: { ticker: string; quantity: number }[];
 }
+
+const CONFLICT_KEY_MESSAGE = "This review submission was already saved with different input — reload the page to see it.";
 
 async function requireOwnedDecision(investorId: string, decisionId: string) {
   const decision = await getDecision(db, decisionId);
@@ -81,6 +85,10 @@ export const reviewsRouter = router({
     .input(
       z.object({
         decisionId: z.string().uuid(),
+        // Decision Review Integrity V1: the client-generated UUID of ONE
+        // explicit review submission — every retry of that submission reuses
+        // it; a deliberate later review gets a new one.
+        idempotencyKey: z.string().uuid(),
         predictionResolutions: z
           .array(
             z.object({
@@ -94,6 +102,21 @@ export const reviewsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const decision = await requireOwnedDecision(ctx.investorId, input.decisionId);
+
+      // Phase 1 — replay first: a retry of an already-committed submission
+      // (e.g. the response was lost) must return that review, before the
+      // pending-prediction checks below would refuse it and before any AI
+      // call. Optimization + replay only — persistDecisionReviewAtomic and
+      // the DB unique index remain the race-safe authority.
+      const requestFingerprint = computeReviewRequestFingerprint({ decisionId: decision.id, resolutions: input.predictionResolutions });
+      const existing = await findReviewByIdempotencyKey(db, decision.id, input.idempotencyKey);
+      if (existing) {
+        if (existing.review.requestFingerprint !== requestFingerprint) {
+          throw new TRPCError({ code: "CONFLICT", message: CONFLICT_KEY_MESSAGE });
+        }
+        return { review: existing.review, dimensions: existing.dimensions, replayed: true };
+      }
+
       const snapshot = await getDecisionSnapshotByDecisionId(db, decision.id);
       if (!snapshot) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "This decision has no snapshot to review." });
@@ -101,6 +124,12 @@ export const reviewsRouter = router({
 
       const allPredictions = await getPredictionsForThesis(db, snapshot.thesisId);
       const resolutionByPredictionId = new Map(input.predictionResolutions.map((r) => [r.predictionId, r]));
+      if (resolutionByPredictionId.size !== input.predictionResolutions.length) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Each prediction can be resolved only once per review." });
+      }
+      // The prediction state this review is generated against — re-checked on
+      // locked rows at persistence time (fail closed on any change).
+      const inputStateFingerprint = computeReviewInputStateFingerprint(allPredictions);
       const stillUnresolved = allPredictions.filter(
         (p) => p.status === "pending" && !resolutionByPredictionId.has(p.id)
       );
@@ -208,32 +237,41 @@ export const reviewsRouter = router({
       const validatedDimensions = validateReviewDimensions(proposed.dimensions);
       const decisionQualityOverall = calculateDecisionQualityOverall(validatedDimensions.map((d) => d.verdict));
 
-      const review = await insertDecisionReview(
-        db,
-        {
+      // Phase 3 — one short atomic transaction (locks, revalidation, review,
+      // dimensions and every resolution together). Nothing is written on
+      // failure; the AI is never re-run automatically.
+      try {
+        return await persistDecisionReviewAtomic(db, {
+          investorId: ctx.investorId,
           decisionId: decision.id,
-          narrativeSummaryText: proposed.narrativeSummaryText,
-          decisionQualityOverall,
-          thesisAccuracy: proposed.thesisAccuracy,
-          outcomeJson: outcome,
-        },
-        validatedDimensions.map((d) => ({
-          dimension: d.dimension,
-          verdict: d.verdict,
-          rationaleText: d.rationaleText,
-          citedSnapshotFields: d.citedSnapshotFields,
-        }))
-      );
-
-      for (const r of input.predictionResolutions) {
-        await resolvePrediction(db, r.predictionId, {
-          status: r.status,
-          resolvedByReviewId: review.id,
-          resolutionNote: r.note,
+          idempotencyKey: input.idempotencyKey,
+          requestFingerprint,
+          inputStateFingerprint,
+          review: {
+            narrativeSummaryText: proposed.narrativeSummaryText,
+            decisionQualityOverall,
+            thesisAccuracy: proposed.thesisAccuracy,
+            outcomeJson: outcome,
+          },
+          dimensions: validatedDimensions.map((d) => ({
+            dimension: d.dimension,
+            verdict: d.verdict,
+            rationaleText: d.rationaleText,
+            citedSnapshotFields: d.citedSnapshotFields,
+          })),
+          resolutions: input.predictionResolutions,
         });
+      } catch (err) {
+        if (err instanceof ReviewIdempotencyConflictError) throw new TRPCError({ code: "CONFLICT", message: CONFLICT_KEY_MESSAGE });
+        if (err instanceof ReviewStateChangedError) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `${err.message} Nothing was saved — reload and run the review again.`,
+          });
+        }
+        if (err instanceof ReviewDecisionNotFoundError) throw new TRPCError({ code: "NOT_FOUND", message: "Decision not found." });
+        throw err;
       }
-
-      return { review, dimensions: validatedDimensions };
     }),
 
   // Generic appeal (docs/architecture.md §2.7: "יכול לערער (Correction,
