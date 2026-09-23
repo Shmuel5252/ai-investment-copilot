@@ -216,4 +216,22 @@ describe("selectInterestingTransactions", () => {
     const result = selectInterestingTransactions(rows, openingStates, 10);
     expect(result.some((r) => r.transaction.ticker === "MSFT" && r.realizedPnlPercent !== undefined)).toBe(false);
   });
+
+  it("applies recorded stock splits (Import Blockers V1): a post-split sale is judged against the split-adjusted cost", () => {
+    // 1 @ 100, then a 4:1 split, then 1 of the 4 post-split shares sold @ 30:
+    // adjusted cost 25 → +20%, a gain. Without the split the very same sale
+    // reads as (30 − 100) / 100 = −70% and is labeled \"biggest_loss\" — the
+    // phantom-loss mislabel this module's header warns about.
+    const rows: TransactionForSelection[] = [
+      txn({ transactionType: "buy", ticker: "SPL", quantity: 1, price: 100, transactionDate: new Date("2026-01-01") }),
+      txn({ transactionType: "sell", ticker: "SPL", quantity: 1, price: 30, transactionDate: new Date("2026-03-01") }),
+    ];
+    const split = { ticker: "SPL", effectiveDate: new Date("2026-02-01"), ratioNumerator: 4, ratioDenominator: 1 };
+    const withSplit = selectInterestingTransactions(rows, [], 10, [split]).find((r) => r.transaction.transactionType === "sell");
+    expect(withSplit?.category).toBe("biggest_gain");
+    expect(withSplit?.realizedPnlPercent).toBeCloseTo(20, 6);
+    const without = selectInterestingTransactions(rows, [], 10).find((r) => r.transaction.transactionType === "sell");
+    expect(without?.category).toBe("biggest_loss");
+    expect(without?.realizedPnlPercent).toBeCloseTo(-70, 6);
+  });
 });

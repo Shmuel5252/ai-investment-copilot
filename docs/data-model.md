@@ -446,7 +446,7 @@ resulting_review_id?, resulting_version_id?`. מנגנון ערעור גנרי �
 ## 6. Portfolio, Transactions
 
 **Transaction** — `id, investor_id, ticker?,
-transaction_type(buy|sell|dividend|deposit|withdrawal|fee), quantity?,
+transaction_type(buy|sell|dividend|deposit|withdrawal|fee|tax_refund), quantity?,
 price?, amount, transaction_date, source(csv_import|manual_entry),
 import_batch_id?, notes?, intra_day_order?, order_unknown_reason?
 (user_declared|never_recorded), created_at, updated_at`.
@@ -514,6 +514,41 @@ type=date>` בהזנה ידנית). קובץ באותו מקור ובאותו פ
 ידנית: `exact_duplicate` (מול קיימת **או** מול שורה קודמת באותו טופס)
 דורש הכרעה — `separate` = "זהה בכוונה, שמור", `same` = דלג. שורות קיימות
 לעולם לא נמחקות/ממוזגות/מוחלפות ב-V1.
+
+**`tax_refund` (Import Blockers V1, 2026-09-23):** זיכוי מס מהברוקר — תנועת
+מזומן נכנסת (`CASH_DIRECTION = +1`), בלי ticker/כמות/מחיר, `amount` חובה;
+ב-`computePositions()` היא מזומן בלבד (כמו deposit), לא episode, ובהתאמה
+(reconciliation) היא תנועת מזומן רגילה (זהות `(""|tax_refund|date|||amount)`).
+**חיובי מס** היסטוריים נשארים `fee` — הוחלט במפורש לא לסווג מחדש; ה-enum
+תוסף בלבד (`0012`; Postgres לא מוחק ערכי enum).
+
+**CorporateAction** (Import Blockers V1, 2026-09-23; טבלה `corporate_actions`)
+— `id, investor_id, ticker, kind(stock_split), effective_date, ratio_numerator,
+ratio_denominator, source(issuer_disclosure|broker_statement|user_declared),
+evidence(text, חובה — ציטוט המקור), created_at`. **Immutable** (repository
+insert-only, §10); `CHECK (numerator > 0 AND denominator > 0)`;
+`UNIQUE (investor_id, ticker, effective_date)`. פיצול הפוך = numerator <
+denominator. **רק** פיצולים: לא מיזוגים/ספין-אוף/שינוי סימול, לא זיהוי
+אוטומטי ולא שליפה מספק. **הכלל הדטרמיניסטי (קפוא):** `effective_date` =
+היום הראשון שבו הכמויות מבוטאות ביחידות שאחרי הפיצול (date-only, 00:00Z כמו
+`transaction_date`). `computePositions(transactions, openingStates,
+asOfDate?, corporateActions)` מיישם את היחס לפי סדר קבוע באותו תאריך: (1)
+הפעולה, (2) opening state, (3) עסקאות — עסקה **בתאריך התחילה** כבר ביחידות
+שאחרי הפיצול; opening state **לפני** התאריך מוכפל; opening state **בתאריך או
+אחריו** הוא דיווח-עצמי כבר ביחידות החדשות ולא מוכפל שוב. הכמות המוחזקת
+מוכפלת ב-numerator/denominator, **סך עלות הבסיס לא משתנה** (עלות ממוצעת
+למניה מתחלקת), `sellTrace`/`sufficientHoldings` נגזרים מהכמות המותאמת;
+הפעולה נספרת אם ורק אם `effective_date <= asOfDate` (אותו כלל cutoff) —
+חישוב point-in-time משחזר בדיוק את מה שהיה נכון באותו תאריך; snapshots
+היסטוריים קפואים לעולם לא מחושבים מחדש. `deriveEpisodeKeys()` מקבל את אותו
+ציר-זמן ומכפיל את `ceiling`/`exactKnown` באותה נקודה — כלל ה-episode לא
+משתנה (Decision Independence קפוא), רק oversell שהפיצול מסביר הופך לסגירה
+מדויקת. נטען פעם אחת ב-`computePositionsForInvestor()` (ה-wrapper היחיד)
+ולכן Journal/DI/Decision/Review/Portfolio Fit/תצוגת הייבוא רואים אותו;
+בחירת העסקאות לראיון (`selectInterestingTransactions`, שקוראת ל-`computePositions()`
+ישירות) מקבלת את אותן פעולות מ-`interview.start` — פער שנמצא ותוקן ב-final
+review של היחידה (בלעדיו מכירה אחרי פיצול הושמטה מהראיון או סווגה כהפסד).
+עסקאות BUY/SELL מקוריות לעולם לא נערכות; אין "BUY מזויף".
 
 **PortfolioOpeningState** — `id, investor_id, ticker, quantity,
 cost_basis_per_share?, cost_basis_confidence(known|approximate|unknown),
@@ -613,7 +648,7 @@ FOR UPDATE` על התשובה הקודמת, בטרנזקציה אחת עם ה-in
   `LaterContext`, `Evidence`, `DNAHypothesisVersion`,
   `StrategyPrincipleVersion`, `StrategyVersion`, `LearningInsightVersion`,
   `InterviewAnswer`, `DNAEvidenceGroundingCheck`, `StrategyEvidenceGroundingCheck`,
-  `TransactionLinkFact`, `TransactionLinkFactMember`.
+  `TransactionLinkFact`, `TransactionLinkFactMember`, `CorporateAction`.
 - **`ON DELETE RESTRICT`**: `strategy_version_id`, `market_context_id`,
   `dna_hypothesis_version_id` (דרך `DecisionSnapshotDNAReference`),
   `thesis_id` — כל FK שיוצא מ-`DecisionSnapshot`.

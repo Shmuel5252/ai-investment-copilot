@@ -170,6 +170,23 @@ export const transactionTypeEnum = pgEnum("transaction_type", [
   "deposit",
   "withdrawal",
   "fee",
+  // Import Blockers V1 (2026-09-23): a broker tax refund — cash in, no
+  // ticker/quantity/price. Historical tax CHARGES stay recorded as "fee"
+  // (decided: not reclassified). Additive enum value; PG cannot drop it.
+  "tax_refund",
+]);
+
+// Import Blockers V1 — immutable corporate actions (docs/data-model.md §6).
+// Deliberately only stock splits (a reverse split is numerator < denominator);
+// no mergers/spin-offs/symbol changes.
+export const corporateActionKindEnum = pgEnum("corporate_action_kind", ["stock_split"]);
+
+// Which kind of evidence the recorded fact rests on — the row's `evidence`
+// text names the concrete document. Never an automatic provider lookup.
+export const corporateActionSourceEnum = pgEnum("corporate_action_source", [
+  "issuer_disclosure",
+  "broker_statement",
+  "user_declared",
 ]);
 
 export const transactionSourceEnum = pgEnum("transaction_source", ["csv_import", "manual_entry"]);

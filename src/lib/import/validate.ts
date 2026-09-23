@@ -16,6 +16,9 @@ const TYPE_SYNONYMS: Record<CanonicalTransactionType, string[]> = {
   deposit: ["deposit", "transfer in", "cash in", "contribution"],
   withdrawal: ["withdrawal", "withdraw", "transfer out", "cash out"],
   fee: ["fee", "commission", "charge"],
+  // Import Blockers V1 — the broker's "זיכוי מס". Tax CHARGES keep arriving
+  // as "fee" (decided 2026-09-23: historical rows are not reclassified).
+  tax_refund: ["tax_refund", "tax refund", "refund", "זיכוי מס"],
 };
 
 // Cash effect direction per type: negative = cash left the account.
@@ -33,6 +36,7 @@ export const CASH_DIRECTION: Record<CanonicalTransactionType, 1 | -1> = {
   deposit: 1,
   withdrawal: -1,
   fee: -1,
+  tax_refund: 1,
 };
 
 // The one canonical rule for "quantity + price -> signed cash amount"

@@ -36,7 +36,9 @@ export type CanonicalTransactionType =
   | "dividend"
   | "deposit"
   | "withdrawal"
-  | "fee";
+  | "fee"
+  // Import Blockers V1: broker tax refund — cash in, no ticker/quantity/price.
+  | "tax_refund";
 
 export interface NormalizedTransactionRow {
   rowIndex: number; // 0-based index into the parsed CSV rows, for error reporting

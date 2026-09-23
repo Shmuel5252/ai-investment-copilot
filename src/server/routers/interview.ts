@@ -7,6 +7,7 @@ import {
   listPortfolioOpeningStatesForInvestor,
   getTransaction,
 } from "@/db/repositories/portfolio";
+import { listCorporateActionsForInvestor } from "@/db/repositories/corporate-actions";
 import {
   insertInterviewSession,
   insertInterviewAnswer,
@@ -68,9 +69,10 @@ export const interviewRouter = router({
   // (docs/data-model.md §9), so the in-flight question set just lives in
   // the response until the client submits answers.
   start: protectedProcedure.mutation(async ({ ctx }) => {
-    const [transactions, openingStates] = await Promise.all([
+    const [transactions, openingStates, corporateActions] = await Promise.all([
       listTransactionsForInvestor(db, ctx.investorId),
       listPortfolioOpeningStatesForInvestor(db, ctx.investorId),
+      listCorporateActionsForInvestor(db, ctx.investorId),
     ]);
     const candidates = selectInterestingTransactions(
       transactions.map((t) => ({
@@ -88,6 +90,15 @@ export const interviewRouter = router({
         costBasisPerShare: o.costBasisPerShare === null ? null : Number(o.costBasisPerShare),
         costBasisConfidence: o.costBasisConfidence,
         asOfDate: o.asOfDate,
+      })),
+      undefined,
+      // The recorded splits (Import Blockers V1) — the same input the
+      // computePositionsForInvestor() wrapper gives every other consumer.
+      corporateActions.map((a) => ({
+        ticker: a.ticker,
+        effectiveDate: a.effectiveDate,
+        ratioNumerator: a.ratioNumerator,
+        ratioDenominator: a.ratioDenominator,
       }))
     );
 

@@ -14,6 +14,7 @@ import {
   computePositions,
   type TransactionInput,
   type OpeningStateInput,
+  type CorporateActionInput,
 } from "@/lib/portfolio/positions";
 
 export type TransactionForSelection = TransactionInput & { id: string };
@@ -34,10 +35,16 @@ export interface SelectedTransaction {
   holdingPeriodDays?: number;
 }
 
+// `corporateActions` (Import Blockers V1): the investor's recorded stock
+// splits, the same input computePositionsForInvestor() feeds every other
+// consumer — without them a post-split sale reads as an oversell (silently
+// skipped) or, for a partial sale, as a phantom loss against the
+// unadjusted cost (found in the unit's final review).
 export function selectInterestingTransactions(
   transactions: TransactionForSelection[],
   openingStates: OpeningStateForSelection[] = [],
-  maxCount = 6
+  maxCount = 6,
+  corporateActions: readonly CorporateActionInput[] = []
 ): SelectedTransaction[] {
   const positionTrades = transactions
     .filter((t): t is TransactionForSelection & { ticker: string } =>
@@ -47,7 +54,7 @@ export function selectInterestingTransactions(
 
   const buys = positionTrades.filter((t) => t.transactionType === "buy");
 
-  const { sellTrace } = computePositions(transactions, openingStates);
+  const { sellTrace } = computePositions(transactions, openingStates, undefined, corporateActions);
   const txnById = new Map(transactions.map((t) => [t.id, t]));
 
   // Only trust P&L/holding-period context for sells computePositions()

@@ -350,6 +350,35 @@ scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמי�
 ---
 
 ## נבנה
+- **Import Blockers V1 — `tax_refund` + פיצולי מניה כאירוע הון בלתי ניתן לשינוי** (2026-09-23):
+  ה-dry run של הרענון האמיתי הראשון (211 תנועות מקובץ ברוקר מותאם) נחסם על שניים: (1) שורת
+  "זיכוי מס אוגוסט" (+$26.65, 01.09) נדחתה כ-`unrecognized transaction type` — ואסור היה למפות
+  אותה ל-deposit/dividend/fee; (2) CRWD: קנייה 17.04 של 0.7383 ומכירה 13.07 של 2.9532 (בדיוק ×4)
+  — פיצול 4:1 שלא מיוצג בהיסטוריה, ולכן oversell/אזהרת opening state ו-P&L שגוי. **הוחלט
+  (2026-09-23):** `tax_refund` כסוג ראשון-מעלה (חיובי מס נשארים `fee`); פיצולים כ-CorporateAction
+  מבוסס-יחס, immutable, רק `stock_split` (הפוך = numerator<denominator); כלל תאריך קפוא
+  (פעולה → opening state → עסקאות; `effective_date <= asOfDate`); snapshots קפואים לא מחושבים
+  מחדש. **נבנה:** מיגרציה `0012_import_blockers` (`ALTER TYPE transaction_type ADD VALUE
+  'tax_refund'`; enums `corporate_action_kind`/`corporate_action_source`; טבלת
+  `corporate_actions` עם CHECK יחס חיובי ו-UNIQUE (investor, ticker, effective_date)) — **נוצרה,
+  הוחלה על DB scratch בלבד, לא על ה-DB האמיתי**; parser (`TYPE_SYNONYMS` כולל "זיכוי מס",
+  `CASH_DIRECTION +1`); `computePositions(..., corporateActions)` + `deriveEpisodeKeys` על אותו
+  ציר-זמן; `computePositionsForInvestor` טוען את הפעולות, ו-`interview.start` מעביר אותן לבחירת העסקאות לראיון (ה-final review מצא
+  שהבורר קרא ל-`computePositions()` ישירות בלי פיצולים — מכירת CRWD אחרי הפיצול, רווח +77.2%, הייתה מושמטת בשקט; תוקן); תצוגת הייבוא מריצה את
+  ה-dry run עם הפיצולים; repository insert-only; `import.recordStockSplit` (אישור מפורש, 1:1
+  נדחה, כפילות → BAD_REQUEST) + `import.corporateActions`; מקטע "פיצולי מניה" ב-`/import`.
+  **העובדה האמיתית של CRWD** (פיצול 4:1, מסחר מותאם מ-2026-07-02, לפי דיווח החברה; דוח הברוקר:
+  30.06 0.7383 @ $763.14, 13.07 2.9532 @ $187.84) **לא נכתבה** — כתיבה אמיתית נפרדת ומאושרת
+  אחרי הרצת המיגרציה. **אומת:** unit (fixture CRWD: 0.7383@423.90 → 2.9532@105.975, סך עלות
+  ללא שינוי, סגירה מדויקת, sufficientHoldings=true, P&L +77.2%; פיצול הפוך, עסקה בתאריך
+  התחילה, opening state לפני/ב/אחרי, asOfDate לפני/ב/אחרי, פיצול אחרי העסקה האחרונה, פיצולים
+  מרובים, אין החזקה → no-op, יחס לא חיובי → שגיאה, 300 ניסויים: סך עלות אינווריאנטי ופיצול+הפוך
+  משחזרים; episodes: CRWD-like, oversell → סגירה מדויקת, ללא פעולות → מפה זהה ב-300 היסטוריות
+  אקראיות; tax_refund: פרסור כולל עברית, סימן, amount חובה, ticker לא נדרש, מזומן בלבד, זהות
+  ואידמפוטנטיות) + integration על DB scratch מסומן (מיגרציה, insert/list, בעלות, יחסים לא
+  תקינים ב-zod וב-CHECK, כפילות, ה-wrapper מעביר פעולות, תצוגת ייבוא מכבדת פיצול, ייבוא
+  `tax_refund` חוזר = 0). replay קריאה-בלבד על הנתונים האמיתיים + הזרקת CRWD בזיכרון: ר' דוח
+  היחידה.
 - **History Refresh V1 — זהות עסקה דטרמיניסטית, ייבוא חופף אידמפוטנטי, טריות היסטוריה**
   (2026-09-22): ה-architecture review אחרי Episode Journal מצא שהבסיס העובדתי קפוא — קובץ
   ה-CSV היחיד (153 שורות, הועלה 2026-08-16) מכסה **2026-01-07 → 2026-06-30 בלבד**, 4 שורות

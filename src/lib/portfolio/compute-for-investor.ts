@@ -1,11 +1,12 @@
 import { eq, and, lte } from "drizzle-orm";
 import type { db as Db } from "@/db/client";
-import { transactions, portfolioOpeningStates } from "@/db/schema";
+import { transactions, portfolioOpeningStates, corporateActions } from "@/db/schema";
 import {
   computePositions,
   type PortfolioState,
   type TransactionInput,
   type OpeningStateInput,
+  type CorporateActionInput,
 } from "./positions";
 
 // Thin DB-fetching wrapper around the pure computePositions(). Numeric
@@ -22,9 +23,18 @@ export async function computePositionsForInvestor(
     ? and(eq(transactions.investorId, investorId), lte(transactions.transactionDate, asOfDate))
     : eq(transactions.investorId, investorId);
 
-  const [txnRows, openingRows] = await Promise.all([
+  // Import Blockers V1: the investor's stock splits are an explicit input to
+  // computePositions() — loaded here, in the ONE wrapper every consumer
+  // (Journal, Decision Independence, decisions, reviews, Portfolio Fit,
+  // import dry run) goes through, so split logic is never reinvented.
+  const actionWhere = asOfDate
+    ? and(eq(corporateActions.investorId, investorId), lte(corporateActions.effectiveDate, asOfDate))
+    : eq(corporateActions.investorId, investorId);
+
+  const [txnRows, openingRows, actionRows] = await Promise.all([
     db.select().from(transactions).where(txnWhere),
     db.select().from(portfolioOpeningStates).where(eq(portfolioOpeningStates.investorId, investorId)),
+    db.select().from(corporateActions).where(actionWhere),
   ]);
 
   const txnInputs: TransactionInput[] = txnRows.map((t) => ({
@@ -45,5 +55,12 @@ export async function computePositionsForInvestor(
     asOfDate: o.asOfDate,
   }));
 
-  return computePositions(txnInputs, openingInputs, asOfDate);
+  const actionInputs: CorporateActionInput[] = actionRows.map((a) => ({
+    ticker: a.ticker,
+    effectiveDate: a.effectiveDate,
+    ratioNumerator: a.ratioNumerator,
+    ratioDenominator: a.ratioDenominator,
+  }));
+
+  return computePositions(txnInputs, openingInputs, asOfDate, actionInputs);
 }

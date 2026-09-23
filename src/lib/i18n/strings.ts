@@ -173,7 +173,7 @@ export const laterContext = {
 export const importFieldLabel: Record<string, string> = {
   date: "תאריך",
   ticker: "טיקר",
-  type: "סוג (קנייה/מכירה/דיבידנד/...)",
+  type: "סוג (קנייה/מכירה/דיבידנד/עמלה/הפקדה/משיכה/זיכוי מס)",
   quantity: "כמות",
   price: "מחיר",
   amount: "סכום",
@@ -227,6 +227,33 @@ export const historyFreshness = {
   manualSuffix: "עסקאות, האחרונה ב-",
   noHistory: "עדיין אין היסטוריית עסקאות — ייבא קובץ או הזן עסקאות ידנית.",
   disclaimer: "המערכת יודעת רק מה שיובא או הוזן; היא לא מסונכרנת עם הברוקר.",
+};
+
+// --- Stock splits (Import Blockers V1) — src/app/import/page.tsx. One
+// kind only; the investor records a fact from a named source and confirms
+// it explicitly; the original BUY/SELL rows are never touched. ---
+export const corporateActionsPage = {
+  title: "פיצולי מניה",
+  description:
+    "פיצול (או פיצול הפוך) שבוצע בנייר שאתה מחזיק. הרישום הוא עובדה בלתי ניתנת לשינוי עם מקור מזוהה; העסקאות המקוריות לא נערכות — חישוב הפוזיציות מיישם את היחס מתאריך התחילה.",
+  none: "לא נרשמו פיצולים.",
+  tickerLabel: "טיקר",
+  effectiveDateLabel: "תאריך תחילה",
+  effectiveDateHint: "היום הראשון שבו הכמויות מבוטאות ביחידות שאחרי הפיצול",
+  ratioLabel: "יחס",
+  ratioHint: "לדוגמה 4 : 1 = ארבע מניות חדשות על כל מניה; פיצול הפוך = 1 : 10",
+  sourceLabel: "מקור העובדה",
+  sourceIssuer: "הודעת החברה / דיווח רגולטורי",
+  sourceBroker: "דוח ברוקר",
+  sourceUser: "הצהרה שלי",
+  evidenceLabel: "ראיה (ציטוט המקור)",
+  evidencePlaceholder: "לדוגמה: הודעת החברה על פיצול 4:1, מסחר מותאם מ-…; דוח ברוקר: שורת ההחזקה לפני התאריך ושורת המכירה אחריו",
+  confirmLabel: "אני מאשר שהיחס והתאריך נלקחו מהמקור שצוין ולא הוסקו מכמויות בלבד",
+  recordButton: "רשום פיצול",
+  recordingButton: "רושם...",
+  recordedLabel: "נרשם.",
+  listHeading: "פיצולים רשומים",
+  recordedOnLabel: "נרשם ב",
 };
 
 // --- Transaction reconciliation (History Refresh V1) — shared by CSV

@@ -5,6 +5,7 @@ export * from "./enums";
 export * from "./identity";
 export * from "./market";
 export * from "./portfolio";
+export * from "./corporate-actions";
 export * from "./dna";
 export * from "./strategy";
 export * from "./learning";

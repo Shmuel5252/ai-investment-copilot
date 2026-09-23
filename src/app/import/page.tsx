@@ -14,6 +14,7 @@ import {
   collisionResolution as cr,
   reconciliation as rc,
   historyFreshness as hf,
+  corporateActionsPage as ca,
   tellMeWhy as ttw,
   costBasisConfidenceLabel,
   common,
@@ -25,6 +26,10 @@ import type { AppRouter } from "@/server/routers/_app";
 type Reconciliation = inferRouterOutputs<AppRouter>["import"]["validate"]["reconciliation"];
 type ReconciliationRow = Reconciliation["rows"][number];
 type HistoryFreshness = inferRouterOutputs<AppRouter>["import"]["history"];
+type CorporateAction = inferRouterOutputs<AppRouter>["import"]["corporateActions"][number];
+type SplitSource = "issuer_disclosure" | "broker_statement" | "user_declared";
+const sourceLabel = (source: SplitSource) => (source === "issuer_disclosure" ? ca.sourceIssuer : source === "broker_statement" ? ca.sourceBroker : ca.sourceUser);
+const emptySplitDraft = () => ({ ticker: "", effectiveDate: "", numerator: "", denominator: "1", source: "issuer_disclosure" as SplitSource, evidence: "", confirmed: false });
 /** The investor's answer for one flagged row — sent to confirm as-is; the server re-verifies it under the lock. */
 type ResolutionDraft = { action: "same" | "separate"; existingTransactionId?: string };
 
@@ -751,7 +756,117 @@ export default function ImportPage() {
           </button>
         </div>
       )}
+      <StockSplitsSection />
     </main>
+  );
+}
+
+// Stock splits (Import Blockers V1) — the narrow record/list surface: a
+// fact with a named source, confirmed explicitly, inserted once. No
+// automatic detection, no provider lookup. Ownership, the ratio checks and
+// the (investor, ticker, date) uniqueness are enforced by the server.
+function StockSplitsSection() {
+  const guard = useSubmitGuard();
+  const utils = trpc.useUtils();
+  const list = trpc.import.corporateActions.useQuery();
+  const [draft, setDraft] = useState(emptySplitDraft());
+  const record = trpc.import.recordStockSplit.useMutation({
+    onSuccess: () => {
+      utils.import.corporateActions.invalidate();
+      setDraft(emptySplitDraft());
+    },
+  });
+  const numerator = Number(draft.numerator);
+  const denominator = Number(draft.denominator);
+  const ready =
+    draft.ticker.trim() !== "" &&
+    draft.effectiveDate !== "" &&
+    Number.isInteger(numerator) &&
+    numerator > 0 &&
+    Number.isInteger(denominator) &&
+    denominator > 0 &&
+    numerator !== denominator &&
+    draft.evidence.trim() !== "" &&
+    draft.confirmed;
+
+  return (
+    <section className="flex flex-col gap-3 border-t border-journal-rule pt-6">
+      <h2 className={`${serifHeader.className} text-lg font-bold`}>{ca.title}</h2>
+      <p className="text-sm text-journal-muted">{ca.description}</p>
+
+      <div className="flex flex-col gap-1">
+        <p className="text-sm font-medium">{ca.listHeading}</p>
+        {list.data && list.data.length === 0 && <p className="text-sm text-journal-muted">{ca.none}</p>}
+        {list.data?.map((a: CorporateAction) => (
+          <div key={a.id} className="rounded border border-journal-rule bg-journal-surface p-2 text-sm">
+            <Num>{a.ticker}</Num> · <Num>{a.ratioNumerator}:{a.ratioDenominator}</Num> · {ca.effectiveDateLabel} <Num>{formatDay(a.effectiveDate)}</Num> · {sourceLabel(a.source)}
+            <p className="mt-1 text-xs text-journal-muted">{a.evidence}</p>
+            <p className="text-xs text-journal-muted">
+              {ca.recordedOnLabel} <Num>{formatDay(a.createdAt)}</Num>
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2 rounded border border-journal-rule p-3">
+        <label className="flex flex-col text-xs">
+          {ca.tickerLabel}
+          <input type="text" className="w-24 rounded border border-journal-rule px-2 py-1" value={draft.ticker} onChange={(e) => setDraft({ ...draft, ticker: e.target.value })} />
+        </label>
+        <label className="flex flex-col text-xs" title={ca.effectiveDateHint}>
+          {ca.effectiveDateLabel}
+          <input type="date" className="rounded border border-journal-rule px-2 py-1" value={draft.effectiveDate} onChange={(e) => setDraft({ ...draft, effectiveDate: e.target.value })} />
+        </label>
+        <label className="flex flex-col text-xs">
+          {ca.ratioLabel}
+          <span className="flex items-center gap-1">
+            <input type="number" min={1} step={1} aria-label="numerator" className="w-16 rounded border border-journal-rule px-2 py-1" value={draft.numerator} onChange={(e) => setDraft({ ...draft, numerator: e.target.value })} />
+            :
+            <input type="number" min={1} step={1} aria-label="denominator" className="w-16 rounded border border-journal-rule px-2 py-1" value={draft.denominator} onChange={(e) => setDraft({ ...draft, denominator: e.target.value })} />
+          </span>
+        </label>
+        <label className="flex flex-col text-xs">
+          {ca.sourceLabel}
+          <select className="rounded border border-journal-rule px-2 py-1" value={draft.source} onChange={(e) => setDraft({ ...draft, source: e.target.value as SplitSource })}>
+            <option value="issuer_disclosure">{ca.sourceIssuer}</option>
+            <option value="broker_statement">{ca.sourceBroker}</option>
+            <option value="user_declared">{ca.sourceUser}</option>
+          </select>
+        </label>
+        <label className="flex min-w-72 flex-1 flex-col text-xs">
+          {ca.evidenceLabel}
+          <textarea rows={2} placeholder={ca.evidencePlaceholder} className="rounded border border-journal-rule px-2 py-1" value={draft.evidence} onChange={(e) => setDraft({ ...draft, evidence: e.target.value })} />
+        </label>
+        <p className="w-full text-xs text-journal-muted">{ca.ratioHint} · {ca.effectiveDateHint}</p>
+        <label className="flex w-full items-center gap-2 text-xs">
+          <input type="checkbox" checked={draft.confirmed} onChange={(e) => setDraft({ ...draft, confirmed: e.target.checked })} />
+          {ca.confirmLabel}
+        </label>
+        <button
+          onClick={() =>
+            guard(
+              () =>
+                record.mutateAsync({
+                  ticker: draft.ticker.trim(),
+                  effectiveDate: new Date(draft.effectiveDate),
+                  ratioNumerator: numerator,
+                  ratioDenominator: denominator,
+                  source: draft.source,
+                  evidence: draft.evidence.trim(),
+                  confirmed: true,
+                }),
+              "record-stock-split"
+            )
+          }
+          disabled={!ready || record.isPending}
+          className="w-fit rounded bg-journal-accent px-3 py-2 text-sm text-white disabled:opacity-50"
+        >
+          {record.isPending ? ca.recordingButton : ca.recordButton}
+        </button>
+        {record.isSuccess && <p className="text-xs text-journal-muted">{ca.recordedLabel}</p>}
+        {record.isError && <p className="text-xs text-red-600">{record.error.message}</p>}
+      </div>
+    </section>
   );
 }
 

@@ -28,6 +28,8 @@ import {
   OrderResolutionError,
   type NewTransactionWithOrder,
 } from "@/db/repositories/portfolio";
+import { insertCorporateAction, listCorporateActionsForInvestor } from "@/db/repositories/corporate-actions";
+import { isUniqueViolation } from "@/db/errors";
 
 // Shared by `validate` (CSV) and `checkManualEntryCollisions` (manual
 // entry) — same-day collision preview against this investor's
@@ -146,6 +148,15 @@ export const importRouter = router({
       const { rows } = parseCsv(input.csvContent);
       const result = validateImportRows(rows, input.mapping);
 
+      // File-alone dry run, with the investor's recorded stock splits
+      // (Import Blockers V1) so a legitimate post-split sale is not reported
+      // as exceeding holdings.
+      const splits = (await listCorporateActionsForInvestor(db, ctx.investorId)).map((a) => ({
+        ticker: a.ticker,
+        effectiveDate: a.effectiveDate,
+        ratioNumerator: a.ratioNumerator,
+        ratioDenominator: a.ratioDenominator,
+      }));
       const dryRun = computePositions(
         result.validRows.map((r) => ({
           ticker: r.ticker,
@@ -155,7 +166,9 @@ export const importRouter = router({
           amount: r.amount,
           transactionDate: r.transactionDate,
         })),
-        []
+        [],
+        undefined,
+        splits
       );
 
       const [collisionGroups, reconciliation] = await Promise.all([
@@ -225,6 +238,55 @@ export const importRouter = router({
         ),
       ]);
       return { collisionGroups, reconciliation };
+    }),
+
+  // Import Blockers V1 — immutable stock splits (docs/data-model.md §6
+  // "CorporateAction"). Narrow by design: one kind, explicit confirmation,
+  // no automatic detection and no provider lookup. The date is stored
+  // date-only (00:00Z) like every transaction so the frozen same-day
+  // ordering rule (action → opening state → transactions) is exact.
+  corporateActions: protectedProcedure.query(({ ctx }) => listCorporateActionsForInvestor(db, ctx.investorId)),
+
+  recordStockSplit: protectedProcedure
+    .input(
+      z.object({
+        ticker: z.string().trim().min(1).max(12),
+        effectiveDate: z.coerce.date(),
+        ratioNumerator: z.number().int().positive(),
+        ratioDenominator: z.number().int().positive(),
+        source: z.enum(["issuer_disclosure", "broker_statement", "user_declared"]),
+        evidence: z.string().trim().min(1),
+        // The investor's explicit confirmation is part of the contract, not a
+        // client-side nicety.
+        confirmed: z.literal(true),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.ratioNumerator === input.ratioDenominator) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "A 1:1 ratio is not a split." });
+      }
+      const d = input.effectiveDate;
+      const effectiveDate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+      try {
+        return await insertCorporateAction(db, {
+          investorId: ctx.investorId,
+          ticker: input.ticker.toUpperCase(),
+          kind: "stock_split",
+          effectiveDate,
+          ratioNumerator: input.ratioNumerator,
+          ratioDenominator: input.ratioDenominator,
+          source: input.source,
+          evidence: input.evidence,
+        });
+      } catch (err) {
+        if (isUniqueViolation(err, "corporate_actions_investor_ticker_effective_date_unique")) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A split for this ticker on this date is already recorded.",
+          });
+        }
+        throw err;
+      }
     }),
 
   // History freshness (History Refresh V1) — how far the persisted history

@@ -23,7 +23,7 @@
 
 export type CostBasisConfidence = "known" | "approximate" | "unknown";
 
-export type TransactionType = "buy" | "sell" | "dividend" | "deposit" | "withdrawal" | "fee";
+export type TransactionType = "buy" | "sell" | "dividend" | "deposit" | "withdrawal" | "fee" | "tax_refund";
 
 export interface TransactionInput {
   /** Optional — only needed if a caller wants sellTrace entries linkable back to a specific row. */
@@ -48,6 +48,19 @@ export interface TransactionInput {
    */
   intraDayOrder?: number | null;
   orderUnknownReason?: "user_declared" | "never_recorded" | null;
+}
+
+// Import Blockers V1 — an immutable stock split (docs/data-model.md §6
+// "CorporateAction"), applied by computePositions() as an explicit input:
+// the original BUY/SELL rows are never rewritten. A reverse split is
+// ratioNumerator < ratioDenominator. effectiveDate is date-only (00:00Z),
+// "the first trading date on which the broker expresses quantities in
+// post-split units".
+export interface CorporateActionInput {
+  ticker: string;
+  effectiveDate: Date;
+  ratioNumerator: number;
+  ratioDenominator: number;
 }
 
 export interface OpeningStateInput {
@@ -160,10 +173,52 @@ interface TickerAccumulator {
   firstOpenedAt: Date;
 }
 
+// The one deterministic ordering rule for splits (frozen 2026-09-23,
+// docs/data-model.md §6): for one ticker and one date, apply
+//   1. the corporate action, 2. opening-state semantics, 3. transactions —
+// so a trade dated ON the effective date is already in post-split units,
+// an opening state dated BEFORE the split is adjusted, and an opening
+// state dated ON/AFTER it is a self-report already in post-split units and
+// is never multiplied again. A split counts iff effective_date <= asOfDate
+// (same cutoff rule as everything else), so a point-in-time computation
+// reproduces exactly what was true at that date. Frozen historical
+// snapshots are never recomputed.
+function splitRatio(action: CorporateActionInput): number {
+  const { ratioNumerator: n, ratioDenominator: d } = action;
+  if (!(Number.isFinite(n) && Number.isFinite(d) && n > 0 && d > 0)) {
+    throw new Error(`computePositions: corporate action for ${action.ticker} has a non-positive ratio (${n}:${d}).`);
+  }
+  return n / d;
+}
+
+function sortedActionsWithin(
+  corporateActions: readonly CorporateActionInput[],
+  withinCutoff: (d: Date) => boolean
+): CorporateActionInput[] {
+  return corporateActions
+    .filter((a) => withinCutoff(a.effectiveDate))
+    .sort((a, b) => a.effectiveDate.getTime() - b.effectiveDate.getTime() || a.ticker.localeCompare(b.ticker));
+}
+
+// Quantity from opening states for this ticker that are dated on/after the
+// action: self-reported in post-split units, so exempt from the multiplier.
+function postSplitOpeningQuantity(
+  openingStates: readonly OpeningStateInput[],
+  action: CorporateActionInput,
+  withinCutoff: (d: Date) => boolean
+): number {
+  return openingStates
+    .filter(
+      (os) => os.ticker === action.ticker && withinCutoff(os.asOfDate) && os.asOfDate.getTime() >= action.effectiveDate.getTime()
+    )
+    .reduce((sum, os) => sum + os.quantity, 0);
+}
+
 export function computePositions(
   transactions: TransactionInput[],
   openingStates: OpeningStateInput[],
-  asOfDate?: Date
+  asOfDate?: Date,
+  corporateActions: readonly CorporateActionInput[] = []
 ): PortfolioState {
   const cutoff = asOfDate ?? null;
   const withinCutoff = (d: Date) => cutoff === null || d.getTime() <= cutoff.getTime();
@@ -171,6 +226,26 @@ export function computePositions(
   const byTicker = new Map<string, TickerAccumulator>();
   const warnings: PortfolioWarning[] = [];
   const sellTrace: SellTraceEntry[] = [];
+
+  const actions = sortedActionsWithin(corporateActions, withinCutoff);
+  let nextAction = 0;
+  // A split multiplies the quantity held at that moment (minus any opening
+  // state already reported in post-split units); total cost basis is
+  // unchanged, so the average cost per share divides by the same ratio.
+  const applySplit = (action: CorporateActionInput) => {
+    const ratio = splitRatio(action);
+    const existing = byTicker.get(action.ticker);
+    if (!existing) return; // nothing held — a valid no-op
+    const exempt = postSplitOpeningQuantity(openingStates, action, withinCutoff);
+    const adjustable = Math.max(existing.quantity - exempt, 0);
+    existing.quantity = adjustable * ratio + (existing.quantity - adjustable);
+  };
+  const applyActionsThrough = (time: number) => {
+    while (nextAction < actions.length && actions[nextAction]!.effectiveDate.getTime() <= time) {
+      applySplit(actions[nextAction]!);
+      nextAction += 1;
+    }
+  };
 
   for (const os of openingStates) {
     if (!withinCutoff(os.asOfDate)) continue;
@@ -190,9 +265,10 @@ export function computePositions(
   let cash = 0;
 
   for (const txn of sortedTxns) {
+    applyActionsThrough(txn.transactionDate.getTime()); // same date: action before the transaction
     cash += txn.amount;
 
-    if (!txn.ticker) continue; // pure cash movement: deposit/withdrawal/fee with no position
+    if (!txn.ticker) continue; // pure cash movement: deposit/withdrawal/fee/tax_refund with no position
 
     if (txn.transactionType === "buy") {
       const qty = txn.quantity ?? 0;
@@ -260,8 +336,9 @@ export function computePositions(
       // don't fabricate a negative holding or a trace entry with no
       // real cost basis behind it.
     }
-    // dividend/fee: cash effect already applied above; no quantity/cost-basis change.
+    // dividend/fee/tax_refund: cash effect already applied above; no quantity/cost-basis change.
   }
+  applyActionsThrough(Number.POSITIVE_INFINITY); // splits after the last transaction (within the cutoff)
 
   const positions: Position[] = [];
   for (const [ticker, state] of byTicker) {
@@ -280,7 +357,7 @@ export function computePositions(
   // — reads the same sortedTxns/openingStates this function already has
   // in hand, writes nothing back into quantity/totalCostBasis/warnings/
   // sellTrace/positions computed above.
-  const episodeKeyByTransactionId = deriveEpisodeKeys(sortedTxns, openingStates);
+  const episodeKeyByTransactionId = deriveEpisodeKeys(sortedTxns, openingStates, actions, withinCutoff);
 
   return { asOfDate: asOfDate ?? new Date(), cash, positions, warnings, sellTrace, episodeKeyByTransactionId };
 }
@@ -410,11 +487,34 @@ function deriveEpisodeKeysForTicker(
   ticker: string,
   txns: TransactionInput[],
   startQty: number,
-  result: Map<string, string>
+  result: Map<string, string>,
+  actions: readonly CorporateActionInput[] = [],
+  postSplitOpeningQty: (action: CorporateActionInput) => number = () => 0
 ): void {
   let mode: "open" | "closed-pending" = startQty > QUANTITY_EPSILON ? "open" : "closed-pending";
   let ceiling = startQty;
   let exactKnown: number | null = startQty;
+  // Import Blockers V1 — the same split timeline as the accounting walk,
+  // applied to this walk's own quantity state at the same deterministic
+  // point (before the day's group). Scaling by a positive ratio preserves
+  // both invariants: `ceiling` stays a proven upper bound and `exactKnown`
+  // stays exact. The episode RULE (continuous open-to-flat) is unchanged;
+  // only an oversell that a split explains turns into an exact close.
+  let nextAction = 0;
+  const applySplitsThrough = (time: number) => {
+    while (nextAction < actions.length && actions[nextAction]!.effectiveDate.getTime() <= time) {
+      const action = actions[nextAction]!;
+      const ratio = splitRatio(action);
+      const exempt = postSplitOpeningQty(action);
+      const scale = (q: number) => {
+        const adjustable = Math.max(q - exempt, 0);
+        return adjustable * ratio + (q - adjustable);
+      };
+      ceiling = scale(ceiling);
+      if (exactKnown !== null) exactKnown = scale(exactKnown);
+      nextAction += 1;
+    }
+  };
   // The number of the last episode actually minted for real (0 = none
   // yet). A run's fallback-if-never-opens target and next-candidate-
   // if-opens key are both always derivable from this one counter — see
@@ -441,6 +541,7 @@ function deriveEpisodeKeysForTicker(
   }
 
   for (const group of groups) {
+    applySplitsThrough(group[0]!.transactionDate.getTime());
     for (const step of classifyGroupIntoSteps(group)) {
       const ceilingBefore = ceiling;
 
@@ -499,7 +600,9 @@ function deriveEpisodeKeysForTicker(
 
   // Chronology ends while still buffered: the run never proved it
   // opened, so it all merges into its fallback target, same rule as an
-  // interior re-closure above.
+  // interior re-closure above. (Splits dated after the last trade are
+  // deliberately not applied here: every id is already keyed, so they
+  // could not change the result.)
   if (mode === "closed-pending" && pendingRun.length > 0) {
     assign(pendingRun, Math.max(episodeCounter, 1));
   }
@@ -507,7 +610,9 @@ function deriveEpisodeKeysForTicker(
 
 function deriveEpisodeKeys(
   sortedTxns: TransactionInput[],
-  openingStates: OpeningStateInput[]
+  openingStates: OpeningStateInput[],
+  actions: readonly CorporateActionInput[] = [],
+  withinCutoff: (d: Date) => boolean = () => true
 ): Map<string, string> {
   const result = new Map<string, string>();
 
@@ -525,7 +630,14 @@ function deriveEpisodeKeys(
   for (const [ticker, txns] of byTicker) {
     // sortedTxns is already date-sorted by the caller; stable per-ticker
     // filter above preserves that order.
-    deriveEpisodeKeysForTicker(ticker, txns, openingByTicker.get(ticker) ?? 0, result);
+    deriveEpisodeKeysForTicker(
+      ticker,
+      txns,
+      openingByTicker.get(ticker) ?? 0,
+      result,
+      actions.filter((a) => a.ticker === ticker),
+      (action) => postSplitOpeningQuantity(openingStates, action, withinCutoff)
+    );
   }
 
   return result;
