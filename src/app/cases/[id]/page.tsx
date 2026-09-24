@@ -9,9 +9,11 @@ import type { MarketIntelligence } from "@/lib/market/fmp";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
 import { Num } from "@/components/num";
+import { PriorRecordBriefView } from "@/components/prior-record-brief";
 import { BackLink } from "@/components/back-link";
 import {
   caseDetailPage as t,
+  priorRecord as tPrior,
   casesListPage,
   decisionTypeLabel,
   caseStatusLabel,
@@ -40,6 +42,10 @@ export default function CaseDetailPage() {
   const dnaList = trpc.dna.list.useQuery();
   const strategyList = trpc.strategy.list.useQuery();
   const existingDecision = trpc.decisions.getForCase.useQuery({ caseId: id });
+  // Prior Record Brief V1 — the investor's own record on this ticker, shown
+  // before the decision is recorded (facts only; frozen server-side into the
+  // snapshot at recording time).
+  const priorRecord = trpc.cases.priorRecord.useQuery({ caseId: id });
 
   const fetchMarketData = trpc.cases.fetchMarketIntelligence.useMutation({
     onSuccess: () => utils.cases.get.invalidate({ caseId: id }),
@@ -292,6 +298,14 @@ export default function CaseDetailPage() {
             <TextBlock label={t.devilsAdvocate} text={investmentCase.devilsAdvocateText} />
           </div>
         )}
+      </section>
+
+      {/* Prior Record Brief V1 */}
+      <section className="flex flex-col gap-3 border-t border-journal-rule pt-6">
+        <h2 className="text-sm font-semibold">{tPrior.title}</h2>
+        {priorRecord.isLoading && <p className="text-sm text-journal-muted">{tPrior.loading}</p>}
+        {priorRecord.isError && <p className="text-sm text-red-600">{priorRecord.error.message}</p>}
+        {priorRecord.data && <PriorRecordBriefView brief={priorRecord.data} />}
       </section>
 
       {/* Record Decision */}

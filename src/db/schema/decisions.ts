@@ -105,6 +105,13 @@ export const decisionSnapshots = pgTable("decision_snapshots", {
     .notNull()
     .references(() => theses.id, { onDelete: "restrict" }),
   investmentCaseSnapshotJson: jsonb("investment_case_snapshot_json").notNull(),
+  // Prior Record Brief V1 (docs/data-model.md §5): the investor's own record
+  // on this ticker as the system knew it at decision time (prior decisions,
+  // episodes, rationale, holding — src/lib/prior-record). Frozen with the
+  // snapshot like everything else here; NULL on snapshots created before
+  // this existed (never backfilled: a brief computed later would be
+  // hindsight, not what was available then).
+  priorRecordJson: jsonb("prior_record_json"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [unique().on(table.decisionId)]);
 

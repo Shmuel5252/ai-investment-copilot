@@ -13,12 +13,10 @@ import {
   insertInterviewAnswer,
   completeInterviewSession,
   getAnswersForSession,
-  getAllAnswersForInvestor,
   getInterviewSession,
   insertSupersedingInterviewAnswer,
 } from "@/db/repositories/interview";
-import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investor";
-import { deriveEpisodeJournal, type EpisodeJournal } from "@/lib/portfolio/episodes";
+import { loadEpisodeJournal as loadEpisodeJournalFor } from "@/lib/portfolio/load-episode-journal";
 import { resolveTellMeWhyAnchor, toHindsightSafeJournal } from "@/lib/interview/journal";
 import { selectInterestingTransactions } from "@/lib/interview/select-transactions";
 import { buildTellMeWhyQuestion } from "@/lib/interview/tell-me-why-question";
@@ -31,27 +29,9 @@ import { describeTransactionFacts, generateInterviewQuestion } from "@/lib/ai/in
 // coverage is computed from getAllAnswersForInvestor, the exact reader
 // dna.generate / strategy.generateObserved consume, so "covered" means
 // "will be seen by generation". Read-only; nothing is stored.
-async function loadEpisodeJournal(investorId: string): Promise<EpisodeJournal> {
-  const [portfolio, transactions, answers] = await Promise.all([
-    computePositionsForInvestor(db, investorId),
-    listTransactionsForInvestor(db, investorId),
-    getAllAnswersForInvestor(db, investorId),
-  ]);
-  return deriveEpisodeJournal(
-    transactions.map((t) => ({
-      id: t.id,
-      ticker: t.ticker,
-      transactionType: t.transactionType,
-      quantity: t.quantity === null ? null : Number(t.quantity),
-      price: t.price === null ? null : Number(t.price),
-      amount: Number(t.amount),
-      transactionDate: t.transactionDate,
-      intraDayOrder: t.intraDayOrder,
-    })),
-    portfolio,
-    answers
-  );
-}
+// (The loader itself now lives in src/lib/portfolio/load-episode-journal.ts,
+// shared with the Prior Record Brief — one derivation path, unchanged.)
+const loadEpisodeJournal = (investorId: string) => loadEpisodeJournalFor(db, investorId);
 
 async function requireOwnedSession(investorId: string, sessionId: string) {
   const session = await getInterviewSession(db, sessionId);

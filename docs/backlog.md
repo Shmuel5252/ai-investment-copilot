@@ -356,7 +356,26 @@ scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמי�
 Monitoring V1 בכוונה** (לא חסם את נכונותו). לתקן ביחידה נפרדת: טרנזקציה אחת + `FOR UPDATE` על
 ה-predictions + הגנת double-submit.
 
+### Roadmap אחרי Prior Record Brief V1 (נכתב 2026-09-24, overnight run)
+1. **Copilot משתמש ברקורד הקודם** — להזין את `PriorRecordBrief` (ובמיוחד תנאי שקילה-מחדש פתוחים ותוויות
+   Review קודמות) ל-`synthesizeDecisionContext`/`synthesizePersonalFit`, עם כללי anti-hindsight משלו (לא
+   להציג שינוי מחיר מאז PASS, לא להסיק כוונה), ולהעביר ל-Review את התקציר הקפוא ("האם שקלת את התנאים
+   שקבעת?"). דורש בדיקות AI mocked בלבד.
+2. **מעקב תנאי שקילה-מחדש** — Predictions מסוג `reentry_condition` כתנאים פתוחים לאורך זמן: פתרון עצמאי
+   (בלי Review מלא) וסיבת attention חדשה — דורש הכרעת Owner (סיבה חמישית ב-Monitoring הקפוא).
+3. **Learning ממעבר מהסקטור בלבד** — Learning מורעב (0 insights; אין סקטור עם 2 החלטות שעברו Review):
+   משפחות לפי טיקר/סוג החלטה ו-Learning מתקופות החזקה עם נימוק (Journal) — דורש הכרעת Owner מה נחשב
+   ראיה עצמאית.
+4. **קישור החלטה↔ביצוע מפורש** (אישור משתמש, לא אוטומטי).
+5. **Hardening:** מפתח Review ב-sessionStorage; בידוד `decision-monitoring.test.ts`; `getForCase` מחזיר undefined.
+
 ## נבנה
+- **Prior Record Brief V1 — "הרקורד שלך בטיקר הזה" לפני החלטה, קפוא ב-Snapshot** (2026-09-24):
+  כל Case במחקר אצל המשקיע האמיתי כבר היה עם היסטוריה בטיקר (LLY 2, SNDK 3, MU 4, AVGO 3 עסקאות;
+  החלטות קודמות עם תנאי שקילה-מחדש), אבל מסך המחקר וההחלטה לא הציגו אותה. **נבנה:** `derivePriorRecordBrief`
+  (טהור) + `loadPriorRecordBrief` (wrapper יחיד, בעלות + טיקר), `cases.priorRecord`, הקפאה ב-`decisions.create`
+  ל-`decision_snapshots.prior_record_json` (מיגרציה `0015`, NULL, בלי backfill — scratch בלבד), תצוגה בעמוד
+  ה-Case ובעמוד ההחלטה, loader משותף ל-Journal. בלי AI, בלי מחירים, בלי שינוי ב-Monitoring/Review/Learning.
 - **Decision Review Integrity V1 — מפתח הגשה, טביעות אצבע, שמירה אטומית** (2026-09-24):
   ה-architecture review שחזר על DB scratch דרך `reviews.generate` האמיתי (AI mocked): (1) Prediction
   שנפתר בזמן קריאת ה-AI → Review נשמר, רק חלק מה-Predictions נפתרו ממנו, והבקשה החזירה שגיאה;

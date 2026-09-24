@@ -417,6 +417,15 @@ thesis_id (FK), investment_case_snapshot_json (עותק קפוא), created_at`.
 **אין UPDATE לעולם** — אכיפה בשכבת אפליקציה (repository חושף רק insert);
 DB trigger כהקשחה אופציונלית בעתיד.
 
+`prior_record_json?` (Prior Record Brief V1, 2026-09-24): עותק קפוא של
+"הרקורד שלך בטיקר" כפי שהמערכת ידעה אותו ברגע רישום ההחלטה
+(`src/lib/prior-record/prior-record.ts`, `version: 1`) — ההחלטות הקודמות
+באותו טיקר (טקסט Snapshot קפוא, תחזיות וסטטוס, תוויות Review, Later
+Context), תקופות ההחזקה מה-Journal (תוצאה ממומשת רק למכירה מגובה) והנימוקים,
+ומצב ההחזקה. נגזר בקוד, בלי AI ובלי מחירים; ההחלטה הנרשמת עצמה לעולם לא
+בתוכו. חלק מה-Snapshot הבלתי-ניתן-לשינוי; NULL ב-Snapshot-ים שקדמו לו, **ללא
+backfill** (חישוב מאוחר = hindsight).
+
 **DecisionSnapshotDNAReference** (קישור, לא JSON) — `decision_snapshot_id,
 dna_hypothesis_version_id (FK, ON DELETE RESTRICT)` — אילו גרסאות-השערה
 היו בתוקף ברגע ההחלטה.

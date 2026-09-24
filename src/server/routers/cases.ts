@@ -17,6 +17,7 @@ import { synthesizeInvestmentCase, synthesizePersonalFit } from "@/lib/ai/case";
 import { validatePersonalFit } from "@/lib/case/validate-personal-fit";
 import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 import type { MarketIntelligence } from "@/lib/market/fmp";
+import { loadPriorRecordBrief } from "@/lib/prior-record/load-prior-record";
 
 async function requireOwnedCase(investorId: string, caseId: string) {
   const investmentCase = await getInvestmentCase(db, caseId);
@@ -122,6 +123,21 @@ export const casesRouter = router({
   // Fit, never averaged together (docs/architecture.md §2.5). Citations
   // are validated against this investor's real DNA hypothesis / Strategy
   // principle ids before being stored.
+  // Prior Record Brief V1 (docs/architecture.md §2.5a) — the investor's
+  // own record on this case's ticker, before deciding. Read-only, derived on
+  // read, no AI, no market data; the case's own decision (if any) is not
+  // "prior" and is excluded.
+  priorRecord: protectedProcedure
+    .input(z.object({ caseId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const investmentCase = await requireOwnedCase(ctx.investorId, input.caseId);
+      return loadPriorRecordBrief(db, {
+        investorId: ctx.investorId,
+        ticker: investmentCase.ticker,
+        excludeInvestmentCaseId: investmentCase.id,
+      });
+    }),
+
   generatePersonalFit: protectedProcedure
     .input(z.object({ caseId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {

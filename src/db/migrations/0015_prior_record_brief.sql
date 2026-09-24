@@ -1,0 +1,1 @@
+ALTER TABLE "decision_snapshots" ADD COLUMN "prior_record_json" jsonb;

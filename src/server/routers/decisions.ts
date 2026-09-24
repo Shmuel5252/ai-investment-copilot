@@ -28,6 +28,7 @@ import { synthesizeDecisionContext } from "@/lib/ai/decision";
 import { isUniqueViolation } from "@/db/errors";
 import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 import { loadDecisionAttention } from "@/lib/monitoring/load-decision-attention";
+import { loadPriorRecordBrief } from "@/lib/prior-record/load-prior-record";
 import { InvalidTimeZoneError } from "@/lib/monitoring/decision-attention";
 import { resolveReviewByDate, reviewHorizonChoiceSchema, ReviewHorizonError } from "@/lib/monitoring/review-horizon";
 
@@ -189,6 +190,21 @@ export const decisionsRouter = router({
         strategyPrinciples: strategyPrinciplesForAi,
       });
 
+      // Prior Record Brief V1 — the investor's own record on this ticker as
+      // the system knows it right now (read-only, no AI, no market data),
+      // frozen into the snapshot below as "what was available at decision
+      // time". Computed before the write transaction, so the decision being
+      // recorded can never appear in its own prior record; this case's own
+      // decision is excluded explicitly too.
+      const priorRecord = await loadPriorRecordBrief(db, {
+        investorId: ctx.investorId,
+        ticker: investmentCase.ticker,
+        excludeInvestmentCaseId: investmentCase.id,
+        // A decision may be recorded with a past decision_date: the brief must
+        // be what was knowable THEN, not everything known now.
+        asOf: decisionDate,
+      });
+
       // Everything above this point is either a read or an external
       // side effect (FMP fetch + its own cache write, the Anthropic call
       // above) that must NOT sit inside a DB transaction — holding one
@@ -272,6 +288,7 @@ export const decisionsRouter = router({
             strategyVersionId: latestStrategyVersion.id,
             thesisId: thesis.id,
             investmentCaseSnapshotJson: investmentCase,
+            priorRecordJson: priorRecord,
           },
           dnaHypothesisVersionIds
         );

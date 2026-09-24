@@ -6,6 +6,8 @@ import { Frank_Ruhl_Libre, Assistant } from "next/font/google";
 import { trpc } from "@/trpc/react";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
 import { Num } from "@/components/num";
+import { PriorRecordBriefView } from "@/components/prior-record-brief";
+import type { PriorRecordBrief } from "@/lib/prior-record/prior-record";
 import { BackLink } from "@/components/back-link";
 import {
   decisionTypeLabel,
@@ -17,6 +19,7 @@ import {
   nav,
   decisionSnapshot as t,
   laterContext as tLater,
+  priorRecord as tPrior,
 } from "@/lib/i18n/strings";
 
 // Direction A ("יומן אנליטי") typography — scoped to this page only
@@ -257,6 +260,18 @@ export default function DecisionDetailPage() {
             Original Snapshot -> Later Context -> Review). Feeds directly
             into Decision Review's AI reasoning as an authoritative
             correction wherever it conflicts with the frozen text. */}
+        {/* Prior Record Brief V1 — frozen with this snapshot; NULL on decisions
+            recorded before it existed (never recomputed later: that would be
+            hindsight, not what was available at decision time). */}
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold">{tPrior.frozenTitle}</h2>
+          {snapshot.priorRecordJson ? (
+            <PriorRecordBriefView brief={snapshot.priorRecordJson as PriorRecordBrief} frozen />
+          ) : (
+            <p className="text-sm text-journal-muted">{tPrior.legacyNote}</p>
+          )}
+        </section>
+
         <section className="flex flex-col gap-3 border-t border-journal-rule pt-6">
           <h2 id="later-context" className="text-sm font-semibold">{tLater.title}</h2>
           <p className="text-xs text-journal-muted">{tLater.explanation}</p>

@@ -532,6 +532,48 @@ export const casesListPage = {
 
 // --- Investment Cases: detail (src/app/cases/[id]/page.tsx) ---
 
+// --- Prior Record Brief V1 (src/components/prior-record-brief.tsx) — the
+// investor's own record on a ticker. Facts only: never "you changed your
+// mind", never a price move since a past PASS, never a score. ---
+export const priorRecord = {
+  title: "הרקורד שלך בטיקר הזה",
+  frozenTitle: "הרקורד הקודם שלך בטיקר, כפי שהיה ידוע במועד ההחלטה",
+  loading: "טוען את הרקורד שלך...",
+  liveNote: "עובדות מההיסטוריה שלך בלבד — בלי ניתוח AI ובלי מחירי שוק",
+  frozenNote: "הוקפא יחד עם ההחלטה — לא מתעדכן בדיעבד",
+  legacyNote: "לא נשמר: ההחלטה נרשמה לפני שהרקורד הקודם נשמר עם ההחלטה.",
+  generatedAtPrefix: "נכון ל",
+  historyThroughPrefix: "היסטוריית העסקאות עד",
+  noHistory: "אין עדיין היסטוריית עסקאות",
+  heldPrefix: "מוחזק כעת:",
+  notHeld: "לא מוחזק כעת",
+  positionUnavailable: "מצב הפוזיציה לא זמין (חישוב לא אמין לטיקר הזה)",
+  empty: "אין לך עדיין החלטות או עסקאות קודמות בטיקר הזה.",
+  decisionsCountSuffix: "החלטות קודמות",
+  reviewedSuffix: "עברו Review",
+  episodesCountSuffix: "תקופות החזקה",
+  openSuffix: "פתוחות",
+  rationaleCountSuffix: "נימוקים שתיעדת",
+  reentryTitle: "תנאים שקבעת בעבר לשקילה מחדש — עדיין פתוחים",
+  decisionsTitle: "החלטות קודמות",
+  priceAtDecisionLabel: "מחיר במועד ההחלטה",
+  notReviewed: "ללא Review",
+  reasoningLabel: "הנימוק שכתבת",
+  risksLabel: "סיכונים ששקלת",
+  exitConditionsLabel: "תנאי יציאה / שקילה מחדש",
+  predictionsLabel: "תחזיות ותנאים",
+  laterContextLabel: "הקשר מאוחר שהוספת",
+  episodesTitle: "תקופות החזקה קודמות",
+  episodeOpen: "פתוחה",
+  episodeClosed: "סגורה",
+  buysSuffix: "קניות",
+  sellsSuffix: "מכירות",
+  realizedPrefix: "תוצאה ממומשת במכירות:",
+  untrustedSell: "לא ניתן לחשב",
+  rationaleLabel: "הנימוק שלך:",
+  noRationale: "לא תועד נימוק לתקופה הזו.",
+};
+
 export const caseDetailPage = {
   marketIntelligenceTitle: "מודיעין שוק — Financial Modeling Prep",
   fetchButton: "שלוף נתוני שוק",

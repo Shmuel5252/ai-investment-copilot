@@ -17,7 +17,12 @@ import {
 export async function computePositionsForInvestor(
   db: typeof Db,
   investorId: string,
-  asOfDate?: Date
+  asOfDate?: Date,
+  // Prior Record Brief V1: an optional extra predicate on the fetched
+  // transaction rows (e.g. "was this row knowable at time T" — it needs
+  // created_at, which the date cutoff above cannot see). Default: every row.
+  // The accounting itself is untouched — the same computePositions() call.
+  options: { includeTransaction?: (row: { transactionDate: Date; createdAt: Date }) => boolean } = {}
 ): Promise<PortfolioState> {
   const txnWhere = asOfDate
     ? and(eq(transactions.investorId, investorId), lte(transactions.transactionDate, asOfDate))
@@ -37,7 +42,8 @@ export async function computePositionsForInvestor(
     db.select().from(corporateActions).where(actionWhere),
   ]);
 
-  const txnInputs: TransactionInput[] = txnRows.map((t) => ({
+  const includedRows = options.includeTransaction ? txnRows.filter((t) => options.includeTransaction!(t)) : txnRows;
+  const txnInputs: TransactionInput[] = includedRows.map((t) => ({
     id: t.id,
     ticker: t.ticker,
     transactionType: t.transactionType,
