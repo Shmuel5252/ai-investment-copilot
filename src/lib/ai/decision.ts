@@ -4,6 +4,7 @@ import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
 import { formatSizeDollarsLine } from "./format-price-size";
 import { formatCashLine, formatSectorExposureLine, formatIndustryExposureLine } from "./format-portfolio-fit";
 import { assertNonEmptyStrings } from "./case";
+import { formatPriorRecordContext, QUOTED_HISTORY_RULES, type PriorRecordDecisionContextV1 } from "@/lib/prior-record/ai-context";
 
 // Three things happen together at the moment a Decision is recorded
 // (docs/architecture.md §2.6): the user's free-form reasoning gets
@@ -44,6 +45,15 @@ export interface DecisionContextInput {
   portfolioFit: PortfolioFit;
   dnaHypotheses: DnaContextItem[];
   strategyPrinciples: StrategyContextItem[];
+  /**
+   * Prior Record → AI Decision Context V1: the investor's own record on this
+   * ticker, projected (src/lib/prior-record/ai-context.ts) from the SAME PIT
+   * brief decisions.create freezes into the snapshot. Prices, realized
+   * results, resolved outcomes, Review verdicts and the position have no
+   * structured field in the contract; investor-authored text stays verbatim
+   * and may mention them (QUOTED_HISTORY_RULES constrains their use).
+   */
+  priorRecord: PriorRecordDecisionContextV1;
 }
 
 export interface ProposedPrediction {
@@ -81,7 +91,7 @@ export interface DecisionContextSynthesis {
   realtimeAssessmentText: string;
 }
 
-const SYSTEM_PROMPT = `You help a personal investor at the exact moment they're recording a real investing decision. You are given their own reasoning verbatim, plus real, already-fetched data: market data for the ticker, broad market context (index/volatility), computed portfolio-fit numbers, and — if any exist — this investor's own DNA hypotheses and Strategy principles. Every hypothesis/principle you're given already has real evidence behind it — thin/unconfirmed (insufficient_evidence) ones have already been excluded before reaching you, so nothing here needs to be second-guessed as too weak to use.
+const SYSTEM_PROMPT = `You help a personal investor at the exact moment they're recording a real investing decision. You are given their own reasoning verbatim, plus real, already-fetched data: market data for the ticker, broad market context (index/volatility), computed portfolio-fit numbers, this investor's own prior record on this ticker, and — if any exist — this investor's own DNA hypotheses and Strategy principles. Every hypothesis/principle you're given already has real evidence behind it — thin/unconfirmed (insufficient_evidence) ones have already been excluded before reaching you, so nothing here needs to be second-guessed as too weak to use.
 
 Write thesisInterpretationText, realtimeAssessmentText, and each prediction's claimText in Hebrew — natural, fluent Hebrew, not a forced or literal translation. Keep tickers, company/product names, and established financial terms (e.g. P/E, margin of safety) in English exactly as an investor writing in natural mixed Hebrew/English would — that mixed style is expected, not a fallback. Keep these fixed terms in English exactly as spelled, never translated: DNA, Evidence Strength, Personal Fit, Portfolio Fit, and Strategy (when naming a Strategy principle specifically).
 
@@ -96,6 +106,15 @@ Three jobs, all grounded only in what you're actually given:
    If you reference a price anywhere in a claim, it must be the actual per-share Price given in the market data — never the Investment size dollar amount, which is not a price at all. Only set timeframeDays if the investor's own reasoning stated or clearly implied an actual timeframe (e.g. "by next earnings" ~90, "within 6 months" ~180, "next year" ~365) — express it as a whole number of days from today, your best estimate of that duration. Do NOT compute or state an actual calendar date yourself; the application computes "today + timeframeDays" in code, precisely so a duration-estimate mistake can't turn into a date that's nonsensically in the past. Leave timeframeDays null if no real timeframe was stated.
 
 3. realtimeAssessmentText: an honest, real-time gut-check. Reference the actual numbers you were given (price, portfolio exposure/concentration, index/volatility levels). If this decision is in tension with a specific Strategy principle or DNA hypothesis you were given, say so plainly and name it — but be honest about evidence strength for DNA hypotheses (don't treat "weak" as confirmed). If nothing you were given conflicts with this decision, say that plainly too rather than manufacturing a concern.
+
+The investor's prior record on this ticker is context about their own past process, never a recommendation or evidence for this decision:
+- A past BUY does not support buying now; a past PASS does not support passing now; a past SELL does not support selling now; holding (now or before) does not imply HOLD. Evaluate this decision on current facts and the investor's current reasoning.
+- Never compute, infer or mention how the price or a past position performed. A profit would not prove a past decision was good; a loss would not prove it was bad.
+- ${QUOTED_HISTORY_RULES}
+- Lines marked AI-EXTRACTED CLAIM were written by an AI — never present them as the investor's own words or as evidence. LATER CONTEXT is the investor's own and is authoritative over the older text and any AI extraction it conflicts with (e.g. a decision flagged as a deliberate test or not representative).
+- The same belief can appear in the prior record, in the rationale, in DNA and in Strategy — count it once, never as independent confirmations.
+- A pending re-entry condition is a check the investor set earlier: you may name it as their own earlier check and ask whether it bears on this decision, but never declare it satisfied or failed, and do not extract it again as a new prediction unless the current reasoning restates it.
+- Missing, unavailable or empty history is uncertainty, not evidence either way.
 
 "Investment size" and "Price" are two different, unrelated numbers — size is the dollar amount being invested, price is the per-share market price. They are not expected to match or relate to each other in any simple way (a $500 investment in a $1278.83/share stock just buys a fraction of a share — completely normal, not an inconsistency). Never describe a "mismatch" or "data inconsistency" between them.
 
@@ -211,6 +230,8 @@ export function formatContext(input: DecisionContextInput): string {
   } else {
     parts.push("\n=== This investor's current Strategy principles === none yet.");
   }
+
+  parts.push("\n" + formatPriorRecordContext(input.priorRecord));
 
   return parts.filter(Boolean).join("\n");
 }

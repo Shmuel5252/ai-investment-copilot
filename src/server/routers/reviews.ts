@@ -24,6 +24,7 @@ import { validateReviewDimensions } from "@/lib/review/validate-review-dimension
 import { synthesizeDecisionReview } from "@/lib/ai/review";
 import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 import type { MarketIntelligence } from "@/lib/market/fmp";
+import { projectPriorRecordForAi, PriorRecordContextError, type PriorRecordDecisionContextV1 } from "@/lib/prior-record/ai-context";
 
 interface FrozenCaseSnapshot {
   marketIntelligenceJson?: MarketIntelligence | null;
@@ -156,6 +157,21 @@ export const reviewsRouter = router({
           : { claimText: p.claimText, kind: p.kind, status: p.status, resolutionNote: p.resolutionNote };
       });
 
+      // Prior Record → AI Decision Context V1: ONLY the copy frozen into the
+      // snapshot at decision time, through the same projection the Decision AI
+      // received — never a recomputed brief (that would be today's history).
+      // NULL (legacy) stays NULL = NOT CAPTURED. A malformed/unsupported frozen
+      // copy fails closed before any AI call.
+      let priorRecordAtDecision: PriorRecordDecisionContextV1 | null = null;
+      if (snapshot.priorRecordJson !== null) {
+        try {
+          priorRecordAtDecision = projectPriorRecordForAi(snapshot.priorRecordJson);
+        } catch (err) {
+          if (err instanceof PriorRecordContextError) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+          throw err;
+        }
+      }
+
       const caseSnapshot = (snapshot.investmentCaseSnapshotJson ?? {}) as FrozenCaseSnapshot;
       const bundledPrincipleRows = await getStrategyVersionPrinciples(db, snapshot.strategyVersionId);
       // insufficient_evidence items are excluded from what the AI
@@ -231,10 +247,11 @@ export const reviewsRouter = router({
         dnaHypothesesInEffect,
         predictionsWithResolutions,
         laterContexts: laterContexts.map((lc) => ({ text: lc.text, addedAt: lc.addedAt.toISOString() })),
+        priorRecordAtDecision,
         outcome,
       });
 
-      const validatedDimensions = validateReviewDimensions(proposed.dimensions);
+      const validatedDimensions = validateReviewDimensions(proposed.dimensions, { priorRecordCaptured: priorRecordAtDecision !== null });
       const decisionQualityOverall = calculateDecisionQualityOverall(validatedDimensions.map((d) => d.verdict));
 
       // Phase 3 — one short atomic transaction (locks, revalidation, review,

@@ -29,6 +29,7 @@ import { isUniqueViolation } from "@/db/errors";
 import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 import { loadDecisionAttention } from "@/lib/monitoring/load-decision-attention";
 import { loadPriorRecordBrief } from "@/lib/prior-record/load-prior-record";
+import { projectPriorRecordForAi } from "@/lib/prior-record/ai-context";
 import { InvalidTimeZoneError } from "@/lib/monitoring/decision-attention";
 import { resolveReviewByDate, reviewHorizonChoiceSchema, ReviewHorizonError } from "@/lib/monitoring/review-horizon";
 
@@ -170,6 +171,26 @@ export const decisionsRouter = router({
         .map((h) => h.versions[0]?.id)
         .filter((id): id is string => !!id);
 
+      // Prior Record Brief V1 — the investor's own record on this ticker as
+      // the system knew it at the decision's effective time (read-only, no AI,
+      // no market data). Loaded ONCE, before the AI call: the AI receives its
+      // restricted projection (Prior Record → AI Decision Context V1) and the
+      // SAME brief object is frozen into the snapshot below, so the context the
+      // AI saw is exactly re-derivable from the snapshot. Computed before the
+      // write transaction, so the decision being recorded can never appear in
+      // its own prior record; this case's own decision is excluded explicitly.
+      // Only the brief is point-in-time here: price, portfolio, market
+      // context, DNA and Strategy above are still "now" even for a backdated
+      // decision (docs/backlog.md, temporal debt).
+      const priorRecord = await loadPriorRecordBrief(db, {
+        investorId: ctx.investorId,
+        ticker: investmentCase.ticker,
+        excludeInvestmentCaseId: investmentCase.id,
+        // A decision may be recorded with a past decision_date: the brief must
+        // be what was knowable THEN, not everything known now.
+        asOf: decisionDate,
+      });
+
       const synthesis = await synthesizeDecisionContext({
         ticker: investmentCase.ticker,
         decisionType: input.decisionType,
@@ -188,21 +209,7 @@ export const decisionsRouter = router({
         portfolioFit,
         dnaHypotheses: dnaHypothesesForAi,
         strategyPrinciples: strategyPrinciplesForAi,
-      });
-
-      // Prior Record Brief V1 — the investor's own record on this ticker as
-      // the system knows it right now (read-only, no AI, no market data),
-      // frozen into the snapshot below as "what was available at decision
-      // time". Computed before the write transaction, so the decision being
-      // recorded can never appear in its own prior record; this case's own
-      // decision is excluded explicitly too.
-      const priorRecord = await loadPriorRecordBrief(db, {
-        investorId: ctx.investorId,
-        ticker: investmentCase.ticker,
-        excludeInvestmentCaseId: investmentCase.id,
-        // A decision may be recorded with a past decision_date: the brief must
-        // be what was knowable THEN, not everything known now.
-        asOf: decisionDate,
+        priorRecord: projectPriorRecordForAi(priorRecord),
       });
 
       // Everything above this point is either a read or an external

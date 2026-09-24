@@ -46,6 +46,13 @@ export const CITABLE_SNAPSHOT_FIELDS = [
 ] as const;
 export type CitableSnapshotField = (typeof CITABLE_SNAPSHOT_FIELDS)[number];
 
+// Prior Record → AI Decision Context V1: the frozen prior record is citable
+// ONLY for a decision whose snapshot actually captured it. A legacy decision
+// (prior_record_json NULL) citing it would point at something that never
+// existed — dropped like any other invalid citation. Fail closed: not
+// citable unless the caller says the frozen copy exists.
+export const PRIOR_RECORD_CITABLE_FIELD = "priorRecord";
+
 export interface ProposedReviewDimension {
   dimension: string;
   verdict: DecisionQuality;
@@ -67,10 +74,12 @@ export interface ValidatedReviewDimension {
 // silently skew it. A dimension the AI omitted becomes an honest
 // insufficient_evidence entry, not a gap.
 export function validateReviewDimensions(
-  proposed: ProposedReviewDimension[]
+  proposed: ProposedReviewDimension[],
+  options: { priorRecordCaptured?: boolean } = {}
 ): ValidatedReviewDimension[] {
   const byDimension = new Map(proposed.map((p) => [p.dimension, p]));
   const validFieldSet = new Set<string>(CITABLE_SNAPSHOT_FIELDS);
+  if (options.priorRecordCaptured === true) validFieldSet.add(PRIOR_RECORD_CITABLE_FIELD);
 
   return REQUIRED_DIMENSIONS.map((dimension) => {
     const entry = byDimension.get(dimension);

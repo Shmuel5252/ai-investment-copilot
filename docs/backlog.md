@@ -356,11 +356,15 @@ scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמי�
 Monitoring V1 בכוונה** (לא חסם את נכונותו). לתקן ביחידה נפרדת: טרנזקציה אחת + `FOR UPDATE` על
 ה-predictions + הגנת double-submit.
 
+### חוב זמני — החלטה עם תאריך בעבר מקפיאה מצב "עכשיו" (נמצא 2026-09-24)
+`decisions.create` עם `decisionDate` בעבר: רק Prior Record נבנה PIT למועד ההחלטה. המחיר (`priceAtDecision`,
+FMP טרי), `portfolioStateJson`/Portfolio Fit, Market Context, גרסאות DNA ו-Strategy — כולם מצב "עכשיו", וגם
+`checkableByDate` מחושב מ-"עכשיו". לכן **אין לטעון שכל ה-DecisionSnapshot PIT-safe** רק כי התקציר כזה. תיקון
+(הגבלת backdating, או שחזור PIT של כל הקלטים, או סימון מפורש) דורש דיון Product נפרד — לא נבנה.
+
 ### Roadmap אחרי Prior Record Brief V1 (נכתב 2026-09-24, overnight run)
-1. **Copilot משתמש ברקורד הקודם** — להזין את `PriorRecordBrief` (ובמיוחד תנאי שקילה-מחדש פתוחים ותוויות
-   Review קודמות) ל-`synthesizeDecisionContext`/`synthesizePersonalFit`, עם כללי anti-hindsight משלו (לא
-   להציג שינוי מחיר מאז PASS, לא להסיק כוונה), ולהעביר ל-Review את התקציר הקפוא ("האם שקלת את התנאים
-   שקבעת?"). דורש בדיקות AI mocked בלבד.
+1. ~~**Copilot משתמש ברקורד הקודם**~~ — נבנה כ-Prior Record → AI Decision Context V1 (ר' "נבנה"), בהיקף
+   מצומצם בהכרעת Owner: Decision AI + Review בלבד; בלי Personal Fit; בלי מחירים/תוצאות/תוויות Review.
 2. **מעקב תנאי שקילה-מחדש** — Predictions מסוג `reentry_condition` כתנאים פתוחים לאורך זמן: פתרון עצמאי
    (בלי Review מלא) וסיבת attention חדשה — דורש הכרעת Owner (סיבה חמישית ב-Monitoring הקפוא).
 3. **Learning ממעבר מהסקטור בלבד** — Learning מורעב (0 insights; אין סקטור עם 2 החלטות שעברו Review):
@@ -370,6 +374,19 @@ Monitoring V1 בכוונה** (לא חסם את נכונותו). לתקן ביח�
 5. **Hardening:** מפתח Review ב-sessionStorage; בידוד `decision-monitoring.test.ts`; `getForCase` מחזיר undefined.
 
 ## נבנה
+- **Prior Record → AI Decision Context V1** (2026-09-24): ה-AI של ההחלטה מקבל הטלה מוגבלת ומסומנת-מקור של
+  הרקורד הקודם (`src/lib/prior-record/ai-context.ts`), מאותו תקציר PIT שמוקפא ב-Snapshot (טעינה אחת, לפני
+  ה-AI); ה-Review מקבל רק את העותק הקפוא (NULL → NOT CAPTURED; `priorRecord` ציטוט רק כשקיים). מחירים,
+  תוצאות ממומשות, Predictions שנפתרו ותוויות Review מוחרגים מבנית. בלי מיגרציה. בנוסף: שומר AI גלובלי
+  בטסטים (`tests/setup.ts`) — המפתח האמיתי מוחלף ו-SDK מוחלף בלקוח שכל קריאה שלו נכשלת; טסט שצריך
+  פלט AI מבצע mock מפורש לגבול. **לא נבנה בכוונה:** dedupe סמנטי (DNA/Strategy/רקורד) — כלל prompt בלבד
+  ("ספור פעם אחת"); שמירת prompt/model version — לא נשמרים בשום נתיב AI כיום (קיים, לא חדש).
+  **טקסט משקיע עם מספרים — הוכרע ע"י Owner (final review):** טקסט היסטורי של המשקיע נשמר מילה במילה גם כשהוא מזכיר
+  מחיר/תוצאה (בפועל: Later Context של SNDK מצטט `$1598.37`, התיקון של LLY מצטט `$1278.83` ו-"~$500"). לא מושמט,
+  לא נערך; `QUOTED_HISTORY_RULES` בשני ה-prompts מגביל את הפרשנות. שדות מובנים של מחיר/ביצועים/תוצאה — לא קיימים בחוזה.
+  **חוב V1 מקובל (לא לתקן ביחידה זו):** (1) anchoring ו-double counting ברמת האמונה נשענים חלקית על כללי prompt;
+  (2) החלטה עם תאריך בעבר עדיין מקפיאה מצב "עכשיו" מחוץ ל-Prior Record (ר' "חוב זמני" למעלה); (3) גרסת prompt/model
+  לא נשמרת בשום נתיב AI.
 - **Prior Record Brief V1 — "הרקורד שלך בטיקר הזה" לפני החלטה, קפוא ב-Snapshot** (2026-09-24):
   כל Case במחקר אצל המשקיע האמיתי כבר היה עם היסטוריה בטיקר (LLY 2, SNDK 3, MU 4, AVGO 3 עסקאות;
   החלטות קודמות עם תנאי שקילה-מחדש), אבל מסך המחקר וההחלטה לא הציגו אותה. **נבנה:** `derivePriorRecordBrief`

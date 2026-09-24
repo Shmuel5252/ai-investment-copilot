@@ -424,7 +424,9 @@ DB trigger כהקשחה אופציונלית בעתיד.
 Context), תקופות ההחזקה מה-Journal (תוצאה ממומשת רק למכירה מגובה) והנימוקים,
 ומצב ההחזקה. נגזר בקוד, בלי AI ובלי מחירים; ההחלטה הנרשמת עצמה לעולם לא
 בתוכו. חלק מה-Snapshot הבלתי-ניתן-לשינוי; NULL ב-Snapshot-ים שקדמו לו, **ללא
-backfill** (חישוב מאוחר = hindsight).
+backfill** (חישוב מאוחר = hindsight). מה שה-AI של ההחלטה קיבל נגזר ממנו
+בדטרמיניזם (`projectPriorRecordForAi`, `contractVersion: 1`) — אין צורך
+לשמור עותק נפרד של ההקשר.
 
 **DecisionSnapshotDNAReference** (קישור, לא JSON) — `decision_snapshot_id,
 dna_hypothesis_version_id (FK, ON DELETE RESTRICT)` — אילו גרסאות-השערה
@@ -458,6 +460,8 @@ valuation_awareness|portfolio_fit|strategy_consistency|exit_conditions),
 verdict(strong|reasonable|weak|insufficient_evidence), rationale_text,
 cited_snapshot_fields(json array — חובה תוכן, אחרת verdict=
 insufficient_evidence, נאכף באפליקציה), created_at`. Immutable, שכבה 2.
+`priorRecord` (2026-09-24) הוא שדה ציטוט תקף **רק** כש-`prior_record_json`
+של ה-Snapshot אינו NULL; בהחלטה ישנה הציטוט נזרק כמו כל ציטוט לא-תקף.
 
 ### decision_quality_overall — טבלת Rollup (מ-7 ה-ReviewDimension verdicts)
 

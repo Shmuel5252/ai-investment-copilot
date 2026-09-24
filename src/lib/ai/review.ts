@@ -1,7 +1,8 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
-import { CITABLE_SNAPSHOT_FIELDS } from "@/lib/review/validate-review-dimensions";
+import { CITABLE_SNAPSHOT_FIELDS, PRIOR_RECORD_CITABLE_FIELD } from "@/lib/review/validate-review-dimensions";
 import { formatSizeDollarsLine } from "./format-price-size";
 import type { DecisionOutcome } from "@/lib/review/decision-outcome";
+import { formatPriorRecordContext, QUOTED_HISTORY_RULES, type PriorRecordDecisionContextV1 } from "@/lib/prior-record/ai-context";
 
 // Decision Review's two layers (docs/architecture.md §2.7): a short
 // narrative (layer 1) and a 7-dimension drill-down (layer 2), plus
@@ -60,6 +61,13 @@ export interface ReviewInput {
    * with in the original snapshot fields.
    */
   laterContexts: { text: string; addedAt: string }[];
+  /**
+   * The investor's prior record on this ticker exactly as it was FROZEN into
+   * the snapshot at decision time (decision_snapshots.prior_record_json),
+   * through the same projection the Decision AI received — never recomputed.
+   * null = a legacy decision recorded before capture: NOT CAPTURED / unknown.
+   */
+  priorRecordAtDecision: PriorRecordDecisionContextV1 | null;
   outcome: DecisionOutcome;
 }
 
@@ -105,10 +113,14 @@ You produce two things:
 ${DIMENSION_LIST}
 
 Ground rules for the dimensions:
-- Every verdict except insufficient_evidence MUST cite at least one real field from this exact list — do not invent a field name: ${CITABLE_SNAPSHOT_FIELDS.join(", ")}.
+- Every verdict except insufficient_evidence MUST cite at least one real field from this exact list — do not invent a field name: ${CITABLE_SNAPSHOT_FIELDS.join(", ")}, and ${PRIOR_RECORD_CITABLE_FIELD} only when the priorRecord section is captured.
 - If you cannot point to something concrete for a dimension, its verdict must be insufficient_evidence — this is a completely normal, expected outcome for some dimensions (e.g. no risksConsideredText was ever recorded), not a failure on your part.
 - Be honest and specific — don't default everything to "reasonable". A dimension with real, cited weaknesses is "weak"; a dimension genuinely well-handled with clear evidence is "strong".
 - Never invent a fact (a number, an event, a company detail) beyond what's in the data you were given.
+
+The priorRecord section is the investor's own earlier record on this ticker exactly as it was frozen when this decision was made — what was actually in front of them (and of the AI) at the time. You may assess whether the decision engaged with it (e.g. a re-entry condition the investor had set earlier, or reasoning that repeats or departs from their earlier reasoning), citing "priorRecord". A past action there is not evidence that this decision was right or wrong, and a past outcome is never proof of decision quality. Never infer performance from it.
+${QUOTED_HISTORY_RULES}
+If the section says NOT CAPTURED, that history is unknown: do not cite priorRecord, and neither credit nor penalize the decision for it.
 
 Then write narrativeSummaryText: a short (2-4 sentence), plain-language summary a busy person could read alone — mention process quality, thesis accuracy, and outcome as three distinct things (never conflate "made money" with "good process"), and end with one concrete, specific takeaway for next time.`;
 
@@ -174,7 +186,8 @@ export function formatOutcome(o: DecisionOutcome): string {
   return parts.join("\n");
 }
 
-function formatInput(input: ReviewInput): string {
+// Exported for direct unit testing (tests/unit/prior-record-ai-context.test.ts).
+export function formatInput(input: ReviewInput): string {
   const parts = [
     `Decision: ${input.decisionType} ${input.ticker} on ${input.decisionDate}`,
     `\n=== userReasoningText (verbatim) ===\n${input.userReasoningText}`,
@@ -198,6 +211,7 @@ function formatInput(input: ReviewInput): string {
     `\n=== strategyPrinciplesInEffect ===\n${input.strategyPrinciplesInEffect.map((p) => `- (${p.principleType}${p.evidenceStrength ? `, ${p.evidenceStrength}` : ""}) ${p.statementText}`).join("\n") || "(none yet)"}`,
     `\n=== dnaHypothesesInEffect ===\n${input.dnaHypothesesInEffect.map((h) => `- (${h.evidenceStrength}) ${h.statementText}`).join("\n") || "(none yet)"}`,
     `\n=== predictionsAndResolutions ===\n${input.predictionsWithResolutions.map((p) => `- [${p.status}] (${p.kind ?? "kind unknown — created before forecast/reentry_condition existed"}) ${p.claimText}${p.resolutionNote ? ` — ${p.resolutionNote}` : ""}`).join("\n") || "(no predictions were extracted from this thesis)"}`,
+    `\n=== priorRecord (frozen at decision time) ===\n${formatPriorRecordContext(input.priorRecordAtDecision)}`,
     `\n=== Outcome (computed in code, a fact — not yours to judge) ===\n${formatOutcome(input.outcome)}`,
   ];
   return parts.join("\n");

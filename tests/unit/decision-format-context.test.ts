@@ -92,6 +92,40 @@ const fixture: DecisionContextInput = {
       evidenceStrength: "strong",
     },
   ],
+  priorRecord: {
+    contractVersion: 1,
+    sourceVersion: 1,
+    ticker: "ACME",
+    asOf: "2026-09-08T07:10:00.000Z",
+    historyThrough: "2026-09-05T00:00:00.000Z",
+    accounting: "ok",
+    decisions: [
+      {
+        decisionId: "d1",
+        decisionType: "PASS",
+        decisionDate: "2026-06-01T10:00:00.000Z",
+        sizeDollars: null,
+        reasoningText: "Great business, price too far ahead of itself.",
+        risksConsideredText: null,
+        exitConditionsText: "Reconsider after a 15% pullback.",
+        pendingClaims: [
+          { kind: "forecast", claimText: "Margins keep expanding." },
+          { kind: "reentry_condition", claimText: "A pullback of 15% or more." },
+        ],
+        resolvedClaimCount: 1,
+        reviewCount: 1,
+        laterContexts: [{ addedAt: "2026-06-03T00:00:00.000Z", text: "This was a deliberate test decision." }],
+      },
+    ],
+    episodes: [
+      {
+        key: "ACME#1", status: "closed", firstDate: "2026-01-05T00:00:00.000Z", exitDate: "2026-03-01T00:00:00.000Z", holdingDays: 55, buyCount: 2, sellCount: 1,
+        rationale: [{ questionText: "Why did you sell?", answerText: "Needed the cash.", answeredAt: "2026-04-01T00:00:00.000Z" }],
+      },
+    ],
+    pendingReentryConditions: [{ decisionId: "d1", decisionType: "PASS", decisionDate: "2026-06-01T10:00:00.000Z", claimText: "A pullback of 15% or more." }],
+    omitted: { decisions: 1, episodes: 2 },
+  },
 };
 
 const EXPECTED = `Decision: BUY ACME
@@ -127,7 +161,29 @@ Warning: Adding ACME would push tech-sector exposure above 40%.
 - (moderate) Tends to buy after a pullback rather than at highs.
 
 === This investor's current Strategy principles ===
-- (declared, strong) Avoid initiating positions above 5% of portfolio without strong conviction.`;
+- (declared, strong) Avoid initiating positions above 5% of portfolio without strong conviction.
+
+=== Investor's own prior record on ACME (information cutoff 2026-09-08T07:10:00.000Z; executions known through 2026-09-05; dates are UTC days) ===
+Context about this investor's past process on this ticker — NOT evidence for or against the current decision. No structured historical price, performance or outcome fields are supplied here (no price, cost basis, position, realized result or return, resolved-claim outcome or Review verdict). INVESTOR-AUTHORED HISTORICAL TEXT is quoted verbatim and may itself mention such information — that is what the investor wrote then, not verified market or performance data.
+
+Prior decisions on this ticker:
+[Prior decision 1] PAST ACTION (not a recommendation): PASS on 2026-06-01
+  INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — reasoning: "Great business, price too far ahead of itself."
+  INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — risks: (none recorded)
+  INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — exit conditions: "Reconsider after a 15% pullback."
+  AI-EXTRACTED CLAIM (forecast), still pending — written by an AI from the reasoning above, NOT the investor's words: "Margins keep expanding."
+  Pending re-entry conditions from this decision: 1 (listed below)
+  Claims already resolved: 1 (how they resolved is deliberately not shown) · Reviews recorded: 1 (verdicts deliberately not shown)
+  LATER CONTEXT — INVESTOR-AUTHORED HISTORICAL TEXT (verbatim), added on 2026-06-03 — authoritative over the older text and any AI extraction above: "This was a deliberate test decision."
+(1 older prior decision(s) omitted — at most 5 are shown)
+
+Holding periods on this ticker (execution facts):
+[Episode ACME#1] EXECUTION FACT: closed; 2026-01-05 → 2026-03-01 (55 days); 2 buy(s), 1 sell(s)
+  INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — rationale recorded 2026-04-01: Q: Why did you sell? A: "Needed the cash."
+(2 older holding period(s) omitted — at most 5 are shown)
+
+Pending re-entry conditions — the investor's own earlier checks, AI-extracted from their exit conditions, still unresolved at the cutoff (not automatically satisfied or failed):
+- (from the PASS of 2026-06-01) "A pullback of 15% or more."`;
 
 describe("formatContext", () => {
   it("renders the complete expected prompt text for a fully-populated input, byte for byte", () => {
