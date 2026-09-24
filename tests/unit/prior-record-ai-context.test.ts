@@ -160,7 +160,7 @@ describe("missing information is never 'clean history'", () => {
       portfolioStateAtDecision: { cash: 0, positions: [] }, marketContextAtDecision: { indexLevel: null, indexChange1d: null, volatilityIndexValue: null },
       caseMarketIntelligenceSummary: "{}", caseBullCaseText: null, caseBearCaseText: null, caseCatalystsText: null, caseInvalidationConditionsText: null,
       caseMarketBlindspotText: null, caseDevilsAdvocateText: null, casePersonalFitText: null, casePortfolioFitText: null, strategyPrinciplesInEffect: [],
-      dnaHypothesesInEffect: [], predictionsWithResolutions: [], laterContexts: [],
+      dnaHypothesesInEffect: [], predictionsWithResolutions: [], laterContexts: [], executionFacts: { executed: [], unrelatedCount: 0 },
       outcome: { priceAtDecision: 1, currentPrice: null, priceChangePercent: null, sizeDollars: null, positionValueNowUsd: null, pnlUsd: null, pnlPercent: null, stillHeld: false, asOfDate: "2026-09-24T00:00:00.000Z" },
     } satisfies Omit<ReviewInput, "priorRecordAtDecision">;
     expect(formatInput({ ...base, priorRecordAtDecision: null })).toContain("=== priorRecord (frozen at decision time) ===\n=== Investor's prior record on this ticker: NOT CAPTURED ===");

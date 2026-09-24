@@ -1,6 +1,8 @@
-import { pgTable, uuid, text, timestamp, jsonb, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { investors } from "./identity";
 import { caseStatusEnum, ideaSourceEnum } from "./enums";
+import { predictions } from "./decisions";
 
 export const ideas = pgTable("ideas", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -56,4 +58,19 @@ export const investmentCases = pgTable("investment_cases", {
   marketBlindspotText: text("market_blindspot_text"),
   devilsAdvocateText: text("devils_advocate_text"),
   synthesisText: text("synthesis_text"),
-});
+
+  // Decision Follow-Through V1 — set only by cases.createFromCondition: this
+  // case was opened because the investor CONFIRMED that a re-entry condition
+  // they had set on an earlier decision fired (predictions.kind =
+  // reentry_condition, status = confirmed). An explicit, investor-initiated
+  // link — never inferred. Frozen into the eventual DecisionSnapshot with the
+  // rest of this row (investment_case_snapshot_json). One case per condition
+  // (partial unique index): the condition resolves once, so does its
+  // reconsideration. Lazy cross-file reference — decisions.ts already refers
+  // to investmentCases the same way; both thunks resolve after load.
+  originPredictionId: uuid("origin_prediction_id").references((): AnyPgColumn => predictions.id),
+}, (table) => [
+  uniqueIndex("investment_cases_origin_prediction_unique")
+    .on(table.originPredictionId)
+    .where(sql`${table.originPredictionId} IS NOT NULL`),
+]);

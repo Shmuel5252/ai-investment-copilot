@@ -29,6 +29,17 @@ export class ReviewStateChangedError extends Error {}
 export class ReviewIdempotencyConflictError extends Error {}
 export class ReviewDecisionNotFoundError extends Error {}
 
+// Decision Follow-Through V1 (resolveReentryCondition). Thrown inside the
+// resolution transaction, so nothing is written when they escape:
+//   PredictionNotFoundError — no such prediction on a decision of this investor;
+//   PredictionNotReentryConditionError — only re-entry conditions resolve on
+//     their own; forecasts are resolved inside a Decision Review;
+//   PredictionAlreadyResolvedError — resolved before with a DIFFERENT
+//     status/note (an identical retry replays instead).
+export class PredictionNotFoundError extends Error {}
+export class PredictionNotReentryConditionError extends Error {}
+export class PredictionAlreadyResolvedError extends Error {}
+
 // Thrown by an identity-version append whose counting was computed against a
 // base state that has since changed — the identity's latest version is no
 // longer the one the generation counted against (another generation,

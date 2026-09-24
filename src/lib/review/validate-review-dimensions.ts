@@ -53,6 +53,12 @@ export type CitableSnapshotField = (typeof CITABLE_SNAPSHOT_FIELDS)[number];
 // citable unless the caller says the frozen copy exists.
 export const PRIOR_RECORD_CITABLE_FIELD = "priorRecord";
 
+// Decision Follow-Through V1: the investor-confirmed execution facts are
+// citable ONLY when at least one effective fact exists for the decision. With
+// none, whether the decision was executed is unknown — there is nothing to
+// point at, so a citation of it is dropped like any invalid one.
+export const EXECUTION_FACTS_CITABLE_FIELD = "executionFacts";
+
 export interface ProposedReviewDimension {
   dimension: string;
   verdict: DecisionQuality;
@@ -75,11 +81,12 @@ export interface ValidatedReviewDimension {
 // insufficient_evidence entry, not a gap.
 export function validateReviewDimensions(
   proposed: ProposedReviewDimension[],
-  options: { priorRecordCaptured?: boolean } = {}
+  options: { priorRecordCaptured?: boolean; executionFactsAsserted?: boolean } = {}
 ): ValidatedReviewDimension[] {
   const byDimension = new Map(proposed.map((p) => [p.dimension, p]));
   const validFieldSet = new Set<string>(CITABLE_SNAPSHOT_FIELDS);
   if (options.priorRecordCaptured === true) validFieldSet.add(PRIOR_RECORD_CITABLE_FIELD);
+  if (options.executionFactsAsserted === true) validFieldSet.add(EXECUTION_FACTS_CITABLE_FIELD);
 
   return REQUIRED_DIMENSIONS.map((dimension) => {
     const entry = byDimension.get(dimension);

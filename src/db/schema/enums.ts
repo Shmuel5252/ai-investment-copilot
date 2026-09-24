@@ -98,6 +98,12 @@ export const principleCreatedByEnum = pgEnum("principle_created_by", [
 // may ever write one (src/db/repositories/link-facts.ts).
 export const linkFactVerdictEnum = pgEnum("link_fact_verdict", ["linked", "independent"]);
 
+// Decision Follow-Through V1 — an INVESTOR-AUTHORED verdict on one
+// (decision, trade) pair: "executed" = this trade carried out that decision;
+// "unrelated" = it did not. The system computes candidates (same ticker,
+// dated on/after the decision) but never asserts either verdict itself.
+export const executionFactVerdictEnum = pgEnum("execution_fact_verdict", ["executed", "unrelated"]);
+
 export const caseStatusEnum = pgEnum("case_status", ["researching", "decided", "archived"]);
 
 export const decisionTypeEnum = pgEnum("decision_type", [

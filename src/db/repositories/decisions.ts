@@ -1,5 +1,13 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
-import { isUniqueViolation, ReviewDecisionNotFoundError, ReviewIdempotencyConflictError, ReviewStateChangedError } from "@/db/errors";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import {
+  PredictionAlreadyResolvedError,
+  PredictionNotFoundError,
+  PredictionNotReentryConditionError,
+  ReviewDecisionNotFoundError,
+  ReviewIdempotencyConflictError,
+  ReviewStateChangedError,
+  isUniqueViolation,
+} from "@/db/errors";
 import { computeReviewInputStateFingerprint } from "@/lib/review/review-fingerprint";
 import type { InferInsertModel } from "drizzle-orm";
 import type { db as Db, DbOrTx } from "@/db/client";
@@ -297,6 +305,90 @@ export async function getPredictionsForThesis(db: typeof Db, thesisId: string) {
 // DecisionReview that resolves it (docs/data-model.md §5). This is not a
 // general-purpose update — it only ever moves a prediction from
 // "pending" to a resolved state.
+// Decision Follow-Through V1 — a re-entry condition ("I'd reconsider if X")
+// is resolved by the investor on its own, without a Decision Review: it is a
+// trigger, not a claim a review needs to weigh. Same lock order as
+// persistDecisionReviewAtomic (decision row, then the prediction row) so a
+// concurrent review of the same decision is serialized against it — and the
+// review's own state-fingerprint recheck fails closed if this landed first.
+// Resolve-once: an identical retry replays; a different resolution of an
+// already-resolved condition is a conflict, never an overwrite.
+// resolved_by_review_id stays NULL — no review resolved it.
+export async function resolveReentryCondition(
+  db: typeof Db,
+  params: { investorId: string; predictionId: string; status: "confirmed" | "refuted" | "inconclusive"; note: string }
+) {
+  return db.transaction(async (tx) => {
+    const [owned] = await tx
+      .select({ predictionId: predictions.id, decisionId: decisions.id })
+      .from(predictions)
+      .innerJoin(decisionSnapshots, eq(decisionSnapshots.thesisId, predictions.thesisId))
+      .innerJoin(decisions, eq(decisions.id, decisionSnapshots.decisionId))
+      .where(and(eq(predictions.id, params.predictionId), eq(decisions.investorId, params.investorId)));
+    if (!owned) throw new PredictionNotFoundError("Prediction not found.");
+
+    await tx.select({ id: decisions.id }).from(decisions).where(eq(decisions.id, owned.decisionId)).for("update");
+    const [locked] = await tx.select().from(predictions).where(eq(predictions.id, params.predictionId)).for("update");
+    if (!locked) throw new PredictionNotFoundError("Prediction not found.");
+    if (locked.kind !== "reentry_condition") {
+      throw new PredictionNotReentryConditionError("Only a re-entry condition can be resolved on its own — forecasts are resolved in a Decision Review.");
+    }
+    if (locked.status !== "pending") {
+      if (locked.status === params.status && locked.resolutionNote === params.note) return { prediction: locked, replayed: true as const };
+      throw new PredictionAlreadyResolvedError("This condition was already resolved differently; a resolution is recorded once.");
+    }
+    const [updated] = await tx
+      .update(predictions)
+      .set({ status: params.status, resolvedAt: new Date(), resolutionNote: params.note, resolvedByReviewId: null })
+      .where(and(eq(predictions.id, params.predictionId), eq(predictions.status, "pending")))
+      .returning();
+    if (!updated) throw new PredictionAlreadyResolvedError("This condition is no longer pending.");
+    return { prediction: updated, replayed: false as const };
+  });
+}
+
+/** Pending re-entry conditions across this investor's decisions — the open checks they set for themselves. Deterministic order. */
+export async function listOpenReentryConditions(db: typeof Db, investorId: string) {
+  return db
+    .select({
+      predictionId: predictions.id,
+      claimText: predictions.claimText,
+      checkableByDate: predictions.checkableByDate,
+      createdAt: predictions.createdAt,
+      decisionId: decisions.id,
+      ticker: decisions.ticker,
+      decisionType: decisions.decisionType,
+      decisionDate: decisions.decisionDate,
+    })
+    .from(predictions)
+    .innerJoin(decisionSnapshots, eq(decisionSnapshots.thesisId, predictions.thesisId))
+    .innerJoin(decisions, eq(decisions.id, decisionSnapshots.decisionId))
+    .where(and(eq(decisions.investorId, investorId), eq(predictions.kind, "reentry_condition"), eq(predictions.status, "pending")))
+    .orderBy(desc(decisions.decisionDate), asc(decisions.id), asc(predictions.createdAt), asc(predictions.id));
+}
+
+/** One prediction with its decision, only when the decision is the investor's. */
+export async function getOwnedPrediction(db: typeof Db, investorId: string, predictionId: string) {
+  const [row] = await db
+    .select({
+      predictionId: predictions.id,
+      claimText: predictions.claimText,
+      kind: predictions.kind,
+      status: predictions.status,
+      resolutionNote: predictions.resolutionNote,
+      resolvedAt: predictions.resolvedAt,
+      decisionId: decisions.id,
+      ticker: decisions.ticker,
+      decisionType: decisions.decisionType,
+      decisionDate: decisions.decisionDate,
+    })
+    .from(predictions)
+    .innerJoin(decisionSnapshots, eq(decisionSnapshots.thesisId, predictions.thesisId))
+    .innerJoin(decisions, eq(decisions.id, decisionSnapshots.decisionId))
+    .where(and(eq(predictions.id, predictionId), eq(decisions.investorId, investorId)));
+  return row ?? null;
+}
+
 export async function resolvePrediction(
   db: typeof Db,
   predictionId: string,

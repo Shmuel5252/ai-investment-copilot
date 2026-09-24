@@ -25,6 +25,7 @@ import { synthesizeDecisionReview } from "@/lib/ai/review";
 import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 import { projectPriorRecordForAi, PriorRecordContextError, type PriorRecordDecisionContextV1 } from "@/lib/prior-record/ai-context";
+import { loadEffectiveExecutionFactsForDecision } from "@/db/repositories/execution-facts";
 
 interface FrozenCaseSnapshot {
   marketIntelligenceJson?: MarketIntelligence | null;
@@ -215,6 +216,25 @@ export const reviewsRouter = router({
 
       const laterContexts = await getLaterContextsForDecision(db, decision.id);
 
+      // Decision Follow-Through V1 — the investor-confirmed execution facts
+      // (effective chain heads only). Read here, after the decision, like
+      // laterContexts: what the investor actually did is part of "what has
+      // happened since", never of the frozen snapshot.
+      const effectiveExecutionFacts = await loadEffectiveExecutionFactsForDecision(db, decision.id);
+      const executionFacts = {
+        executed: effectiveExecutionFacts
+          .filter((f) => f.verdict === "executed")
+          .map((f) => ({
+            transactionType: f.transaction.transactionType,
+            transactionDate: f.transaction.transactionDate.toISOString(),
+            quantity: f.transaction.quantity,
+            price: f.transaction.price,
+            amount: f.transaction.amount,
+            note: f.note,
+          })),
+        unrelatedCount: effectiveExecutionFacts.filter((f) => f.verdict === "unrelated").length,
+      };
+
       const proposed = await synthesizeDecisionReview({
         ticker: decision.ticker,
         decisionType: decision.decisionType,
@@ -248,10 +268,14 @@ export const reviewsRouter = router({
         predictionsWithResolutions,
         laterContexts: laterContexts.map((lc) => ({ text: lc.text, addedAt: lc.addedAt.toISOString() })),
         priorRecordAtDecision,
+        executionFacts,
         outcome,
       });
 
-      const validatedDimensions = validateReviewDimensions(proposed.dimensions, { priorRecordCaptured: priorRecordAtDecision !== null });
+      const validatedDimensions = validateReviewDimensions(proposed.dimensions, {
+        priorRecordCaptured: priorRecordAtDecision !== null,
+        executionFactsAsserted: effectiveExecutionFacts.length > 0,
+      });
       const decisionQualityOverall = calculateDecisionQualityOverall(validatedDimensions.map((d) => d.verdict));
 
       // Phase 3 — one short atomic transaction (locks, revalidation, review,

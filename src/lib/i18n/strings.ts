@@ -170,6 +170,72 @@ export const decisionAttention = {
   addContext: "הוסף הקשר",
   runReview: "הרץ Review",
   withoutHorizonSuffix: "החלטות במעקב ללא תאריך Review",
+  // Decision Follow-Through V1 — the action a card with execution facts offers.
+  markExecution: "סמן ביצוע",
+};
+
+// --- Decision Follow-Through V1 (src/components/execution-facts.tsx) —
+// investor-confirmed execution facts. Wording never asserts that a trade
+// executed a decision; candidates are candidates until the investor marks
+// them. ---
+
+export const decisionExecution = {
+  title: "ביצוע בפועל",
+  explanation:
+    "עסקאות באותו טיקר סביב מועד ההחלטה מוצגות כמועמדות בלבד — המערכת לעולם לא קובעת שעסקה ביצעה החלטה. רק אתה מסמן. כל סימון נרשם כעובדה חדשה; שינוי דעה נרשם כעובדה נוספת, לא כמחיקה.",
+  loading: "בודק...",
+  historyBeforeDecisionPrefix: "היסטוריית העסקאות מגיעה רק עד",
+  noHistory: "אין עדיין היסטוריית עסקאות",
+  noCandidates: "אין עסקאות באותו טיקר סביב מועד ההחלטה.",
+  executedTitle: "סימנת כביצוע ההחלטה",
+  candidatesTitle: "עסקאות מועמדות",
+  beforeTitle: "עסקאות מלפני יום ההחלטה",
+  beforeNote: "מתוארכות לפני יום ההחלטה — לא יכולות להיות הביצוע שלה. אם ההחלטה התקבלה בפועל מוקדם יותר, הוסף הקשר מאוחר.",
+  sameDayNote: "ביום ההחלטה (הסדר ביחס להחלטה לא ידוע)",
+  afterNote: "אחרי יום ההחלטה",
+  notExecutableNote: "החלטת דילוג/החזקה אינה מבוצעת על ידי עסקה — ניתן רק לסמן עסקאות כלא קשורות.",
+  sideMismatchNote: "צד העסקה לא תואם לסוג ההחלטה — לא יכולה להיות הביצוע שלה.",
+  markExecuted: "ביצעה את ההחלטה",
+  markUnrelated: "לא קשורה להחלטה",
+  markingButton: "רושם...",
+  verdictExecuted: "סומנה: ביצוע ההחלטה",
+  verdictUnrelated: "סומנה: לא קשורה",
+  changeToUnrelated: "שנה: לא קשורה",
+  changeToExecuted: "שנה: ביצעה את ההחלטה",
+  unrelatedCountSuffix: "עסקאות סומנו כלא קשורות להחלטה",
+  amountLabel: "סכום",
+};
+
+// --- Decision Follow-Through V1 (src/components/reentry-condition.tsx) —
+// a re-entry condition is the investor's own check; they resolve it. ---
+
+export const reentryCondition = {
+  resolvePrompt: "האם התנאי התקיים? זו קביעה שלך — המערכת לא בודקת את השוק.",
+  fired: "התקיים",
+  notFired: "לא התקיים",
+  undetermined: "לא ניתן לקבוע",
+  notePlaceholder: "מה קרה בפועל (חובה)",
+  submitButton: "רשום פתרון",
+  submittingButton: "רושם...",
+  yourCallPrefix: "קביעתך:",
+  resolvedNotePrefix: "מה שקרה בפועל:",
+  resolvedAtPrefix: "נפתר ב",
+  reconsiderButton: "פתח Case חדש לשקילה מחדש",
+  reconsiderOpening: "פותח...",
+  forecastNote: "תחזית — נפתרת במסגרת Decision Review.",
+};
+
+// --- Decision Follow-Through V1 (src/app/page.tsx) — open re-entry
+// conditions, listed as facts (Pull), never checked against the market. ---
+
+export const openConditions = {
+  title: "תנאי שקילה-מחדש פתוחים",
+  loading: "בודק...",
+  empty: "אין תנאי שקילה-מחדש פתוחים.",
+  explanation: "תנאים שקבעת בעצמך בהחלטות קודמות ועדיין לא נפתרו. המערכת לא בודקת אם התקיימו — זו קביעה שלך.",
+  fromDecisionPrefix: "מהחלטת",
+  openDecision: "פתח החלטה",
+  checkableByPrefix: "ניתן לבדוק עד",
 };
 
 // --- Decision Snapshot (src/app/decisions/[id]/page.tsx) ---
@@ -636,6 +702,11 @@ export const caseDetailPage = {
   portfolioFitNarrative: "Portfolio Fit (נרטיב)",
   marketBlindspot: "נקודה עיוורת בשוק",
   devilsAdvocate: "עורך דין לשטן",
+  // Decision Follow-Through V1 — a case opened from a confirmed re-entry condition.
+  originConditionPrefix: "נפתח בעקבות תנאי שקילה-מחדש שאישרת שהתקיים:",
+  originFromDecisionPrefix: "מהחלטת",
+  originOpenDecision: "פתח את ההחלטה המקורית",
+  originResolutionNotePrefix: "מה שקרה בפועל:",
   recordDecisionTitle: "רשום החלטה",
   decisionAlreadyRecordedPrefix: "החלטה כבר נרשמה לתיק הזה —",
   viewDecisionSnapshot: "צפה ברשומת ההחלטה",

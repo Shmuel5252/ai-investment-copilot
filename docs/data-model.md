@@ -353,6 +353,12 @@ Mutable כל עוד `researching` — מסמך עבודה חי, לא שיפוט 
 Advocate הוא שדה על ה-Case, לא agent/ישות נפרדת.
 - נוצר ע"י: משתמש + AI (סינתזה) + קוד (Market Intelligence fetch,
   portfolio fit מחושב). נצרך ע"י: Decision Snapshot (מעתיק עותק קפוא).
+`origin_prediction_id?` (Decision Follow-Through V1, 2026-09-24): נקבע רק
+ע"י `cases.createFromCondition` — ה-Case נפתח כי המשקיע אישר שתנאי
+שקילה-מחדש (`Prediction.kind=reentry_condition`, `status=confirmed`) שקבע
+בהחלטה קודמת התקיים. קישור מפורש ביוזמת המשקיע, לעולם לא מוסק; אחד לכל
+תנאי (אינדקס ייחודי חלקי); מוקפא ב-`investment_case_snapshot_json` עם
+שאר השורה. לא מוזן ל-Decision AI.
 
 ---
 
@@ -368,8 +374,11 @@ Snapshot משתמש בתזה הזאת" הוא lookup הפוך טריוויאלי
 **Prediction** — `id, thesis_id, claim_text, kind(forecast|reentry_condition)?,
 checkable_by_date?, status(pending|confirmed|refuted|inconclusive),
 resolved_at?, resolved_by_review_id?, resolution_note?`. `claim_text`
-ו-`kind` immutable מרגע היצירה; שדות רזולוציה נכתבים פעם אחת ע"י
-Decision Review שפותר אותם.
+ו-`kind` immutable מרגע היצירה; שדות רזולוציה נכתבים פעם אחת — ע"י
+Decision Review שפותר אותם, או (Decision Follow-Through V1, 2026-09-24) ע"י
+המשקיע לבדו עבור `reentry_condition` (`resolved_by_review_id` NULL;
+`predictions.resolveReentryCondition`, resolve-once: חזרה זהה replay,
+פתרון שונה CONFLICT). `forecast` נפתר רק ב-Review.
 - נוצר ע"י: AI (מחלץ מה-Thesis). נצרך ע"י: Decision Review (Thesis
   Accuracy).
 - `kind` — `forecast` (טענה על מה שיקרה) לעומת `reentry_condition`
@@ -485,6 +494,26 @@ resulting_review_id?, resulting_version_id?`. מנגנון ערעור גנרי �
 המערכת; לעולם לא דורס — אם מתקבל, יוצר Review/Version חדשים.
 
 ---
+
+**DecisionExecutionFact** (Decision Follow-Through V1, 2026-09-24) — `id,
+investor_id, decision_id, transaction_id, verdict(executed|unrelated),
+shown_basis_json?, note?, supersedes_fact_id?, created_at`. טענה
+**שנכתבה ע"י המשקיע** על זוג (החלטה, עסקה) אחד: העסקה ביצעה את ההחלטה,
+או אינה קשורה אליה. המקור היחיד ל"ההחלטה בוצעה ע"י…"; מועמדות (קבוצות
+הביצוע של ה-Monitoring) מחושבות, לא נשמרות; ל-AI אין נתיב לטבלה (נצרך
+ע"י Decision Review כעובדות, דרך ה-router בלבד). Immutable + append-only:
+שינוי דעה = שורה חדשה עם `supersedes_fact_id` (יורש יחיד — אינדקס ייחודי
+חלקי), העובדה בתוקף = ראש השרשרת. **אינווריאנטים ברמת ה-DB:** שורש יחיד לזוג
+(אינדקס ייחודי חלקי על `(decision_id, transaction_id) WHERE supersedes_fact_id
+IS NULL`) + יורש יחיד לכל עובדה ⇒ שרשרת אחת בדיוק, כלומר עובדה בתוקף אחת,
+לכל זוג; `CHECK supersedes_fact_id <> id` (אין החלפה עצמית). מה שה-DB לא
+יכול לבטא (ההחלפה מצביעה על עובדה של אותה החלטה ואותה עסקה ושל אותו משקיע)
+נאכף ב-repository, תחת advisory lock. כללים חוצי-שורות (אותו משקיע וטיקר,
+buy/sell בלבד, ל-"executed": צד תואם לסוג ההחלטה ויום העסקה ≥ יום ההחלטה
+באזור הזמן של המשקיע, PASS/HOLD לעולם לא; עובדה בתוקף אחת לזוג — זהה
+replay, שונה חייבת להחליף) — `src/lib/execution/execution-facts.ts`,
+נאכפים אטומית ב-`src/db/repositories/execution-facts.ts` (advisory lock
+למשקיע).
 
 ## 6. Portfolio, Transactions
 
@@ -691,7 +720,8 @@ FOR UPDATE` על התשובה הקודמת, בטרנזקציה אחת עם ה-in
   `LaterContext`, `Evidence`, `DNAHypothesisVersion`,
   `StrategyPrincipleVersion`, `StrategyVersion`, `LearningInsightVersion`,
   `InterviewAnswer`, `DNAEvidenceGroundingCheck`, `StrategyEvidenceGroundingCheck`,
-  `TransactionLinkFact`, `TransactionLinkFactMember`, `CorporateAction`.
+  `TransactionLinkFact`, `TransactionLinkFactMember`, `CorporateAction`,
+  `DecisionExecutionFact`.
 - **`ON DELETE RESTRICT`**: `strategy_version_id`, `market_context_id`,
   `dna_hypothesis_version_id` (דרך `DecisionSnapshotDNAReference`),
   `thesis_id` — כל FK שיוצא מ-`DecisionSnapshot`.

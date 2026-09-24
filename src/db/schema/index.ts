@@ -16,5 +16,6 @@ export * from "./evidence";
 export * from "./dna-grounding";
 export * from "./strategy-grounding";
 export * from "./link-facts";
+export * from "./execution-facts";
 export * from "./corrections";
 export * from "./relations";

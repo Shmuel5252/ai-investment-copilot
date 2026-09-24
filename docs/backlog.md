@@ -365,15 +365,31 @@ FMP טרי), `portfolioStateJson`/Portfolio Fit, Market Context, גרסאות DN
 ### Roadmap אחרי Prior Record Brief V1 (נכתב 2026-09-24, overnight run)
 1. ~~**Copilot משתמש ברקורד הקודם**~~ — נבנה כ-Prior Record → AI Decision Context V1 (ר' "נבנה"), בהיקף
    מצומצם בהכרעת Owner: Decision AI + Review בלבד; בלי Personal Fit; בלי מחירים/תוצאות/תוויות Review.
-2. **מעקב תנאי שקילה-מחדש** — Predictions מסוג `reentry_condition` כתנאים פתוחים לאורך זמן: פתרון עצמאי
-   (בלי Review מלא) וסיבת attention חדשה — דורש הכרעת Owner (סיבה חמישית ב-Monitoring הקפוא).
+2. ~~**מעקב תנאי שקילה-מחדש**~~ — נבנה כחלק מ-Decision Follow-Through V1 (ר' "נבנה"): פתרון עצמאי + מקטע
+   "תנאים פתוחים" בדשבורד (Pull). **לא** נוספה סיבת attention חמישית — ה-Monitoring הקפוא לא נגע (הכרעת Owner
+   עדיין פתוחה אם רוצים כזו).
 3. **Learning ממעבר מהסקטור בלבד** — Learning מורעב (0 insights; אין סקטור עם 2 החלטות שעברו Review):
    משפחות לפי טיקר/סוג החלטה ו-Learning מתקופות החזקה עם נימוק (Journal) — דורש הכרעת Owner מה נחשב
    ראיה עצמאית.
-4. **קישור החלטה↔ביצוע מפורש** (אישור משתמש, לא אוטומטי).
+4. ~~**קישור החלטה↔ביצוע מפורש**~~ — נבנה כחלק מ-Decision Follow-Through V1 (ר' "נבנה"): מועמדות מחושבות,
+   אישור משקיע בלבד, append-only.
 5. **Hardening:** מפתח Review ב-sessionStorage; בידוד `decision-monitoring.test.ts`; `getForCase` מחזיר undefined.
 
 ## נבנה
+- **Decision Follow-Through V1 — ביצוע בפועל, מחזור חיי תנאי שקילה-מחדש, Case משקילה מחדש** (2026-09-24,
+  autonomous run; `docs/architecture.md` §2.10): נמצא על הנתונים האמיתיים — AVGO BUY $500 (09-08) ליד קניית $670
+  מ-09-02 בלי שום קשר רשום; SNDK PASS (08-20) ואחריה קנייה ב-08-24 — תנאי ה-pullback התקיים והמשקיע פעל בלי החלטה
+  רשומה; 3 תנאי שקילה-מחדש של AVGO ללא תאריך שאפשר היה לפתור רק דרך Review מלא. **נבנה:** `decision_execution_facts`
+  (מיגרציה `0016`, scratch בלבד), `executions.candidates/assert`, מקטע "ביצוע בפועל" בעמוד ההחלטה, Review מקבל
+  `executionFacts` (ציטוט רק כשיש עובדה); `predictions.resolveReentryCondition/openReentryConditions`, פתרון בעמוד
+  ההחלטה, מקטע "תנאי שקילה-מחדש פתוחים" בדשבורד; `cases.createFromCondition/originCondition` +
+  `investment_cases.origin_prediction_id`, שורת מקור בעמוד ה-Case. Monitoring, Prior Record (v1), Decision AI,
+  Learning/DNA/Strategy — ללא שינוי. **לא נבנה בכוונה / חוב:** (א) ה-Monitoring עדיין מסמן עסקה שסומנה "ביצעה
+  את ההחלטה" כ-NEW_EXECUTION_AFTER_DECISION עד ל-Review הבא (baseline) — לא נגענו בסמנטיקה הקפואה; (ב) Prior
+  Record לא מציג אילו עסקאות ביצעו החלטה קודמת (דורש `version: 2` של התקציר + ההטלה ל-AI); (ג) ה-Decision AI
+  לא יודע שה-Case נפתח מתנאי שהתקיים (סטטוס פתרון מוחרג מהחוזה — הכרעת Owner); (ד) Outcome ב-Review עדיין
+  מחושב מ-`size` × תנועת מחיר, לא מהביצוע המאושר (שינוי סמנטיקת Outcome = הכרעת Owner); (ה) אין UI להערה
+  חופשית בסימון ביצוע (ה-API תומך).
 - **Prior Record → AI Decision Context V1** (2026-09-24): ה-AI של ההחלטה מקבל הטלה מוגבלת ומסומנת-מקור של
   הרקורד הקודם (`src/lib/prior-record/ai-context.ts`), מאותו תקציר PIT שמוקפא ב-Snapshot (טעינה אחת, לפני
   ה-AI); ה-Review מקבל רק את העותק הקפוא (NULL → NOT CAPTURED; `priorRecord` ציטוט רק כשקיים). מחירים,

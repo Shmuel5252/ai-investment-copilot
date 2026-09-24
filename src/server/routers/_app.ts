@@ -9,6 +9,8 @@ import { casesRouter } from "./cases";
 import { decisionsRouter } from "./decisions";
 import { reviewsRouter } from "./reviews";
 import { learningRouter } from "./learning";
+import { executionsRouter } from "./executions";
+import { predictionsRouter } from "./predictions";
 
 export const appRouter = router({
   // Proves the DB round-trip works without requiring auth — useful for
@@ -25,6 +27,8 @@ export const appRouter = router({
   decisions: decisionsRouter,
   reviews: reviewsRouter,
   learning: learningRouter,
+  executions: executionsRouter,
+  predictions: predictionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -9,6 +9,8 @@ import { Num } from "@/components/num";
 import { PriorRecordBriefView } from "@/components/prior-record-brief";
 import type { PriorRecordBrief } from "@/lib/prior-record/prior-record";
 import { BackLink } from "@/components/back-link";
+import { ExecutionSection } from "@/components/execution-facts";
+import { ReentryConditionControls } from "@/components/reentry-condition";
 import {
   decisionTypeLabel,
   evidenceStrengthLabel,
@@ -160,7 +162,7 @@ export default function DecisionDetailPage() {
 
         {predictions.length > 0 && (
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-semibold">{t.predictionsTitle}</h2>
+            <h2 id="predictions" className="text-sm font-semibold">{t.predictionsTitle}</h2>
             <ul className="flex flex-col gap-2">
               {predictions.map((p) => (
                 <li key={p.id} className="rounded border border-journal-rule bg-journal-surface p-3 text-sm">
@@ -177,6 +179,10 @@ export default function DecisionDetailPage() {
                       </>
                     ) : null}
                   </p>
+                  {/* Decision Follow-Through V1 — a re-entry condition is resolved
+                      by the investor here, on its own; a confirmed one offers the
+                      reconsideration Case. Forecasts: Decision Review below. */}
+                  <ReentryConditionControls prediction={p} decisionId={id} />
                 </li>
               ))}
             </ul>
@@ -205,6 +211,11 @@ export default function DecisionDetailPage() {
             <p className="text-sm text-journal-muted">{t.noOtherHoldings}</p>
           )}
         </section>
+
+        {/* Decision Follow-Through V1 — investor-confirmed execution facts
+            (candidates from the monitoring's execution groups; verdicts are
+            the investor's, appended, never inferred). */}
+        <ExecutionSection decisionId={id} />
 
         {marketContext && (
           <section className="flex flex-col gap-2">

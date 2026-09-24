@@ -18,6 +18,10 @@ import { validatePersonalFit } from "@/lib/case/validate-personal-fit";
 import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 import type { MarketIntelligence } from "@/lib/market/fmp";
 import { loadPriorRecordBrief } from "@/lib/prior-record/load-prior-record";
+import { getOwnedPrediction } from "@/db/repositories/decisions";
+import { isUniqueViolation } from "@/db/errors";
+import { investmentCases } from "@/db/schema";
+import { and, eq } from "drizzle-orm";
 
 async function requireOwnedCase(investorId: string, caseId: string) {
   const investmentCase = await getInvestmentCase(db, caseId);
@@ -37,6 +41,50 @@ export const casesRouter = router({
     ),
 
   list: protectedProcedure.query(({ ctx }) => listInvestmentCasesForInvestor(db, ctx.investorId)),
+
+  // Decision Follow-Through V1 (docs/architecture.md §2.10) — reconsideration
+  // from a re-entry condition the investor has CONFIRMED fired: opens the new
+  // Idea/Case that the product's "reconsider = new Case" rule requires
+  // (data-model.md, פישוטים מכוונים 6) with an explicit origin. Investor-
+  // initiated only; a pending or refuted condition opens nothing. One case per
+  // condition: a repeat returns the existing case (partial unique index +
+  // unique-violation fallback under a race).
+  createFromCondition: protectedProcedure
+    .input(z.object({ predictionId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const prediction = await getOwnedPrediction(db, ctx.investorId, input.predictionId);
+      if (!prediction) throw new TRPCError({ code: "NOT_FOUND", message: "Prediction not found." });
+      if (prediction.kind !== "reentry_condition") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Only a re-entry condition can open a reconsideration case." });
+      }
+      if (prediction.status !== "confirmed") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Confirm that the condition fired before opening a reconsideration case." });
+      }
+      const existing = await db.query.investmentCases.findFirst({
+        where: and(eq(investmentCases.originPredictionId, prediction.predictionId), eq(investmentCases.investorId, ctx.investorId)),
+      });
+      if (existing) return existing;
+      try {
+        return await insertInvestmentCase(db, { investorId: ctx.investorId, ticker: prediction.ticker, originPredictionId: prediction.predictionId });
+      } catch (err) {
+        if (isUniqueViolation(err, "investment_cases_origin_prediction_unique")) {
+          const raced = await db.query.investmentCases.findFirst({ where: eq(investmentCases.originPredictionId, prediction.predictionId) });
+          if (raced && raced.investorId === ctx.investorId) return raced;
+        }
+        throw err;
+      }
+    }),
+
+  // The condition this case was opened from (null for every other case) —
+  // read, never inferred: the link exists only because the investor opened
+  // the case through createFromCondition.
+  originCondition: protectedProcedure
+    .input(z.object({ caseId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const investmentCase = await requireOwnedCase(ctx.investorId, input.caseId);
+      if (!investmentCase.originPredictionId) return null;
+      return getOwnedPrediction(db, ctx.investorId, investmentCase.originPredictionId);
+    }),
 
   get: protectedProcedure
     .input(z.object({ caseId: z.string().uuid() }))

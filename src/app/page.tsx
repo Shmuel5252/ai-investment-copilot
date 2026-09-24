@@ -6,6 +6,7 @@ import { Frank_Ruhl_Libre, Assistant } from "next/font/google";
 import { trpc } from "@/trpc/react";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
 import { Num } from "@/components/num";
+import { OpenConditionsSection } from "@/components/open-conditions";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers/_app";
 import { dashboardPage as t, importPage, interviewPage, journalPage, historyFreshness, dnaPage, strategyPage, ideasPage, casesListPage, decisionsListPage, decisionAttention as da, decisionTypeLabel } from "@/lib/i18n/strings";
@@ -67,6 +68,7 @@ export default function HomePage() {
       </div>
 
       <DecisionAttentionSection />
+      <OpenConditionsSection />
 
       <div className="flex flex-col gap-2">
         {SECTIONS.map((s) => (
@@ -214,6 +216,11 @@ function AttentionCard({ item }: { item: AttentionItem }) {
         <Link href={`${href}#review`} className="text-journal-accent underline">
           {da.runReview}
         </Link>
+        {item.execution.after.length + item.execution.sameDay.length + item.execution.backfilledBefore.length > 0 && (
+          <Link href={`${href}#execution`} className="text-journal-accent underline">
+            {da.markExecution}
+          </Link>
+        )}
       </p>
     </div>
   );

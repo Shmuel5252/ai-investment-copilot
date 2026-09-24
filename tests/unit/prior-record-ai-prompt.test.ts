@@ -102,7 +102,7 @@ describe("investor-authored prose with prices/outcomes", () => {
       aiRealtimeAssessmentText: null, thesisText: "t", thesisInterpretationText: null, portfolioStateAtDecision: { cash: 0, positions: [] },
       marketContextAtDecision: { indexLevel: null, indexChange1d: null, volatilityIndexValue: null }, caseMarketIntelligenceSummary: "{}", caseBullCaseText: null, caseBearCaseText: null,
       caseCatalystsText: null, caseInvalidationConditionsText: null, caseMarketBlindspotText: null, caseDevilsAdvocateText: null, casePersonalFitText: null, casePortfolioFitText: null,
-      strategyPrinciplesInEffect: [], dnaHypothesesInEffect: [], predictionsWithResolutions: [], laterContexts: [], priorRecordAtDecision: ctx,
+      strategyPrinciplesInEffect: [], dnaHypothesesInEffect: [], predictionsWithResolutions: [], laterContexts: [], priorRecordAtDecision: ctx, executionFacts: { executed: [], unrelatedCount: 0 },
       outcome: { priceAtDecision: 100, currentPrice: null, priceChangePercent: null, sizeDollars: null, positionValueNowUsd: null, pnlUsd: null, pnlPercent: null, stillHeld: false, asOfDate: "2026-09-24T00:00:00.000Z" },
     } as ReviewInput);
 

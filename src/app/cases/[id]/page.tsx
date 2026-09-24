@@ -46,6 +46,9 @@ export default function CaseDetailPage() {
   // before the decision is recorded (facts only; frozen server-side into the
   // snapshot at recording time).
   const priorRecord = trpc.cases.priorRecord.useQuery({ caseId: id });
+  // Decision Follow-Through V1 — the confirmed re-entry condition this case
+  // was opened from (null for every other case).
+  const origin = trpc.cases.originCondition.useQuery({ caseId: id });
 
   const fetchMarketData = trpc.cases.fetchMarketIntelligence.useMutation({
     onSuccess: () => utils.cases.get.invalidate({ caseId: id }),
@@ -99,6 +102,23 @@ export default function CaseDetailPage() {
           {caseStatusLabel[investmentCase.status] ?? investmentCase.status} · {common.createdOnLabel}{" "}
           <Num>{new Date(investmentCase.createdAt).toLocaleDateString("he-IL")}</Num>
         </p>
+        {origin.data && (
+          <p className="text-xs text-journal-muted">
+            {t.originConditionPrefix} <span className="text-journal-ink">{origin.data.claimText}</span> · {t.originFromDecisionPrefix}{" "}
+            {decisionTypeLabel[origin.data.decisionType] ?? origin.data.decisionType} {origin.data.ticker}{" "}
+            <Num>{new Date(origin.data.decisionDate).toLocaleDateString("he-IL")}</Num>
+            {origin.data.resolutionNote && (
+              <>
+                {" · "}
+                {t.originResolutionNotePrefix} {origin.data.resolutionNote}
+              </>
+            )}
+            {" · "}
+            <Link href={`/decisions/${origin.data.decisionId}`} className="text-journal-accent underline">
+              {t.originOpenDecision}
+            </Link>
+          </p>
+        )}
       </div>
 
       {/* Market Intelligence */}
