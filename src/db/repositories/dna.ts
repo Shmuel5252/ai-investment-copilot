@@ -407,7 +407,9 @@ export async function insertDnaHypothesisVersionWithGroundingChecks(
   db: typeof Db,
   dnaHypothesisId: string,
   version: RemediationNewVersion,
-  checks: readonly RemediationCheckResult[]
+  checks: readonly RemediationCheckResult[],
+  /** Grounding Semantics V3: what re-validated this version (generator dna.remediateGrounding, grounding contract, model or null, revalidatedVersionId, reason). NULL keeps the pre-provenance behaviour. */
+  provenance: ArtifactProvenance | null = null
 ) {
   return db.transaction(async (tx) => {
     if (checks.length > 0) {
@@ -433,6 +435,7 @@ export async function insertDnaHypothesisVersionWithGroundingChecks(
         independenceBasisJson: version.independenceBasis,
         createdBy: "system_grounding_revalidation",
         changeReason: version.changeReason,
+        provenanceJson: provenance,
       })
       .returning();
 

@@ -14,7 +14,12 @@ export type ProvenanceGenerator =
   | "dna.generate"
   | "strategy.generateObserved"
   | "learning.generate"
-  | "learning.agree_carry";
+  | "learning.agree_carry"
+  // Grounding remediation (append-only re-validation of an existing version's
+  // citations under the current grounding contract); model is null when the
+  // verdicts came from a deterministic check rather than a real model call.
+  | "dna.remediateGrounding"
+  | "strategy.remediateGrounding";
 
 export interface ArtifactProvenance {
   schemaVersion: typeof PROVENANCE_SCHEMA_VERSION;
@@ -42,6 +47,12 @@ export interface ArtifactProvenance {
   citedReviews?: { decisionReviewId: string; decisionId?: string; stance: "supporting" | "contradicting" }[];
   /** learning.generate only (OD-R1): the effective evidence-state fingerprint that justified THIS version (src/lib/learning/evidence-fingerprint.ts). */
   evidenceFingerprint?: string;
+  /** *.remediateGrounding only: the version whose citations were re-validated (the version this one supersedes as the effective state). */
+  revalidatedVersionId?: string;
+  /** *.remediateGrounding only: why the re-validation ran (e.g. the semantic rule change that triggered it). */
+  remediationReason?: string;
+  /** The stance-semantics rule the grounding verdicts were judged under (src/lib/ai/stance-rules.ts), when applicable. */
+  semanticRule?: string;
 }
 
 export function codeVersionFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
@@ -58,6 +69,9 @@ export function buildProvenance(input: {
   carriedFromLearningInsightVersionId?: string;
   citedReviews?: { decisionReviewId: string; decisionId?: string; stance: "supporting" | "contradicting" }[];
   evidenceFingerprint?: string;
+  revalidatedVersionId?: string;
+  remediationReason?: string;
+  semanticRule?: string;
 }): ArtifactProvenance {
   const p: ArtifactProvenance = {
     schemaVersion: PROVENANCE_SCHEMA_VERSION,
@@ -74,5 +88,8 @@ export function buildProvenance(input: {
   if (input.carriedFromLearningInsightVersionId !== undefined) p.carriedFromLearningInsightVersionId = input.carriedFromLearningInsightVersionId;
   if (input.citedReviews !== undefined) p.citedReviews = input.citedReviews.map((c) => ({ decisionReviewId: c.decisionReviewId, ...(c.decisionId !== undefined ? { decisionId: c.decisionId } : {}), stance: c.stance }));
   if (input.evidenceFingerprint !== undefined) p.evidenceFingerprint = input.evidenceFingerprint;
+  if (input.revalidatedVersionId !== undefined) p.revalidatedVersionId = input.revalidatedVersionId;
+  if (input.remediationReason !== undefined) p.remediationReason = input.remediationReason;
+  if (input.semanticRule !== undefined) p.semanticRule = input.semanticRule;
   return p;
 }

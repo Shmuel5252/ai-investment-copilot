@@ -1,6 +1,7 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
 import { normalizeStructuredCollection } from "./structured-output";
 import { formatInvestorStatements, INVESTOR_STATEMENT_RULES, type InvestorStatementForAnalysis } from "./investor-statements";
+import { AFFIRMATIVE_STANCE_RULES } from "./stance-rules";
 
 export interface InterviewAnswerForAnalysis {
   id: string;
@@ -141,15 +142,18 @@ const OBSERVE_SYSTEM_PROMPT = `You analyze statements a personal investor wrote 
 
 ${INVESTOR_STATEMENT_RULES}
 
+${AFFIRMATIVE_STANCE_RULES}
+
 Write each hypothesis's statement and each evidence description in Hebrew — natural, fluent Hebrew, not a forced or literal translation. Keep tickers, company/product names, and established financial terms (e.g. P/E, margin of safety) in English exactly as an investor writing in natural mixed Hebrew/English would — that mixed style is expected, not a fallback. Keep these fixed terms in English exactly as spelled, never translated: DNA, Evidence Strength, Personal Fit, Portfolio Fit, and Strategy (when naming a Strategy principle specifically). This is about the wording only — it does not change which answer you cite or whether evidence is supporting or contradicting.
 
 Ground rules:
 - Only propose a hypothesis if you can point to specific statements as evidence. A hypothesis with no evidence is useless — don't propose it.
 - Cite evidence using the exact "Statement ID" given for each statement. Never invent an ID, and never cite a statement as evidence for something it doesn't actually support.
 - Do not overclaim: a hypothesis (and its evidence description) should describe only the behavioral tendency the statement actually shows, never a broader stated preference or goal you're inferring from it. For example, an answer showing more confidence deciding on a company the investor already knew well supports "you tend to feel more confident in familiar names" — it does NOT support "you prefer to avoid unfamiliar companies", a stronger, different claim the answer doesn't establish. This applies to the evidence description too, not just the hypothesis statement: describe what the statement actually says, not the wider conclusion you're drawing from it.
-- Distinguish supporting from contradicting evidence honestly — if a statement partially undercuts a pattern you're proposing, cite it as contradicting, don't omit it.
+- Distinguish supporting from contradicting evidence honestly — if a statement affirmatively undercuts a pattern you're proposing, cite it as contradicting rather than omitting it. But cite a statement as "contradicting" ONLY when its own words affirmatively establish something inconsistent with the hypothesis (STANCE SEMANTICS above): never because the claimed behavior is not mentioned, because the investor did something different, because a partial decision record lacks the consideration, or because the text fails to support the claim. A statement that establishes neither direction is simply not cited — not citing it is the correct outcome, not a loss.
 - It is completely fine, and expected with a small number of statements, to propose few hypotheses (even none) or hypotheses with only 1-2 pieces of evidence — thin evidence is for the system to flag as low-confidence, not for you to pad or oversell.
 - Write each hypothesis statement the way you'd describe a real tendency to the investor directly ("You tend to...", "You seem to..."), grounded only in what's actually in the statements — never invent numbers, percentages, or facts not present in the text you were given.
+- Keep tendency language as tendency: never restate "you tend to" as "you always", "you never" or "in every case" — a universal claim would need every cited statement to establish it, and a single silent instance never contradicts a tendency.
 - Propose at most 5 hypotheses.`;
 
 const OBSERVE_TOOL = {

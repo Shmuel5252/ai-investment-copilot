@@ -533,7 +533,7 @@ describe("provenance and AI inputs", () => {
     expect(p).toEqual({ schemaVersion: 1, generator: "dna.generate", model: "m", promptContracts: ["a", "b"], evidenceSourceContract: "evidence-source-v1", independencePolicy: "independence-policy-v2", sourceTypes: ["interview_answer", "decision_statement"], generatedAt: "2026-09-25T00:00:00.000Z", codeVersion: p.codeVersion });
     expect("carriedFromLearningInsightId" in p).toBe(false);
     expect("citedReviews" in p).toBe(false);
-    const carry = buildProvenance({ generator: "learning.agree_carry", model: "m", promptContracts: ["evidence-grounding-v2-statements"], sourceTypes: ["decision_statement"], carriedFromLearningInsightId: U1, carriedFromLearningInsightVersionId: U2 });
+    const carry = buildProvenance({ generator: "learning.agree_carry", model: "m", promptContracts: ["evidence-grounding-v3-statements"], sourceTypes: ["decision_statement"], carriedFromLearningInsightId: U1, carriedFromLearningInsightVersionId: U2 });
     expect(carry.carriedFromLearningInsightId).toBe(U1);
     const learning = buildProvenance({ generator: "learning.generate", model: "m", promptContracts: ["x"], sourceTypes: ["decision_review"], citedReviews: [{ decisionReviewId: "r1", stance: "supporting" }] });
     expect(learning.citedReviews).toEqual([{ decisionReviewId: "r1", stance: "supporting" }]);

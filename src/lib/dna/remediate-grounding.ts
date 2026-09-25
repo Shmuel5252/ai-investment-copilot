@@ -143,7 +143,8 @@ export async function planGroundingRemediation(
     if (statementId === null) {
       // Nothing to ground against (e.g. a LearningInsight-sourced
       // agreement, or a manual note) — Evidence Grounding only ever
-      // judges a claim against real InterviewAnswer.answerText, so this
+      // judges a claim against the investor's own statement text (an
+      // interview answer or a decision statement), so this
       // citation is never sent to the injected grounding function. It
       // still needs its OWN check row here (verdict "supported" by
       // convention, not by a real grounding judgment) — omitting it
@@ -183,6 +184,10 @@ export async function planGroundingRemediation(
         hypothesisStatement: currentVersion.statementText,
         stance: ev.stance,
         sourceAnswerText,
+        // A decision statement must reach the gate AS a decision statement
+        // (partial record, decision-time process) — never relabelled as an
+        // interview answer (Grounding Semantics V3, sourceKind propagation).
+        sourceKind: ev.decisionStatement ? "decision_statement" : "interview_answer",
       });
     } catch {
       verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed." };

@@ -464,7 +464,9 @@ export async function insertObservedPrincipleVersionWithGroundingChecks(
   db: typeof Db,
   strategyPrincipleId: string,
   version: RemediationNewPrincipleVersion,
-  checks: readonly RemediationCheckResult[]
+  checks: readonly RemediationCheckResult[],
+  /** Grounding Semantics V3: what re-validated this version (generator strategy.remediateGrounding, grounding contract, model or null, revalidatedVersionId, reason). NULL keeps the pre-provenance behaviour. */
+  provenance: ArtifactProvenance | null = null
 ) {
   return db.transaction(async (tx) => {
     if (checks.length > 0) {
@@ -485,13 +487,16 @@ export async function insertObservedPrincipleVersionWithGroundingChecks(
         versionNumber: nextVersionNumber,
         principleType: version.principleType,
         statementText: version.statementText,
-        rationaleText: "Observed as a pattern across your interview answers, not stated directly.",
+        // Same rationale text the generate path writes (Evidence Reach V1): a
+        // remediated version may cite decision statements too.
+        rationaleText: OBSERVED_RATIONALE,
         evidenceStrength: version.evidenceStrength,
         supportingEvidenceCount: version.supportingEvidenceCount,
         contradictingEvidenceCount: version.contradictingEvidenceCount,
         independenceBasisJson: version.independenceBasis,
         createdBy: "system_grounding_revalidation",
         changeReason: version.changeReason,
+        provenanceJson: provenance,
       })
       .returning();
 

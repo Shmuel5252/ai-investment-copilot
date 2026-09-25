@@ -120,6 +120,15 @@ SESSION_SECRET=          # חתימת cookie session
   Context, Review, Outcome, ביצוע. אין Statement ID לשום דבר אחר, ולכן אין
   דרך לצטט אותו. עצמאות של החלטה — רק דרך עובדת `executed` שהמשקיע אישר
   (OD-2), מועמדות לא מסווגות = לא נספר. ר' `docs/architecture.md` §2.11.
+- **סתירה דורשת ראיה חיובית (Grounding Semantics V3, הוקפא 2026-09-25):**
+  citation הוא `contradicting` רק כשהטקסט של המשקיע מבסס בחיוב את ההפך;
+  שתיקה, השמטה, אי-ודאות, טקסט לא רלוונטי או פעולה שונה = לא תומך ולא סותר
+  (`unsupported ≠ contradicting`, S+=0, C+=0). הצהרת החלטה היא רשומה חלקית;
+  "אתה נוטה" לעולם לא מוקשח ל"תמיד". הכלל חי **פעם אחת** ב-
+  `src/lib/ai/stance-rules.ts` ומוזרק לשני ה-proposers ולשער ה-grounding —
+  לא מעתיקים אותו לפרומפט אחר. נמצא בפועל: נימוק AVGO נשמר כסותר רק כי לא
+  הזכיר מחיר (`c478eba3` v1, 2026-09-25) — היסטוריה, מתוקן ב-remediation
+  append-only בלבד. ר' `docs/data-model.md` §2.
 - Historical records (ר' `docs/data-model.md` §10 לרשימה המדויקת) לא
   נדרסים לעולם — repository layer חושף רק `insert` עליהם. עקיפה ב-SQL
   ישיר כפופה לכלל הצר ב-Autonomous Working Rules (גישת SQL ישירה

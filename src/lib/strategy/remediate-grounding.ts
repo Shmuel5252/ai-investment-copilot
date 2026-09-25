@@ -108,7 +108,8 @@ export async function planPrincipleGroundingRemediation(
     const statementId = statementIdOf(ev);
     if (statementId === null) {
       // Nothing to ground against — Evidence Grounding only ever judges a
-      // claim against real InterviewAnswer.answerText. Still gets its own
+      // claim against the investor's own statement text (an interview answer
+      // or a decision statement). Still gets its own
       // "supported by convention" check row when a plan is persisted, so
       // it can never silently vanish from effective evidence once other
       // citations on the same version have been checked (the all-or-nothing
@@ -139,6 +140,9 @@ export async function planPrincipleGroundingRemediation(
         hypothesisStatement: currentVersion.statementText,
         stance: ev.stance,
         sourceAnswerText,
+        // Same rule as the DNA planner: a decision statement reaches the gate
+        // as a decision statement, an answer as an answer (Grounding Semantics V3).
+        sourceKind: ev.decisionStatement ? "decision_statement" : "interview_answer",
       });
     } catch {
       verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed." };

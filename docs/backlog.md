@@ -387,12 +387,25 @@ FMP טרי), `portfolioStateJson`/Portfolio Fit, Market Context, גרסאות DN
 4. **OD-R4 — `STALLED_CASE_DAYS = 14`, `REVIEW_WITHOUT_HORIZON_NUDGE_DAYS = 30`:** מדיניות דשבורד V1 בלבד,
    ניתנת לשינוי, לא אמפירית; קצה ±1 יום UTC/מקומי — חוב V1 מקובל.
 5. **OD-R5 — `candidateDayTolerance = 1`** חלק מ-`independence-policy-v2`; רק UNRESOLVED, לעולם לא ראיה/מיזוג/ביטחון.
+6. **OD-R6 — Grounding Semantics V3: סתירה דורשת ראיה חיובית** (הוקפא 2026-09-25 אחרי שהרגנרציה המפוקחת שמרה
+   נימוק AVGO כסותר על בסיס שתיקה, `c478eba3` v1): `unsupported ≠ contradicting`, הצהרת החלטה = רשומה חלקית,
+   נטייה ≠ "תמיד"; חוזים v3; remediation append-only עם provenance (ר' `docs/data-model.md` §2). **remediation
+   מפוקחת (v3, AI אמיתי) עדיין לא רצה** — מועמדים: `c478eba3`/AVGO (חובה), `d5941418`/08860759 (חובה),
+   `5cee68a2`/b865a5a2 (חובה), ושלוש הסתירות החיוביות (`7c3665ca`, `173720c6`, `3653aeed`) כדי ש-v3 יאשר
+   אותן ולא יניח.
 **חוב V1 מקובל (נשאר):** גרסאות Learning ישנות בלי provenance מקבלות טביעה משורות ה-identity (re-baseline
 חד-פעמי, append בלבד); ריצת generate שהמודל לא הציע בה דבר לא משאירה עקבה (ה-nudge "צור מחדש" נשאר);
 Learning עדיין מקובץ לפי סקטור; הצהרות החלטה נכנסות ל-DNA/Strategy רק ביצירה מחדש; שתי שורות
 `source_learning_insight_id` היסטוריות (סינתטיות) נשארות; מיגרציה 0017 חייבת להיות מוחלת לפני פריסת הקוד.
 
 ## נבנה
+- **Grounding Semantics V3 — סתירה דורשת ראיה חיובית** (2026-09-25, OD-R6; `src/lib/ai/stance-rules.ts`,
+  `docs/data-model.md` §2, `docs/architecture.md` §2.11): כלל stance אחד משותף לשני ה-proposers ולשער ה-grounding;
+  חוזים `*-v3-statements`; שני ה-remediation planners מעבירים `sourceKind` נכון (הצהרת החלטה לא מתויגת כתשובה);
+  מסלולי ה-insert של remediation שומרים `provenance_json` (generator `*.remediateGrounding`, חוזה v3, model או
+  `null`, `revalidatedVersionId`, `remediationReason`, `semanticRule`); טסטים: מקרי-תקיפה A–E + קצוות דרך ה-pipeline
+  האמיתי עם שער ייחוס דטרמיניסטי, remediation append-only end-to-end ל-DNA ול-Strategy. **לא בוצע:** remediation
+  אמיתית (AI) על הנתונים האמיתיים — שער מפוקח נפרד; אין מיגרציה, אין שינוי ספי ביטחון, אין rewrite.
 - **Evidence Reach V1 — הצהרות מזמן החלטה כראיה, עצמאות החלטה (OD-2), Learning→DNA (OD-3), provenance,
   שקיפות ראיות ו"מה הצעד הבא"** (2026-09-25, autonomous run; `docs/architecture.md` §2.11, `docs/data-model.md`
   §2/§3/§8): נמצא בריצה חיה (קריאה בלבד) — DNA reach = 0 (10/10 השערות ו-6/6 עקרונות נצפים insufficient; ה-AI

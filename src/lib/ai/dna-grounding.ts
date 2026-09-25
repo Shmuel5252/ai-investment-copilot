@@ -1,5 +1,17 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
+import { AFFIRMATIVE_STANCE_RULES } from "./stance-rules";
 
+// Grounding Semantics V3 (Owner decision, frozen 2026-09-25): a
+// CONTRADICTING citation is grounded only by AFFIRMATIVE evidence — the
+// statement itself must establish the opposite or a clearly inconsistent
+// belief/action. Silence, omission, a different action, ambiguity or
+// uncertainty establish nothing and are judged unsupported (S += 0, C += 0).
+// The shared rule text (stance-rules.ts) is the same one both proposers
+// state; the persisted API stays supported | unsupported because the stance
+// is an input, and the gate never flips a stance. Found on real data: the
+// AVGO decision reasoning was persisted as contradicting a price-discipline
+// claim solely because it did not mention price.
+//
 // Evidence Grounding (Investment DNA — Evidence Grounding + Hypothesis
 // Identity Hardening task). A real gap found on real data: the AI-written
 // evidence *description* for a citation can selectively reframe what the
@@ -69,13 +81,17 @@ const GROUNDING_SYSTEM_PROMPT = `You check whether a single real statement the i
 
 You will be given the hypothesis statement, the stance being claimed (supporting or contradicting), the kind of statement (an interview answer about a trade, or what the investor wrote when recording a decision: their reasoning, the risks they considered, or their exit conditions), and the real, verbatim statement text. The statement text is the ONLY source of truth — you have not been given and must ignore any other characterization of what it says. A decision statement shows what the investor believed, considered or planned at decision time; it never shows what happened afterwards, so a claim about outcomes, results or execution is not grounded by it.
 
+${AFFIRMATIVE_STANCE_RULES}
+
+You judge ONLY the stance you were given: "supported" means the statement affirmatively establishes THAT stance; "unsupported" means it does not. You never assert the other stance — a citation that fails as contradicting is not thereby supporting, and vice versa; a stance is never flipped.
+
 The two stances are judged by DIFFERENT rules. Read the stance you were given and apply only the matching rule below — never apply the "supporting" test to a "contradicting" citation or vice versa:
 
 - Stance = "supporting": the citation is grounded only when the statement's own words provide evidence FOR the hypothesis claim — genuinely establishing the behavior described. If the statement is silent on a material part of the claim, doesn't clearly match it, or actually contains details that undercut it (for example: the position wasn't actually profitable, the original thesis didn't actually hold, no real alternative is described, an external target was missed rather than met), it is NOT grounded.
 
-- Stance = "contradicting": the citation is grounded only when the statement's own words provide evidence AGAINST the hypothesis claim — genuinely showing the investor did the opposite, or something clearly inconsistent with it. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. When the hypothesis pairs a headline behavior with an attributed motive or manner ("does X because of Y, rather than Z"), a clear counter-example to the headline behavior is enough on its own to ground the contradiction — do not additionally require the answer to state an alternative motive for the counter-example, and do not reject the citation merely because the motive clause cannot be evaluated when the described behavior never happened in this instance; an unobservable secondary clause is not the same as an unproven one. Only reject a contradicting citation if the statement is silent on the material behavioral claim it is supposed to contradict, if it contradicts only a minor or non-material detail while leaving that material behavior unaddressed, or if the statement is actually consistent with / supports the hypothesis instead of going against it.
+- Stance = "contradicting": the citation is grounded only when the statement itself affirmatively establishes the opposite or a clearly inconsistent belief/action — the investor's own words must positively show that they believed or did something inconsistent with the claim in that instance. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. When the hypothesis pairs a headline behavior with an attributed motive or manner ("does X because of Y, rather than Z"), a clear counter-example to the headline behavior is enough on its own to ground the contradiction — do not additionally require the answer to state an alternative motive for the counter-example, and do not reject the citation merely because the motive clause cannot be evaluated when the described behavior never happened in this instance; an unobservable secondary clause is not the same as an unproven one. Absence of mention is not evidence of absence: a statement that merely does not mention the claimed consideration or behavior, that describes a different action without showing it was taken in disregard of the claimed principle, that is vague or ambiguous, or that expresses uncertainty establishes nothing against the claim and must be judged unsupported. A decision statement is a partial record — do not infer decision-process facts it does not record. Do not transform a tendency claim ("tends to", "generally", "often") into a universal one ("always") to make a silent instance look like a counter-example. Reject a contradicting citation if the statement is silent on the material behavioral claim it is supposed to contradict, if it contradicts only a minor or non-material detail while leaving that material behavior unaddressed, if it is actually consistent with / supports the hypothesis instead of going against it, or if there is insufficient affirmative evidence of the opposite.
 
-Do not soften your verdict because the claim sounds like a reasonable investing pattern in general — judge strictly against this one statement's own words. Respond only with the structured verdict.`;
+Do not soften your verdict because the claim sounds like a reasonable investing pattern in general — judge strictly against this one statement's own words. If there is insufficient affirmative evidence for the claimed stance, return unsupported. Respond only with the structured verdict.`;
 
 const GROUNDING_TOOL = {
   name: "record_grounding_verdict",

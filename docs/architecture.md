@@ -402,6 +402,16 @@ insufficient_evidence; ה-AI ראה 2 מוצהרים + 4 מאומתים בלבד
   לא נוגעים בראיות, בביטחון, ב-AI, ב-persistence ולא דורשים גרסת מדיניות ראיה.
   קצה ±1 יום (UTC מול יום מקומי) על nudge של 30 יום — חוב V1 מקובל.
   **לא** סיבת attention חמישית — `ATTENTION_REASONS` לא נגע.
+- **Grounding Semantics V3 (הכרעת Owner, הוקפא 2026-09-25):** סתירה דורשת
+  ראיה **חיובית** — שתיקה, השמטה, פעולה שונה, עמימות או אי-ודאות = לא תומך
+  ולא סותר (S+=0, C+=0); הצהרת החלטה היא רשומה חלקית; "אתה נוטה" לעולם לא
+  הופך ל"תמיד". כלל אחד משותף (`src/lib/ai/stance-rules.ts`) לשני ה-proposers
+  ולשער ה-grounding (וממנו ל-Learning→DNA carry ולשתי ה-remediations); חוזים
+  v3 (`dna-propose-v3-statements`, `strategy-observe-v3-statements`,
+  `evidence-grounding-v3-statements`). הרגנרציה המפוקחת הראשונה (2026-09-25)
+  שמרה נימוק AVGO כסותר על בסיס שתיקה (`c478eba3` v1) — ההיסטוריה נשארת;
+  התיקון = remediation append-only מפוקחת עם provenance (ר' `docs/data-model.md`
+  §2), לא rewrite.
 - **לא נבנה בכוונה:** הצהרות החלטה נכנסות ל-DNA/Strategy רק ביצירה מחדש (אין
   backfill לגרסאות קיימות); Learning עדיין מקובץ לפי סקטור; Prior Record v2,
   Outcome, Market Scanner — לא.

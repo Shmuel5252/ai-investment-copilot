@@ -132,6 +132,35 @@ source_learning_insight_id, decision_id}` + `manual_note_text?` (CHECK, מקור
   המשקיע — לטקסט AI, Later Context, Review, Outcome אין מזהה בכלל. Grounding
   נבדק מול הטקסט שהמשקיע כתב (`sourceKind: decision_statement`). שורות
   ישנות (תשובה בלבד) תקפות כפי שהן.
+- **Grounding Semantics V3 — סתירה דורשת ראיה חיובית (הכרעת Owner, הוקפא
+  2026-09-25; `src/lib/ai/stance-rules.ts` — טקסט **אחד** לשני ה-proposers
+  ולשער ה-grounding, וממנו ל-Learning→DNA carry ולשתי ה-remediations):**
+  citation הוא `contradicting` **רק** כשהמילים של המשקיע עצמו מבססות בחיוב
+  אמונה/שיקול/כוונה/פעולה שאינם עקביים עם ה-claim באותו מקרה. **אינם סתירה:**
+  שתיקה, השמטה, אי-אזכור, עמימות, פירוט חסר, אי-ודאות מפורשת, אי-יכולת
+  להסיק את ההתנהגות, כישלון לתמוך, טקסט לא רלוונטי, ופעולה שונה — אלא אם
+  הטקסט מבסס שהפעולה נעשתה תוך התעלמות מהעיקרון. לכן **`unsupported ≠
+  contradicting`**: ראיה לא-מבוססת תורמת S+=0, C+=0. הצהרת החלטה היא **רשומה
+  חלקית** — היעדר שיקול מטקסט נימוק/סיכונים/יציאה אחד אינו מוכיח שהשיקול
+  נעדר מתהליך ההחלטה. claim של נטייה ("אתה נוטה") לעולם לא מוקשח ל"תמיד";
+  מקרה שותק אחד אינו מפריך נטייה. ה-API הנשמר נשאר `supported | unsupported`
+  (ה-stance הוא קלט; השער לעולם לא הופך stance; ראיה שנפסלה מוחרגת, לא
+  מסווגת מחדש). חוזים: `dna-propose-v3-statements`,
+  `strategy-observe-v3-statements`, `evidence-grounding-v3-statements`
+  (`hypothesis-identity-v1`, `learning-propose-v1` ללא שינוי); גרסאות שה-
+  provenance שלהן מציין חוזה v2 שומרות את משמעותן הישנה. **נמצא בפועל
+  (הרולאאוט האמיתי, 2026-09-25):** `c478eba3` v1 — נימוק AVGO נשמר כסותר רק
+  כי לא הזכיר מחיר (שתיקה). התיקון לנתונים קיימים = remediation append-only
+  בלבד (§ DNAEvidenceGroundingCheck): `planGroundingRemediation` מעביר
+  `sourceKind` נכון (הצהרת החלטה נשארת הצהרת החלטה, תשובה נשארת תשובה),
+  והגרסה החדשה נושאת `provenance_json` — generator
+  `dna.remediateGrounding`/`strategy.remediateGrounding`, חוזה grounding v3,
+  `model` אמיתי (או `null` כשהוורדיקטים דטרמיניסטיים, למשל בבדיקות),
+  `revalidatedVersionId`, `remediationReason`, `semanticRule`. שורת ה-Evidence
+  המקורית והגרסה המקורית לעולם לא נערכות — הן רק מפסיקות להיות אפקטיביות;
+  ביטחון יכול לעלות **רק** כי סתירה לא-תקפה חדלה להיספר, לעולם לא כי טקסט
+  לא-מבוסס הפך לתומך. ללא מיגרציה (jsonb קיים, enum `system_grounding_revalidation`
+  קיים).
 - נוצר ע"י: קוד (מדפוסי עסקאות) + AI (מפרשנות ראיון, תמיד עם source_id
   אמיתי). נצרך ע"י: חישוב Evidence Strength, כל "View Evidence".
 - **Raw vs. Effective evidence (DNA Grounding Remediation, Autonomous

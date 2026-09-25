@@ -200,7 +200,7 @@ describe("decision-time statements as evidence (OD-1) through the real generate 
     expect(basis.policy).toEqual({ maxGapDays: 14, isolationMarginDays: 3, decisionCases: "evidence-source-v1", candidateDayTolerance: 1 }); // OD-R5: persisted for later interpretation
     expect(basis.groups.some((g) => g.reasons.some((r) => r.kind === "decision_case" && r.ref === lly.id))).toBe(true);
     expect(h.version.provenanceJson).toMatchObject({ schemaVersion: 1, generator: "dna.generate", model: expect.any(String), evidenceSourceContract: "evidence-source-v1", independencePolicy: "independence-policy-v2", sourceTypes: ["interview_answer", "decision_statement"] });
-    expect((h.version.provenanceJson as { promptContracts: string[] }).promptContracts).toContain("dna-propose-v2-statements");
+    expect((h.version.provenanceJson as { promptContracts: string[] }).promptContracts).toContain("dna-propose-v3-statements");
   });
 
   it("Strategy observed (OD-4): same sources, same counting, same persistence", async () => {
@@ -525,7 +525,7 @@ describe("Learning: dedupe (Unit 5) and the OD-3 carry", () => {
     expect(agreed.version.contradictingEvidenceCount).toBe(1); // SNDK decision, faithful stance
     expect(agreed.version.evidenceStrength).toBe("insufficient_evidence");
     expect(agreed.version.createdBy).toBe("user_correction");
-    expect(agreed.version.provenanceJson).toMatchObject({ generator: "learning.agree_carry", model: expect.any(String), promptContracts: ["evidence-grounding-v2-statements"], carriedFromLearningInsightId: insightId, carriedFromLearningInsightVersionId: gen.insights[0]!.version.id, sourceTypes: ["decision_statement"] });
+    expect(agreed.version.provenanceJson).toMatchObject({ generator: "learning.agree_carry", model: expect.any(String), promptContracts: ["evidence-grounding-v3-statements"], carriedFromLearningInsightId: insightId, carriedFromLearningInsightVersionId: gen.insights[0]!.version.id, sourceTypes: ["decision_statement"] });
     const rows = await getEvidenceForDnaHypothesis(db, agreed.hypothesis.id);
     expect(rows.map((r) => [r.decisionId, r.decisionStatementKind, r.stance, r.sourceLearningInsightId, r.decisionReviewId]).sort()).toEqual(
       [[w.decisions[0]!.id, "risks", "supporting", null, null], [w.decisions[1]!.id, "reasoning", "contradicting", null, null]].sort()
