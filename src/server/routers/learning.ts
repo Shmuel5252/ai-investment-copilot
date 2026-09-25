@@ -4,13 +4,22 @@ import { router, protectedProcedure } from "../trpc";
 import { db } from "@/db/client";
 import { listReviewedDecisionsForInvestor, getLaterContextsForDecision } from "@/db/repositories/decisions";
 import {
-  insertLearningInsightWithEvidence,
+  upsertLearningInsightForFamily,
+  mapReviewIdsToDecisionIds,
   listLearningInsightsForInvestor,
   getLearningInsight,
   getLatestLearningInsightVersion,
 } from "@/db/repositories/learning";
 import { getEvidenceForLearningInsight } from "@/db/repositories/evidence";
-import { insertDnaHypothesisFromLearningInsight } from "@/db/repositories/dna";
+import { carryLearningInsightToDna, findCarriedHypothesisForInsight } from "@/db/repositories/dna";
+import { listDecisionStatementsForInvestor } from "@/db/repositories/decision-statements";
+import { buildLearningCarryCases, citedReviewsOfVersion, groundCarryCitations } from "@/lib/learning/carry-to-dna";
+import { checkEvidenceGrounding } from "@/lib/ai/dna-grounding";
+import { loadIndependenceResolver } from "@/lib/evidence/load-independence-resolver";
+import { assessCitations } from "@/lib/evidence/resolve-independence";
+import { buildProvenance } from "@/lib/evidence/provenance";
+import { AI_CONTRACTS } from "@/lib/ai/contracts";
+import { CLAUDE_MODEL } from "@/lib/ai/client";
 import { insertCorrection, markCorrectionResolved } from "@/db/repositories/corrections";
 import { groupReviewedDecisionsBySector, type ReviewedDecisionInput } from "@/lib/learning/group-decisions";
 import { computeDecisionQualityPattern, computeThesisAccuracyPattern } from "@/lib/learning/pattern-aggregation";
@@ -88,8 +97,16 @@ export const learningRouter = router({
     });
 
     const families = groupReviewedDecisionsBySector(richDecisions);
+    const provenance = buildProvenance({
+      generator: "learning.generate",
+      model: CLAUDE_MODEL,
+      promptContracts: [AI_CONTRACTS.learningPropose],
+      sourceTypes: ["decision_review"],
+    });
 
     const created = [];
+    const versioned = [];
+    const unchanged = [];
     for (const family of families) {
       const proposed = await proposeLearningInsight(
         family.family,
@@ -116,19 +133,36 @@ export const learningRouter = router({
       const validated = validateLearningInsightEvidence(proposed, reviewCaseKeys);
       if (!validated) continue;
 
-      created.push(
-        await insertLearningInsightWithEvidence(db, ctx.investorId, family.family, validated, {
+      // Evidence Reach V1 (Unit 5): one identity per (investor, family);
+      // a repeated run writes nothing unless it cites a decision the
+      // family's insight does not already cite (see the repository).
+      const outcome = await upsertLearningInsightForFamily(
+        db,
+        ctx.investorId,
+        family.family,
+        validated,
+        {
           decisionQualityPattern: computeDecisionQualityPattern(family.decisions),
           thesisAccuracyPattern: computeThesisAccuracyPattern(family.decisions),
-        })
+        },
+        reviewCaseKeys,
+        provenance
       );
+      if (outcome.action === "created") created.push({ insight: outcome.insight, version: outcome.version });
+      else if (outcome.action === "versioned") versioned.push({ insight: outcome.insight, version: outcome.version });
+      else unchanged.push({ insight: outcome.insight, version: outcome.version, wordingDiffers: outcome.wordingDiffers, proposedStatementText: outcome.proposedStatementText });
     }
 
     return {
       familiesConsidered: families.length,
       createdCount: created.length,
-      droppedCount: families.length - created.length,
+      versionedCount: versioned.length,
+      unchangedCount: unchanged.length,
+      droppedCount: families.length - created.length - versioned.length - unchanged.length,
       insights: created,
+      newVersions: versioned,
+      /** Families whose synthesis wrote nothing this run — with the proposed wording when it differs (reported, never silently dropped). */
+      unchanged,
     };
   }),
 
@@ -138,10 +172,18 @@ export const learningRouter = router({
     .input(z.object({ learningInsightId: z.string().uuid() }))
     .query(({ input }) => getEvidenceForLearningInsight(db, input.learningInsightId)),
 
-  // "סגירת הלולאה ל-DNA" (docs/data-model.md §8): agreeing creates a new
-  // DNA hypothesis whose evidence sources back to this insight, and
-  // records the agreement itself as a resolved Correction — the
-  // documented mechanism, not a shortcut around it.
+  // "סגירת הלולאה ל-DNA" (docs/data-model.md §8) under Evidence Reach V1 /
+  // OD-3: agreeing creates a new DNA hypothesis that CARRIES the insight's
+  // cited decisions — one case per underlying Decision (several reviews of
+  // one decision = one case), with the stance the agreed VERSION gave it —
+  // represented by that decision's own investor-authored statements, each of
+  // which must pass the same grounding gate every DNA citation passes
+  // (src/lib/learning/carry-to-dna.ts): a review having cited a decision is
+  // not textual grounding of the new claim. Counted through the shared
+  // resolver under OD-2. The agreement adds zero cases; the insight and the
+  // reviews themselves are not evidence. The agreement is recorded as a
+  // resolved Correction; a repeated agree replays the first result before
+  // any grounding call is made.
   agree: protectedProcedure
     .input(z.object({ learningInsightId: z.string().uuid(), note: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
@@ -154,22 +196,71 @@ export const learningRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "This insight has no version to agree with." });
       }
 
+      // Replay first — a repeated agree must not re-run the grounding gate.
+      const earlier = await findCarriedHypothesisForInsight(db, ctx.investorId, insight.id);
+      if (earlier) return { correction: null, hypothesis: earlier.hypothesis, version: earlier.version, replayed: true, carried: null };
+
+      const insightEvidence = await getEvidenceForLearningInsight(db, insight.id);
+      const cited = citedReviewsOfVersion(latestVersion, insightEvidence);
+      const reviewDecisionIds = await mapReviewIdsToDecisionIds(db, ctx.investorId, cited.map((c) => c.decisionReviewId));
+      const cases = buildLearningCarryCases(cited, reviewDecisionIds);
+      if (cases.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This insight cites no decision of yours — there is nothing to carry into DNA." });
+      }
+      const caseDecisionIds = new Set(cases.map((c) => c.decisionId));
+      const statements = (await listDecisionStatementsForInvestor(db, ctx.investorId)).filter((s) => caseDecisionIds.has(s.decisionId));
+      const grounding = await groundCarryCitations(latestVersion.statementText, cases, statements, checkEvidenceGrounding);
+      if (grounding.citations.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "None of the cited decisions' own statements ground this insight — nothing can be carried into DNA.",
+        });
+      }
+      const independence = await loadIndependenceResolver(db, ctx.investorId);
+      const assessed = assessCitations(independence, grounding.citations);
+      const provenance = buildProvenance({
+        generator: "learning.agree_carry",
+        model: CLAUDE_MODEL,
+        promptContracts: [AI_CONTRACTS.evidenceGrounding],
+        sourceTypes: ["decision_statement"],
+        carriedFromLearningInsightId: insight.id,
+        carriedFromLearningInsightVersionId: latestVersion.id,
+      });
+
+      const { hypothesis, version, replayed } = await carryLearningInsightToDna(db, {
+        investorId: ctx.investorId,
+        learningInsightId: insight.id,
+        statementText: latestVersion.statementText,
+        evidence: grounding.citations.map((c) => ({
+          decisionId: c.decisionStatement.decisionId,
+          kind: c.decisionStatement.kind,
+          stance: c.stance,
+          description: "הועבר מתובנת Learning שהסכמת לה; ההצהרה שכתבת בזמן ההחלטה נבדקה מול ניסוח ההשערה (grounding) — לא ההסכמה עצמה.",
+        })),
+        supportingCount: assessed.supportingCount,
+        contradictingCount: assessed.contradictingCount,
+        evidenceStrength: assessed.evidenceStrength,
+        independenceBasis: assessed.independenceBasis,
+        provenance,
+      });
+      const carried = {
+        cases: cases.length,
+        groundedCitations: grounding.citations.length,
+        excludedCitations: grounding.excluded.length,
+        decisionsWithoutStatements: grounding.decisionsWithoutStatements.length,
+      };
+      if (replayed) return { correction: null, hypothesis, version, replayed: true, carried };
+
       const pendingCorrection = await insertCorrection(db, {
         learningInsightId: insight.id,
         userArgumentText: input.note,
       });
-      const { hypothesis, version } = await insertDnaHypothesisFromLearningInsight(
-        db,
-        ctx.investorId,
-        insight.id,
-        latestVersion.statementText
-      );
       const correction = await markCorrectionResolved(db, pendingCorrection.id, {
         status: "led_to_new_version",
         resultingVersionId: version.id,
       });
 
-      return { correction, hypothesis, version };
+      return { correction, hypothesis, version, replayed: false, carried };
     }),
 
   disagree: protectedProcedure

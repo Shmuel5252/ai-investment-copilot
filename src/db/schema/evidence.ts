@@ -6,7 +6,8 @@ import { learningInsights } from "./learning";
 import { transactions } from "./portfolio";
 import { interviewAnswers } from "./interview";
 import { decisionReviews } from "./decisions";
-import { evidenceStanceEnum } from "./enums";
+import { evidenceStanceEnum, decisionStatementKindEnum } from "./enums";
+import { decisions } from "./decisions";
 
 // Typed-nullable-FK + CHECK polymorphism (docs/data-model.md §0), not a
 // string-typed subject_type/subject_id — this gives real FK integrity in
@@ -44,6 +45,12 @@ export const evidence = pgTable(
     // an approved-design gap discovered during implementation, corrected
     // per the Docs Sync Rule rather than left as a TODO.
     sourceLearningInsightId: uuid("source_learning_insight_id").references(() => learningInsights.id),
+    // Evidence Reach V1 (OD-1): a decision-time investor statement — the
+    // Decision plus WHICH of its three frozen investor-authored texts. Both
+    // set together or neither (CHECK below). The text itself is never copied
+    // here: it stays in the immutable DecisionSnapshot the decision points at.
+    decisionId: uuid("decision_id").references(() => decisions.id),
+    decisionStatementKind: decisionStatementKindEnum("decision_statement_kind"),
     manualNoteText: text("manual_note_text"),
 
     description: text("description").notNull(),
@@ -56,7 +63,8 @@ export const evidence = pgTable(
     ),
     check(
       "evidence_at_most_one_source",
-      sql`num_nonnulls(${table.transactionId}, ${table.interviewAnswerId}, ${table.decisionReviewId}, ${table.sourceLearningInsightId}, ${table.manualNoteText}) <= 1`
+      sql`num_nonnulls(${table.transactionId}, ${table.interviewAnswerId}, ${table.decisionReviewId}, ${table.sourceLearningInsightId}, ${table.decisionId}, ${table.manualNoteText}) <= 1`
     ),
+    check("evidence_decision_statement_kind_iff", sql`(${table.decisionId} IS NULL) = (${table.decisionStatementKind} IS NULL)`),
   ]
 );

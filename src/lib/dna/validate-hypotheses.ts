@@ -5,9 +5,12 @@ import {
   type IndependenceBasis,
 } from "@/lib/evidence/resolve-independence";
 import type { ProposedHypothesis } from "@/lib/ai/dna";
+import { parseStatementId, type DecisionStatementRef } from "@/lib/evidence/statement-ref";
 
 export interface ValidatedEvidence {
-  interviewAnswerId: string;
+  /** The cited InterviewAnswer, or null for a decision-time statement (Evidence Reach V1). */
+  interviewAnswerId: string | null;
+  decisionStatement?: DecisionStatementRef | null;
   stance: "supporting" | "contradicting";
   description: string;
 }
@@ -51,15 +54,18 @@ export function validateProposedHypotheses(
     if (!h || typeof h.statement !== "string" || h.statement.trim() === "") continue;
     if (!Array.isArray(h.evidence)) continue;
 
-    const validEvidence: ValidatedEvidence[] = h.evidence.filter(
-      (e): e is ValidatedEvidence =>
-        !!e &&
-        typeof e.interviewAnswerId === "string" &&
-        independence.hasAnswer(e.interviewAnswerId) &&
-        (e.stance === "supporting" || e.stance === "contradicting") &&
-        typeof e.description === "string" &&
-        e.description.trim() !== ""
-    );
+    // The AI cites a Statement ID: an answer uuid, or "decision:<id>:<kind>".
+    // Anything else — including any id form for AI-generated or post-decision
+    // text, which does not exist — is dropped here; an unknown but well-formed
+    // id is dropped by hasStatement (never a persisted statement of this investor).
+    const validEvidence: ValidatedEvidence[] = [];
+    for (const e of h.evidence) {
+      if (!e || (e.stance !== "supporting" && e.stance !== "contradicting")) continue;
+      if (typeof e.description !== "string" || e.description.trim() === "") continue;
+      const source = parseStatementId(e.statementId);
+      if (source === null || !independence.hasStatement(source)) continue;
+      validEvidence.push({ interviewAnswerId: source.interviewAnswerId, decisionStatement: source.decisionStatement ?? null, stance: e.stance, description: e.description });
+    }
 
     if (validEvidence.length === 0) continue;
 

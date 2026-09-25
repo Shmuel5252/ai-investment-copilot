@@ -39,6 +39,11 @@ export const dnaHypothesisVersions = pgTable(
     // over the stored counts always reproduces the stored tier. NULL =
     // counted before this existed (episode-only, legacy); never backfilled.
     independenceBasisJson: jsonb("independence_basis_json"),
+    // Evidence Reach V1 — what produced this version (src/lib/evidence/provenance.ts):
+    // generator, model, prompt/contract versions, evidence-source contract,
+    // independence policy, generation time, code version. NULL = written before
+    // provenance existed; never backfilled.
+    provenanceJson: jsonb("provenance_json"),
   },
   // Defense-in-depth, added after the same missing-constraint shape was
   // found causing a real duplicate elsewhere (strategy_principles.key —

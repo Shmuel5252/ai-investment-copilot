@@ -1,9 +1,8 @@
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, asc, inArray, sql } from "drizzle-orm";
 import type { db as Db, DbOrTx } from "@/db/client";
 import { dnaHypotheses, dnaHypothesisVersions, evidence, dnaEvidenceGroundingChecks } from "@/db/schema";
 import type { InferInsertModel } from "drizzle-orm";
 import type { ValidatedHypothesis } from "@/lib/dna/validate-hypotheses";
-import { calculateEvidenceStrength } from "@/lib/dna/evidence-strength";
 import type { RemediationCheckResult, RemediationNewVersion } from "@/lib/dna/remediate-grounding";
 import type { IndependenceBasis } from "@/lib/evidence/resolve-independence";
 import { isUniqueViolation, StaleIdentityVersionError } from "@/db/errors";
@@ -22,6 +21,8 @@ import {
 } from "@/lib/evidence/recalculate-independence";
 import { selectEffectiveEvidence } from "@/lib/dna/effective-evidence";
 import type { EvidenceIndependenceResolver } from "@/lib/evidence/resolve-independence";
+import { evidenceSourceColumnsOf, type DecisionStatementKind } from "@/lib/evidence/statement-ref";
+import type { ArtifactProvenance } from "@/lib/evidence/provenance";
 
 export type NewDnaHypothesis = InferInsertModel<typeof dnaHypotheses>;
 export type NewDnaHypothesisVersion = InferInsertModel<typeof dnaHypothesisVersions>;
@@ -67,7 +68,8 @@ export async function listActiveDnaHypothesesForInvestor(db: typeof Db, investor
 export async function insertDnaHypothesisWithEvidence(
   db: typeof Db,
   investorId: string,
-  hypothesis: ValidatedHypothesis
+  hypothesis: ValidatedHypothesis,
+  provenance: ArtifactProvenance | null = null
 ) {
   return db.transaction(async (tx) => {
     const [identity] = await tx.insert(dnaHypotheses).values({ investorId }).returning();
@@ -82,6 +84,7 @@ export async function insertDnaHypothesisWithEvidence(
         contradictingEvidenceCount: hypothesis.contradictingCount,
         independenceBasisJson: hypothesis.independenceBasis,
         createdBy: "ai_generated",
+        provenanceJson: provenance,
       })
       .returning();
 
@@ -89,7 +92,7 @@ export async function insertDnaHypothesisWithEvidence(
       hypothesis.evidence.map((e) => ({
         dnaHypothesisId: identity!.id,
         stance: e.stance,
-        interviewAnswerId: e.interviewAnswerId,
+        ...evidenceSourceColumnsOf(e),
         description: e.description,
       }))
     );
@@ -98,47 +101,89 @@ export async function insertDnaHypothesisWithEvidence(
   });
 }
 
-// "סגירת הלולאה ל-DNA" (docs/data-model.md §8): the investor agreeing
-// with a Learning Insight creates a brand-new DNA hypothesis (not an
-// edit of an existing one — there's no single obviously-right hypothesis
-// to attach this to) whose only evidence, at least at first, is that
-// agreement itself — sourced from the LearningInsight via
-// `Evidence.sourceLearningInsightId` (the column added in this same
-// task specifically to make this representable, see schema/evidence.ts).
-// evidenceStrength is computed the normal way (1 supporting, 0
-// contradicting -> insufficient_evidence) — one agreement is real
-// evidence, but honestly not enough on its own; more accumulates the
-// normal way as the investor answers more interviews or agrees with more
-// insights citing the same pattern.
-export async function insertDnaHypothesisFromLearningInsight(
-  db: typeof Db,
-  investorId: string,
-  learningInsightId: string,
-  statementText: string
-) {
+// "סגירת הלולאה ל-DNA" (docs/data-model.md §8) under Evidence Reach V1 /
+// OD-3: the investor agreeing with a Learning Insight creates a brand-new
+// DNA hypothesis (not an edit of an existing one — there's no single
+// obviously-right hypothesis to attach this to) that CARRIES the insight's
+// underlying decision cases: one Evidence row per (cited decision, statement
+// of that decision that GROUNDED the new claim) — decision_id + the kind
+// (reasoning / risks / exit_conditions) that passed checkEvidenceGrounding in
+// src/lib/learning/carry-to-dna.ts — with the stance the agreed version gave
+// it. The agreement itself and the insight itself are NOT evidence (no
+// source_learning_insight_id row) — agreement adds zero cases. Counts/tier/
+// basis are computed by the caller through the shared resolver over exactly
+// these grounded citations (never S=1 by fiat). Replay:
+// a second agree with the same insight returns the hypothesis the first one
+// created (provenance_json.carriedFromLearningInsightId) — no duplicate
+// hypothesis, no duplicate evidence; an advisory lock serializes the race.
+export interface LearningCarryInput {
+  investorId: string;
+  learningInsightId: string;
+  statementText: string;
+  /** Only citations that passed the grounding gate (src/lib/learning/carry-to-dna.ts) — the statement kind is the one that grounded the claim. */
+  evidence: { decisionId: string; kind: DecisionStatementKind; stance: "supporting" | "contradicting"; description: string }[];
+  supportingCount: number;
+  contradictingCount: number;
+  evidenceStrength: ValidatedHypothesis["evidenceStrength"];
+  independenceBasis: IndependenceBasis;
+  provenance: ArtifactProvenance;
+}
+
+/** The hypothesis an earlier agree with this insight created, if any (the replay key is provenance_json.carriedFromLearningInsightId). */
+export async function findCarriedHypothesisForInsight(db: DbOrTx, investorId: string, learningInsightId: string) {
+  const [existing] = await db
+    .select({ hypothesis: dnaHypotheses, version: dnaHypothesisVersions })
+    .from(dnaHypothesisVersions)
+    .innerJoin(dnaHypotheses, eq(dnaHypotheses.id, dnaHypothesisVersions.dnaHypothesisId))
+    .where(
+      and(
+        eq(dnaHypotheses.investorId, investorId),
+        sql`${dnaHypothesisVersions.provenanceJson} ->> 'carriedFromLearningInsightId' = ${learningInsightId}`
+      )
+    )
+    .orderBy(asc(dnaHypothesisVersions.createdAt), asc(dnaHypothesisVersions.id))
+    .limit(1);
+  return existing ?? null;
+}
+
+export async function carryLearningInsightToDna(db: typeof Db, input: LearningCarryInput) {
+  if (input.provenance.carriedFromLearningInsightId !== input.learningInsightId) {
+    throw new Error("carryLearningInsightToDna: provenance.carriedFromLearningInsightId must name the agreed insight.");
+  }
+  if (input.evidence.length === 0) {
+    throw new Error("carryLearningInsightToDna: refusing to create a hypothesis with no grounded evidence.");
+  }
   return db.transaction(async (tx) => {
-    const [identity] = await tx.insert(dnaHypotheses).values({ investorId }).returning();
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${"learning.agree:" + input.investorId}))`);
+    const existing = await findCarriedHypothesisForInsight(tx, input.investorId, input.learningInsightId);
+    if (existing) return { hypothesis: existing.hypothesis, version: existing.version, replayed: true };
+
+    const [identity] = await tx.insert(dnaHypotheses).values({ investorId: input.investorId }).returning();
     const [version] = await tx
       .insert(dnaHypothesisVersions)
       .values({
         dnaHypothesisId: identity!.id,
         versionNumber: 1,
-        statementText,
-        evidenceStrength: calculateEvidenceStrength(1, 0),
-        supportingEvidenceCount: 1,
-        contradictingEvidenceCount: 0,
+        statementText: input.statementText,
+        evidenceStrength: input.evidenceStrength,
+        supportingEvidenceCount: input.supportingCount,
+        contradictingEvidenceCount: input.contradictingCount,
+        independenceBasisJson: input.independenceBasis,
         createdBy: "user_correction",
-        changeReason: "Investor agreed with a Learning Insight.",
+        changeReason: "Investor agreed with a Learning Insight; its cited decisions were carried as evidence (OD-3).",
+        provenanceJson: input.provenance,
       })
       .returning();
-    await tx.insert(evidence).values({
-      dnaHypothesisId: identity!.id,
-      stance: "supporting",
-      sourceLearningInsightId: learningInsightId,
-      description: "You agreed with this Learning Insight.",
-    });
-
-    return { hypothesis: identity!, version: version! };
+    await tx.insert(evidence).values(
+      input.evidence.map((e) => ({
+        dnaHypothesisId: identity!.id,
+        stance: e.stance,
+        decisionId: e.decisionId,
+        decisionStatementKind: e.kind,
+        description: e.description,
+      }))
+    );
+    return { hypothesis: identity!, version: version!, replayed: false };
   });
 }
 
@@ -171,6 +216,7 @@ export async function insertDnaHypothesisVersionWithEvidence(
     independenceBasis: IndependenceBasis;
     newEvidence: ValidatedHypothesis["evidence"];
     changeReason: string;
+    provenance?: ArtifactProvenance | null;
   }
 ) {
   return db.transaction(async (tx) => {
@@ -210,6 +256,7 @@ export async function insertDnaHypothesisVersionWithEvidence(
         independenceBasisJson: version.independenceBasis,
         createdBy: "ai_generated",
         changeReason: version.changeReason,
+        provenanceJson: version.provenance ?? null,
       })
       .returning();
 
@@ -221,7 +268,7 @@ export async function insertDnaHypothesisVersionWithEvidence(
               version.newEvidence.map((e) => ({
                 dnaHypothesisId,
                 stance: e.stance,
-                interviewAnswerId: e.interviewAnswerId,
+                ...evidenceSourceColumnsOf(e),
                 description: e.description,
               }))
             )

@@ -71,10 +71,10 @@ describe("validateProposedObservedPrinciples", () => {
       {
         statement: "You tend to size new positions consistently.",
         evidence: [
-          { interviewAnswerId: "a1", stance: "supporting", description: "x" },
-          { interviewAnswerId: "a2", stance: "supporting", description: "x" },
-          { interviewAnswerId: "a3", stance: "supporting", description: "x" },
-          { interviewAnswerId: "fake-1", stance: "supporting", description: "x" },
+          { statementId: "a1", stance: "supporting", description: "x" },
+          { statementId: "a2", stance: "supporting", description: "x" },
+          { statementId: "a3", stance: "supporting", description: "x" },
+          { statementId: "fake-1", stance: "supporting", description: "x" },
         ],
       },
     ];
@@ -88,11 +88,11 @@ describe("validateProposedObservedPrinciples", () => {
     const proposed: ProposedObservedPrinciple[] = [
       {
         statement: "No real evidence behind this one.",
-        evidence: [{ interviewAnswerId: "fake-1", stance: "supporting", description: "x" }],
+        evidence: [{ statementId: "fake-1", stance: "supporting", description: "x" }],
       },
       {
         statement: "Real evidence behind this one.",
-        evidence: [{ interviewAnswerId: "a1", stance: "supporting", description: "x" }],
+        evidence: [{ statementId: "a1", stance: "supporting", description: "x" }],
       },
     ];
     const result = validateProposedObservedPrinciples(proposed, resolverFromCaseKeys(caseKeys));
@@ -117,9 +117,9 @@ describe("validateProposedObservedPrinciples", () => {
       {
         statement: "You tend to size new positions consistently.",
         evidence: [
-          { interviewAnswerId: "a1", stance: "supporting", description: "x" },
-          { interviewAnswerId: "a2", stance: "supporting", description: "Same transaction, different session." },
-          { interviewAnswerId: "a3", stance: "supporting", description: "x" },
+          { statementId: "a1", stance: "supporting", description: "x" },
+          { statementId: "a2", stance: "supporting", description: "Same transaction, different session." },
+          { statementId: "a3", stance: "supporting", description: "x" },
         ],
       },
     ];

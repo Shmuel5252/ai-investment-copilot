@@ -22,24 +22,41 @@ import {
   type ExistingHypothesisForMatching,
 } from "@/lib/dna/resolve-hypothesis-identity";
 import { loadIndependenceResolver } from "@/lib/evidence/load-independence-resolver";
+import { listDecisionStatementsForInvestor } from "@/db/repositories/decision-statements";
+import { buildInvestorStatements } from "@/lib/ai/investor-statements";
+import { AI_CONTRACTS } from "@/lib/ai/contracts";
+import { CLAUDE_MODEL } from "@/lib/ai/client";
+import { buildProvenance } from "@/lib/evidence/provenance";
 
 export const dnaRouter = router({
-  // AI proposes hypotheses + evidence citations from InterviewAnswers
-  // (docs/architecture.md §2.3); code validates every citation against
-  // real rows before anything is written, and always computes
-  // evidenceStrength itself (never trusts a number from the model).
+  // AI proposes hypotheses + evidence citations from the investor's OWN
+  // statements (docs/architecture.md §2.3, Evidence Reach V1 / OD-1):
+  // effective InterviewAnswers plus the decision-time texts they wrote into
+  // each immutable DecisionSnapshot (reasoning, risks, exit conditions),
+  // each source-labelled. Nothing AI-written or post-decision is offered
+  // (it has no Statement ID). Code validates every citation against real
+  // rows before anything is written, and always computes evidenceStrength
+  // itself (never trusts a number from the model).
   generate: protectedProcedure.mutation(async ({ ctx }) => {
-    const answers = await getAllAnswersForInvestor(db, ctx.investorId);
-    if (answers.length === 0) {
+    const [answers, decisionStatements] = await Promise.all([
+      getAllAnswersForInvestor(db, ctx.investorId),
+      listDecisionStatementsForInvestor(db, ctx.investorId),
+    ]);
+    const statements = buildInvestorStatements(answers, decisionStatements);
+    if (statements.length === 0) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "No interview answers found yet — complete the onboarding interview first.",
+        message: "No interview answers or recorded decisions found yet — complete the onboarding interview first.",
       });
     }
 
-    const proposed = await proposeDnaHypotheses(
-      answers.map((a) => ({ id: a.id, questionText: a.questionText, answerText: a.answerText }))
-    );
+    const proposed = await proposeDnaHypotheses(statements);
+    const provenance = buildProvenance({
+      generator: "dna.generate",
+      model: CLAUDE_MODEL,
+      promptContracts: [AI_CONTRACTS.dnaPropose, AI_CONTRACTS.evidenceGrounding, AI_CONTRACTS.hypothesisIdentity],
+      sourceTypes: decisionStatements.length > 0 ? ["interview_answer", "decision_statement"] : ["interview_answer"],
+    });
 
     // Evidence Strength must count independent DECISIONS, not raw
     // transactions or raw Evidence rows: several answers about one position
@@ -65,11 +82,13 @@ export const dnaRouter = router({
     // contradictingCount/evidenceStrength from only what survives, via
     // the exact same shared independence resolver used everywhere else.
     // Fails closed: any grounding-check failure
-    // excludes the citation, never includes it by default.
-    const answerTextById = new Map(answers.map((a) => [a.id, a.answerText]));
+    // excludes the citation, never includes it by default. Keyed by
+    // Statement ID: a decision statement is grounded against the text the
+    // investor wrote, exactly like an answer.
+    const statementTextById = new Map(statements.map((s) => [s.id, s.text]));
     const { hypotheses: grounded } = await groundValidatedHypotheses(
       structurallyValidated,
-      answerTextById,
+      statementTextById,
       independence,
       checkEvidenceGrounding
     );
@@ -126,14 +145,19 @@ export const dnaRouter = router({
     for (const resolution of resolutions) {
       if (resolution.action === "new_identity") {
         createdIdentities.push(
-          await insertDnaHypothesisWithEvidence(db, ctx.investorId, {
-            statement: resolution.statement,
-            evidence: resolution.evidence,
-            supportingCount: resolution.supportingCount,
-            contradictingCount: resolution.contradictingCount,
-            evidenceStrength: resolution.evidenceStrength,
-            independenceBasis: resolution.independenceBasis,
-          })
+          await insertDnaHypothesisWithEvidence(
+            db,
+            ctx.investorId,
+            {
+              statement: resolution.statement,
+              evidence: resolution.evidence,
+              supportingCount: resolution.supportingCount,
+              contradictingCount: resolution.contradictingCount,
+              evidenceStrength: resolution.evidenceStrength,
+              independenceBasis: resolution.independenceBasis,
+            },
+            provenance
+          )
         );
       } else if (resolution.action === "new_version") {
         try {
@@ -146,7 +170,8 @@ export const dnaRouter = router({
             contradictingEvidenceCount: resolution.contradictingCount,
             independenceBasis: resolution.independenceBasis,
             newEvidence: resolution.newEvidence,
-            changeReason: "New evidence from a later interview extended this existing pattern.",
+            changeReason: "New evidence from a later interview or a recorded decision extended this existing pattern.",
+            provenance,
           });
           newVersions.push({ hypothesisId: resolution.hypothesisId, version });
         } catch (err) {

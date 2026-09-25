@@ -1,4 +1,6 @@
 import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evidence-strength";
+import { EVIDENCE_SOURCE_CONTRACT_VERSION, formatDecisionStatementId, statementKeyOf, type DecisionStatementRef } from "./statement-ref";
+import type { DecisionCaseResolution } from "./decision-cases";
 
 // Decision Independence V1 — the ONE shared, pure (no DB, no AI) function
 // that decides how many independent decisions a claim's cited evidence
@@ -22,8 +24,17 @@ import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evid
 //
 // Everything is computed from the persisted inputs handed in. There is no
 // parameter through which an AI, or any caller, can inject a candidate.
-export const INDEPENDENCE_POLICY_VERSION = "independence-policy-v1";
-export const INDEPENDENCE_POLICY = { maxGapDays: 14, isolationMarginDays: 3 } as const;
+// v2 (Evidence Reach V1): decision-time statements are citable and resolve
+// to a case under OD-2 (src/lib/evidence/decision-cases.ts). Everything
+// counted before stays as persisted — no basis is ever backfilled.
+export const INDEPENDENCE_POLICY_VERSION = "independence-policy-v2";
+// candidateDayTolerance: OD-2 executable-candidate window starts at the
+// decision's UTC day minus this many days — a zone-free SUPERSET of the
+// product's zone-aware candidate list (every IANA zone is within one calendar
+// day of UTC). It only ever widens the set of trades that must be classified
+// before a decision counts (UNRESOLVED); it never infers execution, merges,
+// or counts anything.
+export const INDEPENDENCE_POLICY = { maxGapDays: 14, isolationMarginDays: 3, decisionCases: EVIDENCE_SOURCE_CONTRACT_VERSION, candidateDayTolerance: 1 } as const;
 
 const DAY_MS = 86_400_000;
 const UNMAPPED_LABEL = "unmapped";
@@ -49,26 +60,37 @@ export interface EffectiveLinkFact {
   transactionIds: readonly string[];
 }
 
+/** A Decision of this investor with its OD-2 case resolution (computed by the loader from persisted rows only). */
+export interface IndependenceDecision {
+  id: string;
+  caseResolution: DecisionCaseResolution;
+}
+
 export interface IndependenceContext {
   /** transaction id -> position-episode key (computePositions().episodeKeyByTransactionId). */
   episodeKeyByTransactionId: ReadonlyMap<string, string>;
   transactions: readonly IndependenceTransaction[];
   answers: readonly IndependenceAnswer[];
   facts: readonly EffectiveLinkFact[];
+  /** Evidence Reach V1 — optional so every pre-existing context (answers only) is unchanged. */
+  decisions?: readonly IndependenceDecision[];
 }
 
 export interface EvidenceCitation {
-  /** null = evidence not sourced from an InterviewAnswer (learning-insight agreement, manual note). */
+  /** null = evidence not sourced from an InterviewAnswer (decision statement, learning-insight agreement, manual note). */
   interviewAnswerId: string | null;
+  /** Evidence Reach V1 (OD-1): a decision-time investor statement. */
+  decisionStatement?: DecisionStatementRef | null;
   stance: "supporting" | "contradicting";
-  /** Required when interviewAnswerId is null (it is the citation's only identity). */
+  /** Required when the citation has neither an interview answer nor a decision statement (it is then the citation's only identity). */
   evidenceId?: string;
 }
 
 export type WeakEdgeReason = "exclusive_counterpart" | "named_counterpart";
 
 export interface BasisGroupReason {
-  kind: "same_episode" | "confirmed_link" | "unanchored" | "unmapped";
+  /** executed_fact (OD-R2): the investor-confirmed execution fact through which a decision case took on a trade's episode. */
+  kind: "same_episode" | "confirmed_link" | "unanchored" | "unmapped" | "decision_case" | "executed_fact";
   ref: string;
 }
 
@@ -100,7 +122,7 @@ export interface BasisReviewOnly {
 export interface IndependenceBasis {
   schemaVersion: 1;
   policyVersion: string;
-  policy: { maxGapDays: number; isolationMarginDays: number };
+  policy: { maxGapDays: number; isolationMarginDays: number; decisionCases?: string; candidateDayTolerance?: number };
   /** S_lb: supporting independent decisions if every weak edge is real. */
   supportingLower: number;
   /** S_ub: supporting independent decisions if no weak edge is real (display/audit only). */
@@ -113,6 +135,12 @@ export interface IndependenceBasis {
   exact: boolean;
   /** Cited items with no transaction anchor (null-transaction answer, or non-answer evidence): counted as their own case, exactly as before. */
   unanchoredCitations: number;
+  /**
+   * Evidence Reach V1 (OD-2 C): decision statements whose decision has
+   * unclassified executable candidates. REVIEW-ONLY — in no group, in no
+   * count, either stance; absent (undefined) on bases counted before v2.
+   */
+  unresolvedDecisionIds?: string[];
   groups: BasisGroup[];
   confirmedFactIds: string[];
   independentFactIds: string[];
@@ -123,6 +151,8 @@ export interface IndependenceBasis {
 export interface EvidenceIndependenceResolver {
   /** True when the answer id is a persisted answer of this investor (the validators' "real citation" test). */
   hasAnswer(answerId: string): boolean;
+  /** True when the citation names a persisted statement of this investor: an answer, or a decision statement of one of their decisions. */
+  hasStatement(source: { interviewAnswerId: string | null; decisionStatement?: DecisionStatementRef | null }): boolean;
   resolve(citations: readonly EvidenceCitation[]): IndependenceBasis;
 }
 
@@ -138,9 +168,13 @@ interface Item {
   ref: string;
   stance: "supporting" | "contradicting";
   labels: string[];
-  /** Anchor transaction id when the item is a resolvable trade. */
-  anchor: string | null;
+  /** Anchor transaction ids when the item resolves to trades (an answer's trade; a decision's executed trades). */
+  anchors: string[];
   unanchored: boolean;
+  /** OD-2 C: review-only — excluded from every group and count. */
+  unresolved?: string;
+  /** OD-R2: the effective executed facts that merged this decision with its trades' episodes (reasons only; never labels). */
+  executedFactIds?: string[];
 }
 
 // THE production envelope. `contradicting[i]` says group i holds a
@@ -201,6 +235,7 @@ export function createIndependenceResolver(context: IndependenceContext): Eviden
   }
 
   const answersById = new Map(context.answers.map((a) => [a.id, a]));
+  const decisionsById = new Map((context.decisions ?? []).map((d) => [d.id, d]));
   const answersByTransaction = new Map<string, IndependenceAnswer[]>();
   for (const a of context.answers) {
     if (a.transactionId === null) continue;
@@ -264,31 +299,57 @@ export function createIndependenceResolver(context: IndependenceContext): Eviden
 
   function resolve(citations: readonly EvidenceCitation[]): IndependenceBasis {
     // ---- 1. items and their labels ---------------------------------
-    const items: Item[] = citations.map((c) => {
+    const allItems: Item[] = citations.map((c) => {
+      if (c.decisionStatement) {
+        // Evidence Reach V1 (OD-2). The ref is per statement; the LABEL is
+        // per decision, so a decision's reasoning, risks and exit
+        // conditions always land in ONE group (OD-2 G).
+        const ref = formatDecisionStatementId(c.decisionStatement);
+        const decision = decisionsById.get(c.decisionStatement.decisionId);
+        // Unknown decision (never a persisted one of this investor): the same global sentinel as an unknown answer.
+        if (!decision) return { ref, stance: c.stance, labels: [UNMAPPED_LABEL], anchors: [], unanchored: false };
+        const ownLabel = `decision:${decision.id}`;
+        const resolution = decision.caseResolution;
+        if (resolution.kind === "unresolved") return { ref, stance: c.stance, labels: [], anchors: [], unanchored: false, unresolved: decision.id };
+        if (resolution.kind === "own") return { ref, stance: c.stance, labels: [ownLabel], anchors: [], unanchored: false };
+        // merged: the executed trades' episodes (and their confirmed link facts) are this decision's case.
+        const labels = new Set<string>([ownLabel]);
+        const anchors: string[] = [];
+        for (const txnId of resolution.transactionIds) {
+          const episode = context.episodeKeyByTransactionId.get(txnId);
+          if (episode !== undefined) labels.add(`episode:${episode}`);
+          for (const factId of linkedFactsByTransaction.get(txnId) ?? []) labels.add(`fact:${factId}`);
+          if (tradeById.has(txnId)) anchors.push(txnId);
+        }
+        return { ref, stance: c.stance, labels: [...labels].sort(compare), anchors: anchors.sort(compare), unanchored: false, executedFactIds: resolution.executedFactIds };
+      }
       if (c.interviewAnswerId === null) {
         if (c.evidenceId === undefined) {
           throw new Error("resolveEvidenceIndependence: a citation without an interview answer must carry its evidenceId.");
         }
         const ref = `evidence:${c.evidenceId}`;
-        return { ref, stance: c.stance, labels: [ref], anchor: null, unanchored: true };
+        return { ref, stance: c.stance, labels: [ref], anchors: [], unanchored: true };
       }
       const ref = `answer:${c.interviewAnswerId}`;
       const answer = answersById.get(c.interviewAnswerId);
       // Unknown answer: the old global sentinel — all of them collapse to one case.
-      if (!answer) return { ref, stance: c.stance, labels: [UNMAPPED_LABEL], anchor: null, unanchored: false };
+      if (!answer) return { ref, stance: c.stance, labels: [UNMAPPED_LABEL], anchors: [], unanchored: false };
       // Null-transaction answer: its own case, exactly as before.
-      if (answer.transactionId === null) return { ref, stance: c.stance, labels: [ref], anchor: null, unanchored: true };
+      if (answer.transactionId === null) return { ref, stance: c.stance, labels: [ref], anchors: [], unanchored: true };
       const episode = context.episodeKeyByTransactionId.get(answer.transactionId);
-      if (episode === undefined) return { ref, stance: c.stance, labels: [UNMAPPED_LABEL], anchor: null, unanchored: false };
+      if (episode === undefined) return { ref, stance: c.stance, labels: [UNMAPPED_LABEL], anchors: [], unanchored: false };
       const factLabels = (linkedFactsByTransaction.get(answer.transactionId) ?? []).map((id) => `fact:${id}`);
       return {
         ref,
         stance: c.stance,
         labels: [`episode:${episode}`, ...factLabels],
-        anchor: tradeById.has(answer.transactionId) ? answer.transactionId : null,
+        anchors: tradeById.has(answer.transactionId) ? [answer.transactionId] : [],
         unanchored: false,
       };
     });
+    // OD-2 C: unresolved decision statements are review-only — reported, never grouped or counted.
+    const unresolvedDecisionIds = [...new Set(allItems.map((it) => it.unresolved).filter((id): id is string => id !== undefined))].sort(compare);
+    const items = allItems.filter((it) => it.unresolved === undefined);
 
     // ---- 2. strong groups: components under shared labels ----------
     const parent = items.map((_, i) => i);
@@ -322,6 +383,7 @@ export function createIndependenceResolver(context: IndependenceContext): Eviden
       const reasons: BasisGroupReason[] = [];
       for (const label of labels) {
         if (label.startsWith("episode:")) reasons.push({ kind: "same_episode", ref: label.slice("episode:".length) });
+        else if (label.startsWith("decision:")) reasons.push({ kind: "decision_case", ref: label.slice("decision:".length) });
         else if (label.startsWith("fact:")) {
           // A fact only collapses anything when it links >= 2 distinct cited anchors here.
           const carriers = new Set(groupItems.filter((it) => it.labels.includes(label)).map((it) => it.ref));
@@ -332,12 +394,14 @@ export function createIndependenceResolver(context: IndependenceContext): Eviden
         } else if (label === UNMAPPED_LABEL) reasons.push({ kind: "unmapped", ref: UNMAPPED_LABEL });
         else reasons.push({ kind: "unanchored", ref: label });
       }
+      // OD-R2 reconstruction: decision -> effective executed facts -> episode labels -> this union group.
+      for (const factId of [...new Set(groupItems.flatMap((it) => it.executedFactIds ?? []))].sort(compare)) reasons.push({ kind: "executed_fact", ref: factId });
       return {
         key: labels[0]!,
         contradicting: groupItems.some((it) => it.stance === "contradicting"),
         citations: [...new Set(groupItems.map((it) => it.ref))].sort(compare),
         reasons,
-        anchors: [...new Set(groupItems.map((it) => it.anchor).filter((a): a is string => a !== null))].sort(compare),
+        anchors: [...new Set(groupItems.flatMap((it) => it.anchors))].sort(compare),
       };
     });
     groups.sort((x, y) => compare(x.key, y.key));
@@ -427,6 +491,7 @@ export function createIndependenceResolver(context: IndependenceContext): Eviden
       confidenceInputs: { supporting: supportingLower, contradicting: contradictingUpper },
       exact: weakEdges.length === 0,
       unanchoredCitations: new Set(items.filter((it) => it.unanchored).map((it) => it.ref)).size,
+      unresolvedDecisionIds,
       groups: groups.map((g) => ({
         key: g.key,
         stance: g.contradicting ? "contradicting" : "supporting",
@@ -440,7 +505,12 @@ export function createIndependenceResolver(context: IndependenceContext): Eviden
     };
   }
 
-  return { hasAnswer: (answerId) => answersById.has(answerId), resolve };
+  return {
+    hasAnswer: (answerId) => answersById.has(answerId),
+    hasStatement: (source) =>
+      source.decisionStatement ? decisionsById.has(source.decisionStatement.decisionId) : source.interviewAnswerId !== null && answersById.has(source.interviewAnswerId),
+    resolve,
+  };
 }
 
 export interface AssessedEvidence {
@@ -451,6 +521,9 @@ export interface AssessedEvidence {
   evidenceStrength: EvidenceStrength;
   independenceBasis: IndependenceBasis;
 }
+
+/** Stable string key of a citation for dedupe/rejection tracking (answers and decision statements never collide). */
+export const citationKey = (c: { interviewAnswerId: string | null; decisionStatement?: DecisionStatementRef | null; stance: string }) => `${statementKeyOf(c)}::${c.stance}`;
 
 // The single place every DNA/Strategy path turns citations into
 // count + tier + basis: generation validation, grounding, identity

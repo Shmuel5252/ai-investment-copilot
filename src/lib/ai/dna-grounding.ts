@@ -51,6 +51,8 @@ import { anthropic, CLAUDE_MODEL } from "./client";
 export interface EvidenceGroundingCheckInput {
   hypothesisStatement: string;
   stance: "supporting" | "contradicting";
+  /** Evidence Reach V1: what kind of investor-authored statement the text is (an interview answer, or what they wrote when recording a decision). Default: interview answer. */
+  sourceKind?: "interview_answer" | "decision_statement";
   /** The real, persisted InterviewAnswer.answerText — the sole source of truth. Never the AI-generated evidence description. */
   sourceAnswerText: string;
 }
@@ -63,32 +65,32 @@ export interface EvidenceGroundingResult {
   reason: string;
 }
 
-const GROUNDING_SYSTEM_PROMPT = `You check whether a single real interview answer, in its own actual words, genuinely grounds one specific claimed relationship — a hypothesis statement PLUS a specific stance, supporting or contradicting — not whether a separately-written description of it sounds plausible.
+const GROUNDING_SYSTEM_PROMPT = `You check whether a single real statement the investor wrote themselves, in its own actual words, genuinely grounds one specific claimed relationship — a hypothesis statement PLUS a specific stance, supporting or contradicting — not whether a separately-written description of it sounds plausible.
 
-You will be given the hypothesis statement, the stance being claimed (supporting or contradicting), and the real, verbatim interview answer text. The answer text is the ONLY source of truth — you have not been given and must ignore any other characterization of what it says.
+You will be given the hypothesis statement, the stance being claimed (supporting or contradicting), the kind of statement (an interview answer about a trade, or what the investor wrote when recording a decision: their reasoning, the risks they considered, or their exit conditions), and the real, verbatim statement text. The statement text is the ONLY source of truth — you have not been given and must ignore any other characterization of what it says. A decision statement shows what the investor believed, considered or planned at decision time; it never shows what happened afterwards, so a claim about outcomes, results or execution is not grounded by it.
 
 The two stances are judged by DIFFERENT rules. Read the stance you were given and apply only the matching rule below — never apply the "supporting" test to a "contradicting" citation or vice versa:
 
-- Stance = "supporting": the citation is grounded only when the answer's own words provide evidence FOR the hypothesis claim — genuinely establishing the behavior described. If the answer is silent on a material part of the claim, doesn't clearly match it, or actually contains details that undercut it (for example: the position wasn't actually profitable, the original thesis didn't actually hold, no real alternative is described, an external target was missed rather than met), it is NOT grounded.
+- Stance = "supporting": the citation is grounded only when the statement's own words provide evidence FOR the hypothesis claim — genuinely establishing the behavior described. If the statement is silent on a material part of the claim, doesn't clearly match it, or actually contains details that undercut it (for example: the position wasn't actually profitable, the original thesis didn't actually hold, no real alternative is described, an external target was missed rather than met), it is NOT grounded.
 
-- Stance = "contradicting": the citation is grounded only when the answer's own words provide evidence AGAINST the hypothesis claim — genuinely showing the investor did the opposite, or something clearly inconsistent with it. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. When the hypothesis pairs a headline behavior with an attributed motive or manner ("does X because of Y, rather than Z"), a clear counter-example to the headline behavior is enough on its own to ground the contradiction — do not additionally require the answer to state an alternative motive for the counter-example, and do not reject the citation merely because the motive clause cannot be evaluated when the described behavior never happened in this instance; an unobservable secondary clause is not the same as an unproven one. Only reject a contradicting citation if the answer is silent on the material behavioral claim it is supposed to contradict, if it contradicts only a minor or non-material detail while leaving that material behavior unaddressed, or if the answer is actually consistent with / supports the hypothesis instead of going against it.
+- Stance = "contradicting": the citation is grounded only when the statement's own words provide evidence AGAINST the hypothesis claim — genuinely showing the investor did the opposite, or something clearly inconsistent with it. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. When the hypothesis pairs a headline behavior with an attributed motive or manner ("does X because of Y, rather than Z"), a clear counter-example to the headline behavior is enough on its own to ground the contradiction — do not additionally require the answer to state an alternative motive for the counter-example, and do not reject the citation merely because the motive clause cannot be evaluated when the described behavior never happened in this instance; an unobservable secondary clause is not the same as an unproven one. Only reject a contradicting citation if the statement is silent on the material behavioral claim it is supposed to contradict, if it contradicts only a minor or non-material detail while leaving that material behavior unaddressed, or if the statement is actually consistent with / supports the hypothesis instead of going against it.
 
-Do not soften your verdict because the claim sounds like a reasonable investing pattern in general — judge strictly against this one answer's own words. Respond only with the structured verdict.`;
+Do not soften your verdict because the claim sounds like a reasonable investing pattern in general — judge strictly against this one statement's own words. Respond only with the structured verdict.`;
 
 const GROUNDING_TOOL = {
   name: "record_grounding_verdict",
-  description: "Record whether the real answer text actually grounds the claimed stance.",
+  description: "Record whether the real statement text actually grounds the claimed stance.",
   input_schema: {
     type: "object" as const,
     properties: {
       verdict: {
         type: "string" as const,
         enum: ["supported", "unsupported"],
-        description: "Whether the answer's own words genuinely establish the claimed stance.",
+        description: "Whether the statement's own words genuinely establish the claimed stance.",
       },
       reason: {
         type: "string" as const,
-        description: "One sentence, grounded in the actual answer text, explaining the verdict.",
+        description: "One sentence, grounded in the actual statement text, explaining the verdict.",
       },
     },
     required: ["verdict", "reason"],
@@ -133,7 +135,7 @@ export async function checkEvidenceGrounding(
       messages: [
         {
           role: "user",
-          content: `Hypothesis statement: ${input.hypothesisStatement}\nClaimed stance: ${input.stance}\n\nReal interview answer (verbatim, the only source of truth):\n${input.sourceAnswerText}`,
+          content: `Hypothesis statement: ${input.hypothesisStatement}\nClaimed stance: ${input.stance}\nStatement kind: ${input.sourceKind === "decision_statement" ? "decision statement (what the investor wrote when recording a decision)" : "interview answer"}\n\nReal investor statement (verbatim, the only source of truth):\n${input.sourceAnswerText}`,
         },
       ],
     });

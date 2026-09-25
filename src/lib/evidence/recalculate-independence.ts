@@ -1,4 +1,5 @@
 import { calculateEvidenceStrength, type EvidenceStrength } from "@/lib/dna/evidence-strength";
+import type { DecisionStatementKind } from "./statement-ref";
 import type { dnaHypothesisVersions, strategyPrincipleVersions } from "@/db/schema";
 import type { TieredVersionSnapshot } from "@/lib/evidence/recalculate-confidence";
 import {
@@ -156,9 +157,14 @@ export function buildIndependenceRecalculatedStrategyVersion(
 }
 
 export function citationsFromEvidence(
-  rows: readonly { id: string; interviewAnswerId: string | null; stance: "supporting" | "contradicting" }[]
+  rows: readonly { id: string; interviewAnswerId: string | null; decisionId?: string | null; decisionStatementKind?: string | null; stance: "supporting" | "contradicting" }[]
 ): EvidenceCitation[] {
-  return rows.map((e) => ({ interviewAnswerId: e.interviewAnswerId, stance: e.stance, evidenceId: e.id }));
+  return rows.map((e) => ({
+    interviewAnswerId: e.interviewAnswerId,
+    decisionStatement: e.decisionId && e.decisionStatementKind ? { decisionId: e.decisionId, kind: e.decisionStatementKind as DecisionStatementKind } : null,
+    stance: e.stance,
+    evidenceId: e.id,
+  }));
 }
 
 export type IndependenceRecalculationOutcome<V> =

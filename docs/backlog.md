@@ -370,12 +370,49 @@ FMP טרי), `portfolioStateJson`/Portfolio Fit, Market Context, גרסאות DN
    עדיין פתוחה אם רוצים כזו).
 3. **Learning ממעבר מהסקטור בלבד** — Learning מורעב (0 insights; אין סקטור עם 2 החלטות שעברו Review):
    משפחות לפי טיקר/סוג החלטה ו-Learning מתקופות החזקה עם נימוק (Journal) — דורש הכרעת Owner מה נחשב
-   ראיה עצמאית.
+   ראיה עצמאית. **עדכון 2026-09-25:** "מה נחשב ראיה עצמאית" הוכרע (OD-1..OD-4, Evidence Reach V1, ר'
+   "נבנה") והקשת Learning→DNA עובדת (OD-3); הקיבוץ עצמו עדיין לפי סקטור בלבד — פתוח.
 4. ~~**קישור החלטה↔ביצוע מפורש**~~ — נבנה כחלק מ-Decision Follow-Through V1 (ר' "נבנה"): מועמדות מחושבות,
    אישור משקיע בלבד, append-only.
 5. **Hardening:** מפתח Review ב-sessionStorage; בידוד `decision-monitoring.test.ts`; `getForCase` מחזיר undefined.
 
+### הכרעות Owner — Evidence Reach V1 (הוכרעו 2026-09-25, OD-R1..OD-R5)
+1. **OD-R1 — זהות תובנת Learning = (investor, family), זרם סינתזה אחד למשפחה ב-V1.** גרסה רק על שינוי טביעת
+   מצב-הראיה האפקטיבי (`lef-v1`: החלטה/Review/stance — ר' `docs/data-model.md` §8); ניסוח בלבד = no-op מדווח.
+   כמה תובנות עצמאיות באותה משפחה — **נדחה ל-Learning V2** (חוב מקובל).
+2. **OD-R2 — החלטה אחת = מקרה אחד; `executed` משני episodes = איחוד labels** (רק דרך עובדות שהמשקיע אישר;
+   ה-basis משחזר החלטה → עובדות → episodes → איחוד).
+3. **OD-R3 — carry ל-DNA רק דרך הצהרות החלטה שעברו grounding מול ההשערה החדשה;** אין הצהרה מבוססת → fail-closed
+   (בלי השערה/גרסה/ראיה/Correction).
+4. **OD-R4 — `STALLED_CASE_DAYS = 14`, `REVIEW_WITHOUT_HORIZON_NUDGE_DAYS = 30`:** מדיניות דשבורד V1 בלבד,
+   ניתנת לשינוי, לא אמפירית; קצה ±1 יום UTC/מקומי — חוב V1 מקובל.
+5. **OD-R5 — `candidateDayTolerance = 1`** חלק מ-`independence-policy-v2`; רק UNRESOLVED, לעולם לא ראיה/מיזוג/ביטחון.
+**חוב V1 מקובל (נשאר):** גרסאות Learning ישנות בלי provenance מקבלות טביעה משורות ה-identity (re-baseline
+חד-פעמי, append בלבד); ריצת generate שהמודל לא הציע בה דבר לא משאירה עקבה (ה-nudge "צור מחדש" נשאר);
+Learning עדיין מקובץ לפי סקטור; הצהרות החלטה נכנסות ל-DNA/Strategy רק ביצירה מחדש; שתי שורות
+`source_learning_insight_id` היסטוריות (סינתטיות) נשארות; מיגרציה 0017 חייבת להיות מוחלת לפני פריסת הקוד.
+
 ## נבנה
+- **Evidence Reach V1 — הצהרות מזמן החלטה כראיה, עצמאות החלטה (OD-2), Learning→DNA (OD-3), provenance,
+  שקיפות ראיות ו"מה הצעד הבא"** (2026-09-25, autonomous run; `docs/architecture.md` §2.11, `docs/data-model.md`
+  §2/§3/§8): נמצא בריצה חיה (קריאה בלבד) — DNA reach = 0 (10/10 השערות ו-6/6 עקרונות נצפים insufficient; ה-AI
+  ראה 2 מוצהרים + 4 מאומתים בלבד), 9 הצהרות החלטה (~2,300 תווים) שמעולם לא הוזנו, הסכמה ל-Learning יצרה השערה
+  S=1 שמיד הוחרגה, `learning.generate` חוזר ייצר כפילויות. **נבנה:** Statement IDs + `evidence.decision_id/
+  decision_statement_kind` + `provenance_json` (מיגרציה `0017`, **scratch בלבד — לא הוחלה על ה-DB האמיתי**);
+  `decision-cases.ts` (OD-2) + `independence-policy-v2` (`unresolvedDecisionIds` review-only); prompts/tool-schemas
+  של DNA/Strategy נצפית מצטטים Statement ID עם תוויות מקור וכללי OD-1; grounding מול הטקסט של המשקיע; `learning.agree`
+  נושא החלטות-מקור (replay, advisory lock) ו-`learning.generate` מזהה לפי (investor, family); `evidence.reach` +
+  שורות reach בעמודי DNA/Strategy; `evidence.nextActions` + מקטע "מה הצעד הבא" בדשבורד (Monitoring לא נגע).
+  **replay על הנתונים האמיתיים (קריאה בלבד):** 19 הצהרות (10 תשובות + 9 הצהרות החלטה); LLY/SNDK/AVGO כולן
+  "own" תחת OD-2 (אין מועמדות ביצוע — הקניות באותו טיקר קדמו להחלטה); גבול עליון היפותטי אם 3 הנימוקים היו
+  מצוטטים כתומכים ועוברים grounding: 2 claims היו מגיעים ל-strong (S=5), השאר ל-moderate — **לא טענה, גבול
+  עליון**; 5 צעדים הבאים (תאריך Review ל-AVGO, Case MU שנתקע, 60 אפיזודות ללא נימוק, יצירה מחדש ב-DNA
+  וב-Strategy). **לא נבנה בכוונה / חוב:** (א) גרסאות קיימות לא נכתבות מחדש — הצהרות החלטה נכנסות רק ביצירה
+  מחדש (הצעד הבא בדשבורד); (ב) **פריסה: מיגרציה 0017 חייבת להיות מוחלת לפני שהקוד רץ** — ה-ORM בוחר את
+  העמודות החדשות בכל קריאת `evidence`/גרסאות (נבדק: clone של הסכמה האמיתית + ledger, upgrade רק 0017, תקין);
+  (ג) קטלוג הצעדים עם שני קבועים (30 יום ל-Review מוצע, 14 יום ל-Case שנתקע) — לא הגדרות משתמש; (ד) Learning
+  עדיין מקובץ לפי סקטור; (ה) הצהרת החלטה נספרת רק כשהמשקיע מסווג מועמדות ביצוע (UNRESOLVED אחרת) — על
+  הנתונים האמיתיים כרגע 0 כאלה; (ו) שתי שורות `source_learning_insight_id` היסטוריות (סינתטיות) נשארות.
 - **Decision Follow-Through V1 — ביצוע בפועל, מחזור חיי תנאי שקילה-מחדש, Case משקילה מחדש** (2026-09-24,
   autonomous run; `docs/architecture.md` §2.10): נמצא על הנתונים האמיתיים — AVGO BUY $500 (09-08) ליד קניית $670
   מ-09-02 בלי שום קשר רשום; SNDK PASS (08-20) ואחריה קנייה ב-08-24 — תנאי ה-pullback התקיים והמשקיע פעל בלי החלטה

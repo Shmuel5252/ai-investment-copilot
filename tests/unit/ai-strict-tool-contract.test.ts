@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { anthropic } from "@/lib/ai/client";
 import { proposeObservedPrinciples, extractDeclaredPrinciples } from "@/lib/ai/strategy";
 import { proposeDnaHypotheses } from "@/lib/ai/dna";
+import { buildInvestorStatements } from "@/lib/ai/investor-statements";
 
 // Request-shape contract for the three collection generators. Every
 // assertion inspects the arguments the REAL production function passes to
@@ -101,7 +102,7 @@ const CASES: Case[] = [
     name: "Strategy observed — proposeObservedPrinciples",
     key: "principles",
     toolName: "propose_observed_principles",
-    call: () => proposeObservedPrinciples(ANSWERS),
+    call: () => proposeObservedPrinciples(buildInvestorStatements(ANSWERS, [])),
     itemRequired: ["statement", "evidence"],
     nestedField: "evidence",
     nestedItemType: "object",
@@ -119,7 +120,7 @@ const CASES: Case[] = [
     name: "DNA — proposeDnaHypotheses",
     key: "hypotheses",
     toolName: "propose_hypotheses",
-    call: () => proposeDnaHypotheses(ANSWERS),
+    call: () => proposeDnaHypotheses(buildInvestorStatements(ANSWERS, [])),
     itemRequired: ["statement", "evidence"],
     nestedField: "evidence",
     nestedItemType: "object",
@@ -176,7 +177,7 @@ describe.each(CASES)("strict tool contract — $name", (c) => {
 
     if (c.nestedItemType === "object") {
       expect(element.additionalProperties).toBe(false);
-      expect([...(element.required as string[])].sort()).toEqual(["description", "interviewAnswerId", "stance"]);
+      expect([...(element.required as string[])].sort()).toEqual(["description", "stance", "statementId"]);
       expect(prop(element, "stance").enum).toEqual(["supporting", "contradicting"]);
     }
   });

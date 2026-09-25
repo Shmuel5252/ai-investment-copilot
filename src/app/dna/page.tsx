@@ -6,6 +6,7 @@ import { trpc } from "@/trpc/react";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
 import { Num } from "@/components/num";
 import { BackLink } from "@/components/back-link";
+import { ReachLine } from "@/components/evidence-reach";
 import { dnaPage as t, evidenceStrengthLabel, evidenceStanceLabel, nav } from "@/lib/i18n/strings";
 
 const serifHeader = Frank_Ruhl_Libre({ subsets: ["latin", "hebrew"], weight: ["400", "700"], display: "swap" });
@@ -22,8 +23,14 @@ export default function DnaPage() {
   const guard = useSubmitGuard();
   const utils = trpc.useUtils();
   const list = trpc.dna.list.useQuery();
+  // Evidence Reach V1 — read-only transparency per hypothesis (no AI, no write).
+  const reach = trpc.evidence.reach.useQuery();
+  const reachById = new Map((reach.data?.claims ?? []).filter((c) => c.kind === "dna_hypothesis").map((c) => [c.id, c]));
   const generate = trpc.dna.generate.useMutation({
-    onSuccess: () => utils.dna.list.invalidate(),
+    onSuccess: () => {
+      utils.dna.list.invalidate();
+      utils.evidence.reach.invalidate();
+    },
   });
   const reject = trpc.dna.reject.useMutation({
     onSuccess: () => utils.dna.list.invalidate(),
@@ -90,6 +97,7 @@ export default function DnaPage() {
                 <Num>{version.supportingEvidenceCount}</Num> {t.supportingLabel} ·{" "}
                 <Num>{version.contradictingEvidenceCount}</Num> {t.contradictingLabel}
               </p>
+              <ReachLine reach={reachById.get(h.id)} />
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={() => setExpandedId(expandedId === h.id ? null : h.id)}

@@ -30,6 +30,11 @@ import {
 } from "@/lib/evidence/recalculate-independence";
 import { selectEffectiveEvidence } from "@/lib/dna/effective-evidence";
 import type { EvidenceIndependenceResolver } from "@/lib/evidence/resolve-independence";
+import { evidenceSourceColumnsOf } from "@/lib/evidence/statement-ref";
+import type { ArtifactProvenance } from "@/lib/evidence/provenance";
+
+// Evidence Reach V1: observed principles may now also cite decision-time statements.
+const OBSERVED_RATIONALE = "Observed as a pattern across your own statements (interview answers and decision records), not stated directly.";
 
 export type NewStrategyPrinciple = InferInsertModel<typeof strategyPrinciples>;
 export type NewStrategyPrincipleVersion = InferInsertModel<typeof strategyPrincipleVersions>;
@@ -215,7 +220,8 @@ export async function insertDeclaredPrinciple(
 export async function insertObservedPrincipleWithEvidence(
   db: typeof Db,
   investorId: string,
-  principle: ValidatedObservedPrinciple
+  principle: ValidatedObservedPrinciple,
+  provenance: ArtifactProvenance | null = null
 ) {
   return db.transaction(async (tx) => {
     const [identity] = await tx
@@ -229,12 +235,13 @@ export async function insertObservedPrincipleWithEvidence(
         versionNumber: 1,
         principleType: "observed",
         statementText: principle.statement,
-        rationaleText: "Observed as a pattern across your interview answers, not stated directly.",
+        rationaleText: OBSERVED_RATIONALE,
         createdBy: "ai_observed",
         evidenceStrength: principle.evidenceStrength,
         supportingEvidenceCount: principle.supportingCount,
         contradictingEvidenceCount: principle.contradictingCount,
         independenceBasisJson: principle.independenceBasis,
+        provenanceJson: provenance,
       })
       .returning();
 
@@ -242,7 +249,7 @@ export async function insertObservedPrincipleWithEvidence(
       principle.evidence.map((e) => ({
         strategyPrincipleId: identity!.id,
         stance: e.stance,
-        interviewAnswerId: e.interviewAnswerId,
+        ...evidenceSourceColumnsOf(e),
         description: e.description,
       }))
     );
@@ -278,6 +285,7 @@ export async function insertObservedPrincipleVersionWithEvidence(
     independenceBasis: IndependenceBasis;
     newEvidence: ValidatedPrincipleEvidence[];
     changeReason: string;
+    provenance?: ArtifactProvenance | null;
   }
 ) {
   return db.transaction(async (tx) => {
@@ -312,13 +320,14 @@ export async function insertObservedPrincipleVersionWithEvidence(
         versionNumber: nextVersionNumber,
         principleType: "observed",
         statementText: version.statementText,
-        rationaleText: "Observed as a pattern across your interview answers, not stated directly.",
+        rationaleText: OBSERVED_RATIONALE,
         evidenceStrength: version.evidenceStrength,
         supportingEvidenceCount: version.supportingEvidenceCount,
         contradictingEvidenceCount: version.contradictingEvidenceCount,
         independenceBasisJson: version.independenceBasis,
         createdBy: "ai_observed",
         changeReason: version.changeReason,
+        provenanceJson: version.provenance ?? null,
       })
       .returning();
 
@@ -330,7 +339,7 @@ export async function insertObservedPrincipleVersionWithEvidence(
               version.newEvidence.map((e) => ({
                 strategyPrincipleId,
                 stance: e.stance,
-                interviewAnswerId: e.interviewAnswerId,
+                ...evidenceSourceColumnsOf(e),
                 description: e.description,
               }))
             )

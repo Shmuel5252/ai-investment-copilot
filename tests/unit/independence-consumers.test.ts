@@ -23,9 +23,9 @@ import { MP_ANSWERS, MP_TRADES, contextFromTrades, fixtureBasis } from "../helpe
 const resolver = createIndependenceResolver(contextFromTrades(MP_TRADES, MP_ANSWERS));
 const d = (text: string) => text;
 const evidence = (...specs: [string, "supporting" | "contradicting"][]) =>
-  specs.map(([interviewAnswerId, stance]) => ({ interviewAnswerId, stance, description: d("cited") }));
-const asCitations = (rows: { interviewAnswerId: string; stance: "supporting" | "contradicting" }[]): EvidenceCitation[] =>
-  rows.map((r) => ({ interviewAnswerId: r.interviewAnswerId, stance: r.stance }));
+  specs.map(([interviewAnswerId, stance]) => ({ statementId: interviewAnswerId, interviewAnswerId, stance, description: d("cited") }));
+const asCitations = (rows: { interviewAnswerId: string | null; decisionStatement?: EvidenceCitation["decisionStatement"]; stance: "supporting" | "contradicting" }[]): EvidenceCitation[] =>
+  rows.map((r) => ({ interviewAnswerId: r.interviewAnswerId, decisionStatement: r.decisionStatement ?? null, stance: r.stance }));
 
 const REALLOCATION = evidence(["a-mp-s2", "supporting"], ["a-mrvl", "supporting"]);
 
@@ -137,7 +137,7 @@ describe("18. generation / grounding / remediation parity", () => {
 describe("19. identity resolution under dependence: recording a citation is not proving a new independent case", () => {
   interface Outcome {
     action: "new_identity" | "new_version" | "no_new_information";
-    newEvidenceAnswers?: string[];
+    newEvidenceAnswers?: (string | null)[];
     supporting?: number;
     contradicting?: number;
     supportingUpper?: number;

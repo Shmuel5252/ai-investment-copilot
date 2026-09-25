@@ -1,9 +1,11 @@
 import type { EvidenceStrength } from "./evidence-strength";
 import {
   assessCitations,
+  citationKey,
   type EvidenceIndependenceResolver,
   type IndependenceBasis,
 } from "@/lib/evidence/resolve-independence";
+import type { DecisionStatementRef } from "@/lib/evidence/statement-ref";
 import type { ValidatedEvidence, ValidatedHypothesis } from "./validate-hypotheses";
 import type { HypothesisMatchCandidate, HypothesisMatchResult } from "@/lib/ai/dna-identity";
 
@@ -33,7 +35,8 @@ export type HypothesisMatchFn = (
 ) => Promise<HypothesisMatchResult>;
 
 export interface ExistingEvidenceForCounting {
-  interviewAnswerId: string;
+  interviewAnswerId: string | null;
+  decisionStatement?: DecisionStatementRef | null;
   stance: "supporting" | "contradicting";
 }
 
@@ -97,7 +100,7 @@ function dedupeEvidence(evidence: readonly ValidatedEvidence[]): ValidatedEviden
   const seen = new Set<string>();
   const result: ValidatedEvidence[] = [];
   for (const e of evidence) {
-    const key = `${e.interviewAnswerId}::${e.stance}`;
+    const key = citationKey(e);
     if (seen.has(key)) continue;
     seen.add(key);
     result.push(e);
@@ -131,7 +134,7 @@ export async function resolveHypothesisIdentities(
       statement: h.statementText,
       isExisting: true,
       existingEvidenceForCounting: h.evidenceForCounting,
-      rejected: new Set(h.rejectedEvidence.map((e) => `${e.interviewAnswerId}::${e.stance}`)),
+      rejected: new Set(h.rejectedEvidence.map((e) => citationKey(e))),
       touched: false,
       newEvidence: [],
     });
@@ -146,7 +149,7 @@ export async function resolveHypothesisIdentities(
     if (target) {
       target.touched = true;
       target.newEvidence.push(
-        ...hypothesis.evidence.filter((e) => !target.rejected.has(`${e.interviewAnswerId}::${e.stance}`))
+        ...hypothesis.evidence.filter((e) => !target.rejected.has(citationKey(e)))
       );
     } else {
       syntheticCounter += 1;
@@ -189,9 +192,7 @@ export async function resolveHypothesisIdentities(
       // unresolvable old citation from this round's comparison is the
       // conservative choice: at worst it very slightly undercounts how
       // much was already known, never invents a case that doesn't exist.
-      const resolvableExisting = group.existingEvidenceForCounting.filter((e) =>
-        independence.hasAnswer(e.interviewAnswerId)
-      );
+      const resolvableExisting = group.existingEvidenceForCounting.filter((e) => independence.hasStatement(e));
       const oldGroupCount = independence.resolve(resolvableExisting).groups.length;
       const combinedForCounting = [...resolvableExisting, ...dedupedNewEvidence];
       const combined = assessCitations(independence, combinedForCounting);
@@ -220,12 +221,8 @@ export async function resolveHypothesisIdentities(
       // by group regardless of how many raw citations map to it, so
       // removing an exact-duplicate raw citation before insertion changes
       // nothing about the groups already computed.
-      const alreadyPersisted = new Set(
-        group.existingEvidenceForCounting.map((e) => `${e.interviewAnswerId}::${e.stance}`)
-      );
-      const evidenceToInsert = dedupedNewEvidence.filter(
-        (e) => !alreadyPersisted.has(`${e.interviewAnswerId}::${e.stance}`)
-      );
+      const alreadyPersisted = new Set(group.existingEvidenceForCounting.map((e) => citationKey(e)));
+      const evidenceToInsert = dedupedNewEvidence.filter((e) => !alreadyPersisted.has(citationKey(e)));
       resolutions.push({
         action: "new_version",
         hypothesisId: group.id,

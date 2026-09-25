@@ -1,6 +1,7 @@
 import { assessCitations, type EvidenceIndependenceResolver } from "@/lib/evidence/resolve-independence";
 import type { ValidatedObservedPrinciple, ValidatedPrincipleEvidence } from "./validate-principles";
 import type { EvidenceGroundingCheckInput, EvidenceGroundingResult } from "@/lib/ai/dna-grounding";
+import { statementIdOf } from "@/lib/evidence/statement-ref";
 
 // Strategy Grounding + Identity Hardening task — the Strategy-specific
 // mirror of src/lib/dna/ground-evidence.ts's groundValidatedHypotheses.
@@ -28,7 +29,7 @@ export type StrategyGroundingCheckFn = (
 export interface StrategyGroundingRunResult {
   principles: ValidatedObservedPrinciple[];
   /** Every citation excluded by grounding, across every principle — for logging/reporting, never for display as if it were still evidence. */
-  excluded: { statement: string; interviewAnswerId: string; stance: "supporting" | "contradicting"; reason: string }[];
+  excluded: { statement: string; statementId: string; stance: "supporting" | "contradicting"; reason: string }[];
   /** Principles dropped entirely because zero citations survived grounding. */
   droppedPrinciples: string[];
 }
@@ -56,7 +57,8 @@ export async function groundValidatedObservedPrinciples(
     const groundedEvidence: ValidatedPrincipleEvidence[] = [];
 
     for (const evidence of principle.evidence) {
-      const sourceAnswerText = answerTextById.get(evidence.interviewAnswerId);
+      const statementId = statementIdOf(evidence) ?? "";
+      const sourceAnswerText = answerTextById.get(statementId);
       // Shouldn't happen — validateProposedObservedPrinciples already
       // confirmed this id is real — but if the text is somehow
       // unavailable, that's exactly the kind of missing/malformed input
@@ -64,9 +66,9 @@ export async function groundValidatedObservedPrinciples(
       if (sourceAnswerText === undefined) {
         excluded.push({
           statement: principle.statement,
-          interviewAnswerId: evidence.interviewAnswerId,
+          statementId,
           stance: evidence.stance,
-          reason: "Source answer text unavailable — failing closed.",
+          reason: "Source statement text unavailable — failing closed.",
         });
         continue;
       }
@@ -77,6 +79,7 @@ export async function groundValidatedObservedPrinciples(
           hypothesisStatement: principle.statement,
           stance: evidence.stance,
           sourceAnswerText,
+          sourceKind: evidence.decisionStatement ? "decision_statement" : "interview_answer",
         });
       } catch {
         verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed." };
@@ -87,7 +90,7 @@ export async function groundValidatedObservedPrinciples(
       } else {
         excluded.push({
           statement: principle.statement,
-          interviewAnswerId: evidence.interviewAnswerId,
+          statementId,
           stance: evidence.stance,
           reason: verdict.reason,
         });

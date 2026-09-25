@@ -135,7 +135,7 @@ describe("groundValidatedHypotheses", () => {
     );
 
     expect(excluded).toHaveLength(1);
-    expect(excluded[0]?.interviewAnswerId).toBe("can-answer");
+    expect(excluded[0]?.statementId).toBe("can-answer");
     expect(hypotheses).toHaveLength(1);
     // Only the MP citation survives -> 1 independent case, not 2 — CAN's
     // exclusion must not be replaced by any inflated count.

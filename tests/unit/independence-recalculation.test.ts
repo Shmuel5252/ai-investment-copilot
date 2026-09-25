@@ -42,7 +42,7 @@ describe("planIndependenceRecalculation", () => {
     expect(plan.independenceBasis.weakEdges).toHaveLength(1);
     // Deterministic text, built from numbers only — never AI prose.
     expect(plan.changeReason).toBe(
-      "Decision Independence (independence-policy-v1): the same effective evidence now counts as S=1, C=0 (was S=2, C=0); " +
+      "Decision Independence (independence-policy-v2): the same effective evidence now counts as S=1, C=0 (was S=2, C=0); " +
         "tier insufficient_evidence -> insufficient_evidence. 1 weak dependence edge(s), 0 confirmed link fact(s). " +
         "No new evidence; statement and evidence unchanged."
     );
@@ -186,6 +186,7 @@ describe("version builders", () => {
     createdBy: "system_grounding_revalidation" as const,
     changeReason: "earlier reason",
     independenceBasisJson: null,
+    provenanceJson: null,
   };
   const strategyBase = {
     id: "st-v1",
@@ -201,6 +202,7 @@ describe("version builders", () => {
     supportingEvidenceCount: 2,
     contradictingEvidenceCount: 0,
     independenceBasisJson: null,
+    provenanceJson: null,
   };
 
   it("the new provenance value exists in BOTH enums", () => {
@@ -250,7 +252,7 @@ describe("version builders", () => {
 
   it("citationsFromEvidence keeps the answer id, stance and evidence id", () => {
     expect(citationsFromEvidence([{ id: "e1", interviewAnswerId: null, stance: "supporting" }])).toEqual([
-      { interviewAnswerId: null, stance: "supporting", evidenceId: "e1" },
+      { interviewAnswerId: null, decisionStatement: null, stance: "supporting", evidenceId: "e1" },
     ]);
   });
 });

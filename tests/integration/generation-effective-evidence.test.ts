@@ -126,7 +126,7 @@ interface Domain {
 const proposal = (w: World, cites: Cite[]) => [
   {
     statement: "a proposed claim",
-    evidence: cites.map((c) => ({ interviewAnswerId: w.answerId[c.answer], stance: c.stance, description: `cites ${c.answer}` })),
+    evidence: cites.map((c) => ({ statementId: w.answerId[c.answer], stance: c.stance, description: `cites ${c.answer}` })),
   },
 ];
 

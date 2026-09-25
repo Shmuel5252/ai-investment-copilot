@@ -204,12 +204,12 @@ describe("apply", () => {
     expect(h1v2.evidenceStrength).toBe("insufficient_evidence");
     expect(h1v2.statementText).toBe("אתה נוטה למכור פוזיציה מרוויחה כשמתעוררת הזדמנות חדשה.");
     const basis = h1v2.independenceBasisJson as IndependenceBasis;
-    expect(basis.policyVersion).toBe("independence-policy-v1");
+    expect(basis.policyVersion).toBe("independence-policy-v2");
     expect(basis.supportingLower).toBe(1);
     expect(basis.supportingUpper).toBe(2);
     expect(basis.exact).toBe(false);
     expect(basis.weakEdges).toHaveLength(1);
-    expect(h1v2.changeReason).toMatch(/^Decision Independence \(independence-policy-v1\)/);
+    expect(h1v2.changeReason).toMatch(/^Decision Independence \(independence-policy-v2\)/);
 
     const p1v2 = (await getLatestStrategyPrincipleVersion(db, w.p1))!;
     expect(p1v2.versionNumber).toBe(2);

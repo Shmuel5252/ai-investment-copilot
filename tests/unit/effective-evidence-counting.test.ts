@@ -19,8 +19,8 @@ describe("partitionEvidenceForCounting — what an identity's CURRENT version co
   it("E. a version with ZERO grounding checks keeps the approved fallback: every raw citation is effective, nothing is rejected", () => {
     const p = partitionEvidenceForCounting([row("e1", "a1"), row("e2", "a2", "contradicting")], []);
     expect(p.effective).toEqual([
-      { interviewAnswerId: "a1", stance: "supporting" },
-      { interviewAnswerId: "a2", stance: "contradicting" },
+      { interviewAnswerId: "a1", decisionStatement: null, stance: "supporting" },
+      { interviewAnswerId: "a2", decisionStatement: null, stance: "contradicting" },
     ]);
     expect(p.rejected).toEqual([]);
   });
@@ -31,7 +31,7 @@ describe("partitionEvidenceForCounting — what an identity's CURRENT version co
       [check("e1", "supported"), check("e2", "unsupported"), check("e3", "supported")]
     );
     expect(p.effective.map((e) => e.interviewAnswerId)).toEqual(["a1", "a3"]);
-    expect(p.rejected).toEqual([{ interviewAnswerId: "a2", stance: "supporting" }]);
+    expect(p.rejected).toEqual([{ interviewAnswerId: "a2", decisionStatement: null, stance: "supporting" }]);
   });
 
   it("fail closed: on a checked version a raw row with NO check row is rejected, never assumed supported", () => {

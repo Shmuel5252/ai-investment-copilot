@@ -1,4 +1,5 @@
 import { selectEffectiveEvidence, type GroundingCheckForSelection } from "@/lib/dna/effective-evidence";
+import type { DecisionStatementKind, DecisionStatementRef } from "./statement-ref";
 
 // Identity matching used to read an identity's RAW Evidence pool to decide
 // "what is already counted". Raw Evidence is immutable provenance and
@@ -18,8 +19,17 @@ import { selectEffectiveEvidence, type GroundingCheckForSelection } from "@/lib/
 // Only answer-sourced rows are countable; evidence with no interview answer
 // (a Learning Insight agreement, a manual note) never reached the resolver.
 export interface CountableEvidence {
-  interviewAnswerId: string;
+  interviewAnswerId: string | null;
+  /** Evidence Reach V1: set for a decision-statement citation (then interviewAnswerId is null). */
+  decisionStatement: DecisionStatementRef | null;
   stance: "supporting" | "contradicting";
+}
+
+/** The two countable source shapes of a persisted evidence row; anything else (learning agreement, manual note) never reaches the resolver. */
+export function countableSourceOf(row: { interviewAnswerId: string | null; decisionId?: string | null; decisionStatementKind?: string | null }): Pick<CountableEvidence, "interviewAnswerId" | "decisionStatement"> | null {
+  if (row.decisionId && row.decisionStatementKind) return { interviewAnswerId: null, decisionStatement: { decisionId: row.decisionId, kind: row.decisionStatementKind as DecisionStatementKind } };
+  if (row.interviewAnswerId !== null) return { interviewAnswerId: row.interviewAnswerId, decisionStatement: null };
+  return null;
 }
 
 export interface EvidencePartition {
@@ -36,15 +46,16 @@ export interface EvidencePartition {
 }
 
 export function partitionEvidenceForCounting(
-  raw: readonly { id: string; interviewAnswerId: string | null; stance: "supporting" | "contradicting" }[],
+  raw: readonly { id: string; interviewAnswerId: string | null; decisionId?: string | null; decisionStatementKind?: string | null; stance: "supporting" | "contradicting" }[],
   checks: readonly GroundingCheckForSelection[]
 ): EvidencePartition {
   const effectiveIds = new Set(selectEffectiveEvidence(raw, checks).map((e) => e.id));
   const effective: CountableEvidence[] = [];
   const rejected: CountableEvidence[] = [];
   for (const row of raw) {
-    if (row.interviewAnswerId === null) continue;
-    (effectiveIds.has(row.id) ? effective : rejected).push({ interviewAnswerId: row.interviewAnswerId, stance: row.stance });
+    const source = countableSourceOf(row);
+    if (source === null) continue;
+    (effectiveIds.has(row.id) ? effective : rejected).push({ ...source, stance: row.stance });
   }
   return { effective, rejected, checkCount: checks.length };
 }

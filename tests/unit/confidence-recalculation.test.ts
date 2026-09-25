@@ -32,6 +32,7 @@ const dnaBase = {
   createdBy: "ai_generated" as const,
   changeReason: null,
   independenceBasisJson: null,
+  provenanceJson: null,
 };
 const strategyBase = {
   id: "st-v2",
@@ -47,6 +48,7 @@ const strategyBase = {
   supportingEvidenceCount: 2,
   contradictingEvidenceCount: 1,
   independenceBasisJson: null,
+  provenanceJson: null,
 };
 
 function appendPlanFor(v: { id: string; evidenceStrength: EvidenceStrength | null; supportingEvidenceCount: number | null; contradictingEvidenceCount: number | null }): AppendRecalculatedVersionPlan {

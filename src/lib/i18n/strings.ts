@@ -174,6 +174,65 @@ export const decisionAttention = {
   markExecution: "סמן ביצוע",
 };
 
+// --- Evidence Reach V1 (src/components/evidence-reach.tsx) — per-claim
+// transparency. "The AI does not currently use this" is a threshold fact,
+// never a verdict that the claim is false; the distance line is shown only
+// when the threshold table makes it exactly true, and it counts INDEPENDENT
+// cases — another answer about an episode already counted adds nothing. ---
+
+export const evidenceReach = {
+  sourcesPrefix: "מקורות:",
+  interviewAnswers: "תשובות ראיון",
+  decisionStatements: "הצהרות מזמן החלטה",
+  usedByAi: "ה-AI משתמש בזה כרגע בניתוחים.",
+  notUsedByAi: "ה-AI לא משתמש בזה כרגע — לא כי זה שגוי, אלא כי הראיות מתחת לסף.",
+  distancePrefix: "נדרשים עוד",
+  distanceMiddle: "מקרים עצמאיים תומכים כדי לעבור לרמה",
+  distanceNote: "ראיה נוספת על אותו אירוע/אותה החלטה אינה מקרה נוסף.",
+  unresolvedSuffix: "החלטות מצוטטות עם עסקאות מועמדות שלא סווגו — לא נספרות לאף צד עד לסיווג.",
+};
+
+// --- Evidence Reach V1 (src/components/next-actions.tsx) — the deterministic
+// next-action list beside Monitoring. FACT -> REASON -> DESTINATION. ---
+
+export const nextActions = {
+  title: "מה הצעד הבא",
+  explanation: "פעולות שמוסיפות למערכת מידע אמיתי ממך. כל שורה נעלמת ברגע שהפעולה בוצעה. זו לא רשימת התראות ולא שיפוט על ההחלטות.",
+  loading: "בודק...",
+  empty: "אין כרגע צעד מוצע.",
+  fact: {
+    execPrefix: "ל-",
+    execMiddle: "יש",
+    execSuffix: "עסקאות מועמדות לביצוע שלא סווגו",
+    unreviewed: "— טרם עבר Review",
+    noHorizon: "— לא נקבע תאריך Review",
+    conditionPrefix: "הגיע מועד הבדיקה של תנאי שקילה-מחדש מ-",
+    stalledCasePrefix: "תיק המחקר",
+    stalledCaseSuffix: "לא התקדם זמן רב",
+    rationale: "אפיזודות בהיסטוריה ללא נימוק רשום",
+    unusedDna: "הצהרות שלך שאף השערת DNA פעילה עדיין לא מצטטת",
+    unusedStrategy: "הצהרות שלך שאף עיקרון Strategy נצפה עדיין לא מצטט",
+  },
+  reason: {
+    RESOLVE_EXECUTION_CANDIDATES: "עד לסיווג, ההצהרות מהחלטה זו אינן נספרות כראיה — לא תומכת ולא סותרת.",
+    REVIEW_UNREVIEWED_DECISION: "בלי Review אין Learning, ואין הפרדה בין איכות ההחלטה לתוצאה.",
+    SET_REVIEW_HORIZON: "בלי תאריך Review ה-Monitoring לא יזכיר לך לחזור להחלטה.",
+    RESOLVE_OPEN_REENTRY_CONDITION: "רק אתה קובע אם התנאי שהצבת התקיים; המערכת לא בודקת זאת מול השוק.",
+    CONTINUE_STALLED_CASE: "תיק פתוח בלי החלטה לא מייצר רשומה, ראיה או Review.",
+    ADD_EPISODE_RATIONALE: "נימוק שאתה כותב הוא ראיה לגיטימית ל-DNA ול-Strategy; בלעדיו האפיזודה אילמת.",
+    REGENERATE_WITH_UNUSED_EVIDENCE: "יצירה מחדש עשויה לצטט את ההצהרות האלה; היא לא מעלה ביטחון מעבר למה שהראיות מוכיחות.",
+  } as Record<string, string>,
+  destination: {
+    RESOLVE_EXECUTION_CANDIDATES: "סמן ביצוע",
+    REVIEW_UNREVIEWED_DECISION: "הרץ Review",
+    SET_REVIEW_HORIZON: "קבע תאריך Review",
+    RESOLVE_OPEN_REENTRY_CONDITION: "פתח את ההחלטה",
+    CONTINUE_STALLED_CASE: "פתח את התיק",
+    ADD_EPISODE_RATIONALE: "פתח את היומן",
+    REGENERATE_WITH_UNUSED_EVIDENCE: "פתח את העמוד",
+  } as Record<string, string>,
+};
+
 // --- Decision Follow-Through V1 (src/components/execution-facts.tsx) —
 // investor-confirmed execution facts. Wording never asserts that a trade
 // executed a decision; candidates are candidates until the investor marks

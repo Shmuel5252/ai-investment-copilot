@@ -65,6 +65,8 @@ export const strategyPrincipleVersions = pgTable(
     // over the stored counts always reproduces the stored tier. NULL =
     // counted before this existed (episode-only, legacy); never backfilled.
     independenceBasisJson: jsonb("independence_basis_json"),
+    // Evidence Reach V1 — see dna.ts's provenanceJson.
+    provenanceJson: jsonb("provenance_json"),
   },
   // Defense-in-depth swept across every identity+version table after a
   // real duplicate was found on strategy_principles — see that migration.

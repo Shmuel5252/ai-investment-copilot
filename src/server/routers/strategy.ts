@@ -32,6 +32,11 @@ import {
 } from "@/lib/strategy/resolve-principle-identity";
 import { isUniqueViolation, StaleIdentityVersionError } from "@/db/errors";
 import { loadIndependenceResolver } from "@/lib/evidence/load-independence-resolver";
+import { listDecisionStatementsForInvestor } from "@/db/repositories/decision-statements";
+import { buildInvestorStatements } from "@/lib/ai/investor-statements";
+import { AI_CONTRACTS } from "@/lib/ai/contracts";
+import { CLAUDE_MODEL } from "@/lib/ai/client";
+import { buildProvenance } from "@/lib/evidence/provenance";
 
 export const strategyRouter = router({
   // Fixed baseline risk principles (docs/architecture.md §2.4) — code
@@ -107,18 +112,30 @@ export const strategyRouter = router({
   // surviving proposals against existing ACTIVE OBSERVED principles (and
   // against each other within this same batch) instead of unconditionally
   // creating a new identity every time.
+  //
+  // Evidence Reach V1 (OD-4): observed principles read the same sources as
+  // DNA — effective answers plus decision-time statements — under the same
+  // independence and exclusions. Declared principles are untouched.
   generateObserved: protectedProcedure.mutation(async ({ ctx }) => {
-    const answers = await getAllAnswersForInvestor(db, ctx.investorId);
-    if (answers.length === 0) {
+    const [answers, decisionStatements] = await Promise.all([
+      getAllAnswersForInvestor(db, ctx.investorId),
+      listDecisionStatementsForInvestor(db, ctx.investorId),
+    ]);
+    const statements = buildInvestorStatements(answers, decisionStatements);
+    if (statements.length === 0) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: "No interview answers found yet — complete the onboarding interview first.",
+        message: "No interview answers or recorded decisions found yet — complete the onboarding interview first.",
       });
     }
 
-    const proposed = await proposeObservedPrinciples(
-      answers.map((a) => ({ id: a.id, questionText: a.questionText, answerText: a.answerText }))
-    );
+    const proposed = await proposeObservedPrinciples(statements);
+    const provenance = buildProvenance({
+      generator: "strategy.generateObserved",
+      model: CLAUDE_MODEL,
+      promptContracts: [AI_CONTRACTS.strategyObserve, AI_CONTRACTS.evidenceGrounding, AI_CONTRACTS.hypothesisIdentity],
+      sourceTypes: decisionStatements.length > 0 ? ["interview_answer", "decision_statement"] : ["interview_answer"],
+    });
     // Same shared resolver as dna.ts's generate (Decision Independence
     // V1): evidence is collapsed by independent decision — position
     // episode, confirmed link, or a corroborated cross-ticker weak edge —
@@ -133,10 +150,10 @@ export const strategyRouter = router({
     // reframe what that answer actually says. Checks every citation
     // against the REAL persisted answerText, never the AI's own
     // description.
-    const answerTextById = new Map(answers.map((a) => [a.id, a.answerText]));
+    const statementTextById = new Map(statements.map((s) => [s.id, s.text]));
     const { principles: grounded } = await groundValidatedObservedPrinciples(
       structurallyValidated,
-      answerTextById,
+      statementTextById,
       independence,
       checkEvidenceGrounding
     );
@@ -187,14 +204,19 @@ export const strategyRouter = router({
     for (const resolution of resolutions) {
       if (resolution.action === "new_identity") {
         createdIdentities.push(
-          await insertObservedPrincipleWithEvidence(db, ctx.investorId, {
-            statement: resolution.statement,
-            evidence: resolution.evidence,
-            supportingCount: resolution.supportingCount,
-            contradictingCount: resolution.contradictingCount,
-            evidenceStrength: resolution.evidenceStrength,
-            independenceBasis: resolution.independenceBasis,
-          })
+          await insertObservedPrincipleWithEvidence(
+            db,
+            ctx.investorId,
+            {
+              statement: resolution.statement,
+              evidence: resolution.evidence,
+              supportingCount: resolution.supportingCount,
+              contradictingCount: resolution.contradictingCount,
+              evidenceStrength: resolution.evidenceStrength,
+              independenceBasis: resolution.independenceBasis,
+            },
+            provenance
+          )
         );
       } else if (resolution.action === "new_version") {
         try {
@@ -207,7 +229,8 @@ export const strategyRouter = router({
             contradictingEvidenceCount: resolution.contradictingCount,
             independenceBasis: resolution.independenceBasis,
             newEvidence: resolution.newEvidence,
-            changeReason: "New evidence from a later interview extended this existing pattern.",
+            changeReason: "New evidence from a later interview or a recorded decision extended this existing pattern.",
+            provenance,
           });
           newVersions.push({ principleId: resolution.principleId, version });
         } catch (err) {

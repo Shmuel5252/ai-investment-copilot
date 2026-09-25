@@ -6,6 +6,7 @@ import {
 } from "@/lib/evidence/resolve-independence";
 import type { EvidenceGroundingCheckInput, EvidenceGroundingResult } from "@/lib/ai/dna-grounding";
 import type { PersistedEvidenceForRemediation } from "@/lib/dna/remediate-grounding";
+import { statementIdOf } from "@/lib/evidence/statement-ref";
 
 // Strategy Grounding + Identity Hardening task — the Strategy-specific
 // mirror of src/lib/dna/remediate-grounding.ts's planGroundingRemediation.
@@ -104,7 +105,8 @@ export async function planPrincipleGroundingRemediation(
   const freshSupportedIds = new Set<string>();
 
   for (const ev of rawEvidence) {
-    if (ev.interviewAnswerId === null) {
+    const statementId = statementIdOf(ev);
+    if (statementId === null) {
       // Nothing to ground against — Evidence Grounding only ever judges a
       // claim against real InterviewAnswer.answerText. Still gets its own
       // "supported by convention" check row when a plan is persisted, so
@@ -121,7 +123,7 @@ export async function planPrincipleGroundingRemediation(
       continue;
     }
 
-    const sourceAnswerText = answerTextById.get(ev.interviewAnswerId);
+    const sourceAnswerText = answerTextById.get(statementId);
     if (sourceAnswerText === undefined) {
       checks.push({
         evidenceId: ev.id,
@@ -156,7 +158,7 @@ export async function planPrincipleGroundingRemediation(
   const survivingEvidence = rawEvidence.filter((e) => freshSupportedIds.has(e.id));
   const assessed = assessCitations(
     independence,
-    survivingEvidence.map((e) => ({ interviewAnswerId: e.interviewAnswerId, stance: e.stance, evidenceId: e.id }))
+    survivingEvidence.map((e) => ({ interviewAnswerId: e.interviewAnswerId, decisionStatement: e.decisionStatement ?? null, stance: e.stance, evidenceId: e.id }))
   );
 
   return {

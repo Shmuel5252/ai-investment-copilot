@@ -27,8 +27,8 @@ type Stance = "supporting" | "contradicting";
 // s supporting + c contradicting citations, each about its OWN independent case.
 function citationsFor(s: number, c: number) {
   return [
-    ...Array.from({ length: s }, (_, i) => ({ interviewAnswerId: `s${i}`, stance: "supporting" as Stance, description: "d" })),
-    ...Array.from({ length: c }, (_, i) => ({ interviewAnswerId: `c${i}`, stance: "contradicting" as Stance, description: "d" })),
+    ...Array.from({ length: s }, (_, i) => ({ statementId: `s${i}`, interviewAnswerId: `s${i}`, stance: "supporting" as Stance, description: "d" })),
+    ...Array.from({ length: c }, (_, i) => ({ statementId: `c${i}`, interviewAnswerId: `c${i}`, stance: "contradicting" as Stance, description: "d" })),
   ];
 }
 const identityKeys = (evidence: { interviewAnswerId: string }[]) =>
@@ -251,7 +251,7 @@ describe("F/G. independent-case counting still drives S and C", () => {
       facts: [],
     });
   const independence = resolverFor();
-  const cite = (id: string, stance: Stance) => ({ interviewAnswerId: id, stance, description: "d" });
+  const cite = (id: string, stance: Stance) => ({ statementId: id, interviewAnswerId: id, stance, description: "d" });
   const strategyOf = (evidence: ReturnType<typeof cite>[]) =>
     validateProposedObservedPrinciples([{ statement: "claim", evidence }], independence)[0];
 

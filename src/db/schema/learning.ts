@@ -28,6 +28,8 @@ export const learningInsightVersions = pgTable(
     // same meaning here: who authored this version of the insight.
     createdBy: dnaCreatedByEnum("created_by").notNull(),
     changeReason: text("change_reason"),
+    // Evidence Reach V1 — see dna.ts's provenanceJson.
+    provenanceJson: jsonb("provenance_json"),
   },
   // Defense-in-depth swept across every identity+version table after a
   // real duplicate was found on strategy_principles — see that migration.

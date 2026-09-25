@@ -6,6 +6,7 @@ import { trpc } from "@/trpc/react";
 import { useSubmitGuard } from "@/lib/use-submit-guard";
 import { Num } from "@/components/num";
 import { BackLink } from "@/components/back-link";
+import { ReachLine } from "@/components/evidence-reach";
 import {
   strategyPage as t,
   evidenceStrengthLabel,
@@ -29,6 +30,9 @@ export default function StrategyPage() {
   const guard = useSubmitGuard();
   const utils = trpc.useUtils();
   const list = trpc.strategy.list.useQuery();
+  // Evidence Reach V1 — read-only transparency per observed principle.
+  const reach = trpc.evidence.reach.useQuery();
+  const reachById = new Map((reach.data?.claims ?? []).filter((c) => c.kind === "strategy_principle").map((c) => [c.id, c]));
 
   const ensureDefaults = trpc.strategy.ensureDefaults.useMutation({
     onSuccess: () => utils.strategy.list.invalidate(),
@@ -53,7 +57,10 @@ export default function StrategyPage() {
     onSuccess: () => utils.strategy.list.invalidate(),
   });
   const generateObserved = trpc.strategy.generateObserved.useMutation({
-    onSuccess: () => utils.strategy.list.invalidate(),
+    onSuccess: () => {
+      utils.strategy.list.invalidate();
+      utils.evidence.reach.invalidate();
+    },
   });
   const approveVersion = trpc.strategy.approveVersion.useMutation({
     onSuccess: () => utils.strategy.list.invalidate(),
@@ -204,6 +211,7 @@ export default function StrategyPage() {
                       <Num>{version.contradictingEvidenceCount}</Num> {t.contradictingLabel}
                     </p>
                   )}
+                  {version.principleType === "observed" && <ReachLine reach={reachById.get(p.id)} />}
                   <button
                     onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                     className="mt-2 text-xs text-journal-accent underline"

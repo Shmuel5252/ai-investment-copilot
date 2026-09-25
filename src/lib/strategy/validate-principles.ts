@@ -5,6 +5,7 @@ import {
   type IndependenceBasis,
 } from "@/lib/evidence/resolve-independence";
 import type { ProposedDeclaredPrinciple, ProposedObservedPrinciple } from "@/lib/ai/strategy";
+import { parseStatementId, type DecisionStatementRef } from "@/lib/evidence/statement-ref";
 
 // The AI's citations are never trusted blindly here either (same trust
 // boundary as src/lib/dna/validate-hypotheses.ts) — every citedAnswerId
@@ -48,7 +49,9 @@ export function validateProposedDeclaredPrinciples(
 // engine as DNA" (docs/architecture.md §2.4) means the same validation
 // trust boundary too, not just the same threshold table.
 export interface ValidatedPrincipleEvidence {
-  interviewAnswerId: string;
+  /** The cited InterviewAnswer, or null for a decision-time statement (Evidence Reach V1 / OD-4). */
+  interviewAnswerId: string | null;
+  decisionStatement?: DecisionStatementRef | null;
   stance: "supporting" | "contradicting";
   description: string;
 }
@@ -77,15 +80,14 @@ export function validateProposedObservedPrinciples(
     if (!p || typeof p.statement !== "string" || p.statement.trim() === "") continue;
     if (!Array.isArray(p.evidence)) continue;
 
-    const validEvidence: ValidatedPrincipleEvidence[] = p.evidence.filter(
-      (e): e is ValidatedPrincipleEvidence =>
-        !!e &&
-        typeof e.interviewAnswerId === "string" &&
-        independence.hasAnswer(e.interviewAnswerId) &&
-        (e.stance === "supporting" || e.stance === "contradicting") &&
-        typeof e.description === "string" &&
-        e.description.trim() !== ""
-    );
+    const validEvidence: ValidatedPrincipleEvidence[] = [];
+    for (const e of p.evidence) {
+      if (!e || (e.stance !== "supporting" && e.stance !== "contradicting")) continue;
+      if (typeof e.description !== "string" || e.description.trim() === "") continue;
+      const source = parseStatementId(e.statementId);
+      if (source === null || !independence.hasStatement(source)) continue;
+      validEvidence.push({ interviewAnswerId: source.interviewAnswerId, decisionStatement: source.decisionStatement ?? null, stance: e.stance, description: e.description });
+    }
 
     if (validEvidence.length === 0) continue;
 

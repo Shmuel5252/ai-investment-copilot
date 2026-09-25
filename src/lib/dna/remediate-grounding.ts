@@ -5,6 +5,7 @@ import {
   type IndependenceBasis,
 } from "@/lib/evidence/resolve-independence";
 import type { EvidenceGroundingCheckInput, EvidenceGroundingResult } from "@/lib/ai/dna-grounding";
+import { statementIdOf, type DecisionStatementRef } from "@/lib/evidence/statement-ref";
 
 // DNA Grounding Remediation — a SEPARATE orchestration from
 // groundValidatedHypotheses() (ground-evidence.ts), even though both
@@ -30,6 +31,8 @@ export interface PersistedEvidenceForRemediation {
   id: string;
   /** null for Evidence sourced from something other than an InterviewAnswer (e.g. a LearningInsight agreement, a manual note) — Evidence Grounding only ever judges against real answerText, so such rows are never sent through grounding at all (see below). */
   interviewAnswerId: string | null;
+  /** Evidence Reach V1: a decision-statement citation (then interviewAnswerId is null); grounded against the statement text like an answer. */
+  decisionStatement?: DecisionStatementRef | null;
   stance: "supporting" | "contradicting";
 }
 
@@ -136,7 +139,8 @@ export async function planGroundingRemediation(
   const freshSupportedIds = new Set<string>();
 
   for (const ev of rawEvidence) {
-    if (ev.interviewAnswerId === null) {
+    const statementId = statementIdOf(ev);
+    if (statementId === null) {
       // Nothing to ground against (e.g. a LearningInsight-sourced
       // agreement, or a manual note) — Evidence Grounding only ever
       // judges a claim against real InterviewAnswer.answerText, so this
@@ -161,7 +165,7 @@ export async function planGroundingRemediation(
       continue;
     }
 
-    const sourceAnswerText = answerTextById.get(ev.interviewAnswerId);
+    const sourceAnswerText = answerTextById.get(statementId);
     if (sourceAnswerText === undefined) {
       // Shouldn't happen for a real, persisted citation — fail closed,
       // same convention as ground-evidence.ts's own defensive branch.
@@ -198,7 +202,7 @@ export async function planGroundingRemediation(
   const survivingEvidence = rawEvidence.filter((e) => freshSupportedIds.has(e.id));
   const assessed = assessCitations(
     independence,
-    survivingEvidence.map((e) => ({ interviewAnswerId: e.interviewAnswerId, stance: e.stance, evidenceId: e.id }))
+    survivingEvidence.map((e) => ({ interviewAnswerId: e.interviewAnswerId, decisionStatement: e.decisionStatement ?? null, stance: e.stance, evidenceId: e.id }))
   );
 
   return {

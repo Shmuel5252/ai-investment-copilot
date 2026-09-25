@@ -114,6 +114,12 @@ SESSION_SECRET=          # חתימת cookie session
 - AI מפרש ומנתח (נרטיב, חילוץ Thesis, השערות, שאלות המשך, זיהוי דפוסים,
   Devil's Advocate) — **לא ממציא facts**.
 - Judgment משמעותי חייב Evidence מקושר; בלי זה → Insufficient Evidence.
+- **מקורות ראיה ל-DNA/Strategy נצפית (Evidence Reach V1, OD-1):** רק הצהרות
+  שהמשקיע כתב בעצמו — תשובות ראיון והטקסטים שכתב בזמן ההחלטה (נימוק/
+  סיכונים/תנאי יציאה), מתויגות מקור, verbatim. לעולם לא טקסט AI, Later
+  Context, Review, Outcome, ביצוע. אין Statement ID לשום דבר אחר, ולכן אין
+  דרך לצטט אותו. עצמאות של החלטה — רק דרך עובדת `executed` שהמשקיע אישר
+  (OD-2), מועמדות לא מסווגות = לא נספר. ר' `docs/architecture.md` §2.11.
 - Historical records (ר' `docs/data-model.md` §10 לרשימה המדויקת) לא
   נדרסים לעולם — repository layer חושף רק `insert` עליהם. עקיפה ב-SQL
   ישיר כפופה לכלל הצר ב-Autonomous Working Rules (גישת SQL ישירה

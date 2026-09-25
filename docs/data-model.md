@@ -58,9 +58,16 @@ status(active|user_rejected)`.
 **DNAHypothesisVersion** (append-only) — `id, dna_hypothesis_id,
 version_number, statement_text, evidence_strength, supporting_evidence_count,
 contradicting_evidence_count, created_at, created_by(ai_generated|
-user_correction|system_grounding_revalidation|system_confidence_recalculation), change_reason`.
+user_correction|system_grounding_revalidation|system_confidence_recalculation), change_reason,
+provenance_json?`.
 - נוצר ע"י: AI (ניסוח) + קוד (evidence_strength, ר' §Evidence Strength
   Table). נצרך ע"י: DNA view, Personal Fit, Decision Snapshot.
+- **`provenance_json`** (Evidence Reach V1, מיגרציה `0017`; גם ב-
+  `strategy_principle_versions` ו-`learning_insight_versions`): מה ייצר את
+  הגרסה — `generator`, `model`, `promptContracts` (`src/lib/ai/contracts.ts`),
+  `evidenceSourceContract`, `independencePolicy`, `sourceTypes`, `generatedAt`,
+  `codeVersion`; ב-carry מ-Learning גם `carriedFromLearningInsightId` (מפתח
+  ה-replay). NULL בכל גרסה שנכתבה לפני כן — לעולם לא backfill.
 - **`created_by=system_grounding_revalidation`** (DNA Grounding
   Remediation, Autonomous Unit 3): ערך שלישי, נוסף כי אף אחד משני
   הערכים הקיימים לא כן — `ai_generated` מרמז הצעה טרייה מ-`dna.generate`,
@@ -112,9 +119,19 @@ grounding). בלי זה גרסה כזו הייתה נופלת בשקט ל-raw ו
 `{dna_hypothesis_id, strategy_principle_id, learning_insight_id}` (CHECK,
 subject), `stance(supporting|contradicting)`, בדיוק אחד או אפס מ-
 `{transaction_id, interview_answer_id, decision_review_id,
-source_learning_insight_id}` + `manual_note_text?` (CHECK, מקור),
-`description, created_at`.
+source_learning_insight_id, decision_id}` + `manual_note_text?` (CHECK, מקור),
+`decision_statement_kind?(reasoning|risks|exit_conditions)` — **שניהם יחד או
+אף אחד** (CHECK `evidence_decision_statement_kind_iff`), `description, created_at`.
 **Immutable לחלוטין — לעולם לא נערך/נמחק.**
+- **הצהרת החלטה כמקור (Evidence Reach V1, מיגרציה `0017`, 2026-09-25):**
+  `decision_id` + `decision_statement_kind` מצביעים על אחד משלושת הטקסטים
+  שהמשקיע כתב בזמן ההחלטה לתוך ה-`DecisionSnapshot` הקפוא — הטקסט לא מועתק
+  לכאן. ה-AI מצטט Statement ID (`<answer uuid>` או
+  `decision:<decision_id>:<kind>`, `src/lib/evidence/statement-ref.ts`);
+  `parseStatementId` מקבל רק שתי צורות אלה ו-`hasStatement` מאמת מול רשומות
+  המשקיע — לטקסט AI, Later Context, Review, Outcome אין מזהה בכלל. Grounding
+  נבדק מול הטקסט שהמשקיע כתב (`sourceKind: decision_statement`). שורות
+  ישנות (תשובה בלבד) תקפות כפי שהן.
 - נוצר ע"י: קוד (מדפוסי עסקאות) + AI (מפרשנות ראיון, תמיד עם source_id
   אמיתי). נצרך ע"י: חישוב Evidence Strength, כל "View Evidence".
 - **Raw vs. Effective evidence (DNA Grounding Remediation, Autonomous
@@ -236,6 +253,20 @@ Learning Insight מחוץ ל-scope וממשיך ב-`countIndependentCases`.
   policy version, קבוצות וסיבותיהן, קשתות חלשות, review-only, facts שנוצלו.
   סידור דטרמיניסטי; byte-identity מוגדר מעל `serializeIndependenceBasis` (מפתחות
   ממוינים — `jsonb` ממיין מחדש).
+- **v2 — הצהרות החלטה (Evidence Reach V1, 2026-09-25; `independence-policy-v2`,
+  `policy.decisionCases = evidence-source-v1`, `policy.candidateDayTolerance = 1`):** ציטוט `decisionStatement`
+  מקבל label `decision:<id>` (כל הצהרות ההחלטה = קבוצה אחת, reason
+  `decision_case`), ובמיזוג לפי עובדת `executed` אפקטיבית (§5 Decision
+  Follow-Through) גם את ה-`episode:`/`fact:` של העסקאות המבוצעות + עוגנים
+  לקשתות חלשות. החלטה **UNRESOLVED** (מועמדות ביצוע לא מסווגות, OD-2 C) היא
+  review-only: מחוץ לכל קבוצה וספירה, מדווחת ב-`unresolvedDecisionIds`.
+  הכרעת המקרה (`src/lib/evidence/decision-cases.ts`) מחושבת ב-loader מרשומות
+  בלבד — החלטות, עסקאות, עובדות ביצוע אפקטיביות — לעולם לא מקרבה או כוונה.
+  **OD-R2:** מיזוג דרך עובדות `executed` משני episodes = קבוצה אחת עם איחוד
+  ה-labels; ה-basis רושם `executed_fact` reason לכל עובדה (ids) לצד
+  `decision_case` ו-`same_episode` — שחזור מלא: החלטה → עובדות → episodes →
+  איחוד. בסיסים שנספרו ב-v1 נשארים כפי שהם (אין backfill; recalculation
+  דטרמיניסטית עם הגארד הכיווני הקיים).
 - **`TransactionLinkFact` / `TransactionLinkFactMember`** — ההצהרה המחייבת
   היחידה של המשקיע (`verdict` = `linked` | `independent`); append-only +
   `supersedes_fact_id` (יורש אחד לכל היותר; עובדה אפקטיבית = ראש השרשרת). אין
@@ -266,7 +297,7 @@ Learning Insight מחוץ ל-scope וממשיך ב-`countIndependentCases`.
 version_number, principle_type(declared|observed|validated), statement_text,
 rationale_text, created_at, created_by(user_declared|ai_observed|
 system_default|system_grounding_revalidation|system_confidence_recalculation), change_reason, evidence_strength?, supporting_evidence_count?,
-contradicting_evidence_count?`. שלושת השדות האחרונים **nullable** —
+contradicting_evidence_count?, provenance_json?` (provenance — ר' §2). שלושת השדות `evidence_*`/`*_count` **nullable** —
 נמלאים רק כש-`principle_type=observed` (אותה טבלת סף כמו DNA, ר' §2;
 קוד תמיד מחשב, לעולם לא ה-LLM). `declared` הוא ציטוט מפורש של המשתמש
 ו-`validated` הוא ברירת מחדל קבועה של המערכת — אף אחד מהם אינו דפוס
@@ -662,11 +693,36 @@ created_at`.
 **LearningInsightVersion** (append-only) — `id, learning_insight_id,
 version_number, statement_text, decision_quality_pattern_json /
 thesis_accuracy_pattern_json (אגרגציה דטרמיניסטית), evidence_strength
-(אותה טבלה כמו DNA), created_at, created_by, change_reason`.
+(אותה טבלה כמו DNA), created_at, created_by, change_reason, provenance_json?`.
+**זהות = (investor_id, family)** (OD-R1, הוקפא 2026-09-25): זרם סינתזה אחד
+למשפחה ב-V1; `learning.generate` חוזר לא יוצר identity שני. **גרסה חדשה רק
+כשטביעת מצב-הראיה האפקטיבי משתנה** — `provenance_json.evidenceFingerprint` =
+`lef-v1:` + רשומות `decisionId|decisionReviewId|stance` ממוינות וייחודיות
+(`src/lib/learning/evidence-fingerprint.ts`; קלט = הציטוטים המאומתים של
+הסינתזה הנוכחית ממופים להחלטות של המשקיע). שווה לטביעת הגרסה האחרונה →
+no-op מדווח (`wordingDiffers`), אחרת גרסה. `citedReviews` בכל גרסה כוללים
+`decisionId`; גרסה ישנה בלי provenance מקבלת טביעה משורות ה-Evidence של
+ה-identity (re-baseline חד-פעמי, רק append). שורות Evidence הן per-identity,
+append-only, לפי (review, stance) — היפוך stance מוסיף שורה, לא עורך ולא
+מוחק; החלטה שהסינתזה כבר לא מצטטת נשארת בשורות ההיסטוריות ונעלמת רק
+מ-`citedReviews` של הגרסה. נעילת advisory למשקיע; אין unique index כי
+כפילויות היסטוריות נשארות, האחרונה היא הקנונית.
 
-**סגירת הלולאה ל-DNA:** אישור משתמש (Correction, status=led_to_new_version)
-יוצר `DNAHypothesisVersion` חדש שמצטט את ה-LearningInsight עצמו כ-Evidence
-(`Evidence.learning_insight_id`) — שימוש חוזר במנגנון Evidence הקיים.
+**סגירת הלולאה ל-DNA (OD-3, Evidence Reach V1; הוקשח ב-review 2026-09-25):**
+אישור משתמש (Correction, status=led_to_new_version) יוצר `DNAHypothesis` חדש
+ש**נושא** את החלטות-המקור של הגרסה שאושרה (`provenance_json.citedReviews` של
+גרסת ה-Learning — ה-Review וה-stance שהיא נתנה; fallback לשורות Evidence
+בגרסאות ישנות): מקרה אחד לכל החלטה (כמה Reviews של אותה החלטה = מקרה אחד).
+כל הצהרה שהמשקיע כתב בהחלטה (נימוק/סיכונים/תנאי יציאה) נבדקת מול ניסוח
+ההשערה החדשה ב-`checkEvidenceGrounding` (fail-closed); רק `supported` הופכת
+לשורת Evidence עם `decision_id` + `decision_statement_kind` של ההצהרה שביססה.
+ללא אף הצהרה מבוססת — אין השערה ואין Correction. הספירה דרך `assessCitations`
+תחת OD-2. ההסכמה והתובנה עצמן אינן ראיה — **אין** שורת
+`source_learning_insight_id` חדשה (העמודה נשארת בסכמה; שתי שורות היסטוריות
+סינתטיות כאלה נשארות כפי שהן). `provenance_json` של ההשערה: generator
+`learning.agree_carry`, model + חוזה grounding, `carriedFromLearningInsightId`
+= מפתח ה-replay (נבדק **לפני** כל קריאת AI): הסכמה חוזרת/מקבילה מחזירה את
+אותה השערה בלי Correction נוסף.
 
 ---
 

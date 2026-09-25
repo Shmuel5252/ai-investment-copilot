@@ -64,6 +64,25 @@ async function loadFactRowsForDecision(db: DbOrTx, decisionId: string): Promise<
   return rows;
 }
 
+/** EFFECTIVE (chain-head) facts of EVERY decision of one investor — the OD-2 case-resolution input (src/lib/evidence/decision-cases.ts). Read-only. */
+export async function loadEffectiveExecutionFactsForInvestor(
+  db: DbOrTx,
+  investorId: string
+): Promise<{ id: string; decisionId: string; transactionId: string; verdict: ExecutionVerdict }[]> {
+  const rows = await db
+    .select({
+      id: decisionExecutionFacts.id,
+      decisionId: decisionExecutionFacts.decisionId,
+      transactionId: decisionExecutionFacts.transactionId,
+      verdict: decisionExecutionFacts.verdict,
+      supersedesFactId: decisionExecutionFacts.supersedesFactId,
+    })
+    .from(decisionExecutionFacts)
+    .where(eq(decisionExecutionFacts.investorId, investorId))
+    .orderBy(asc(decisionExecutionFacts.createdAt), asc(decisionExecutionFacts.id));
+  return selectEffectiveExecutionFacts(rows).map((r) => ({ id: r.id, decisionId: r.decisionId, transactionId: r.transactionId, verdict: r.verdict }));
+}
+
 export interface EffectiveExecutionFact {
   id: string;
   verdict: ExecutionVerdict;

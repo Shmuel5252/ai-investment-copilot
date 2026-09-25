@@ -1,5 +1,6 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
 import { normalizeStructuredCollection } from "./structured-output";
+import { formatInvestorStatements, INVESTOR_STATEMENT_RULES, type InvestorStatementForAnalysis } from "./investor-statements";
 
 export interface InterviewAnswerForAnalysis {
   id: string;
@@ -125,7 +126,8 @@ export async function extractDeclaredPrinciples(
 // ---------------------------------------------------------------------
 
 export interface ProposedPrincipleEvidence {
-  interviewAnswerId: string;
+  /** An interview-answer uuid or a "decision:<id>:<kind>" statement id — parsed and validated in code, never trusted. */
+  statementId: string;
   stance: "supporting" | "contradicting";
   description: string;
 }
@@ -135,17 +137,19 @@ export interface ProposedObservedPrinciple {
   evidence: ProposedPrincipleEvidence[];
 }
 
-const OBSERVE_SYSTEM_PROMPT = `You analyze a personal investor's onboarding interview answers to propose hypotheses about recurring risk-management and strategy-relevant behavior — position sizing habits, diversification, exit/stop discipline, whether they average down, holding-period consistency. This is specifically about risk and strategy behavior, not general psychology (that's covered elsewhere) — don't propose a hypothesis about something outside that scope.
+const OBSERVE_SYSTEM_PROMPT = `You analyze statements a personal investor wrote themselves — onboarding interview answers about their trades, and what they wrote when recording investment decisions — to propose hypotheses about recurring risk-management and strategy-relevant behavior — position sizing habits, diversification, exit/stop discipline, whether they average down, holding-period consistency. This is specifically about risk and strategy behavior, not general psychology (that's covered elsewhere) — don't propose a hypothesis about something outside that scope.
+
+${INVESTOR_STATEMENT_RULES}
 
 Write each hypothesis's statement and each evidence description in Hebrew — natural, fluent Hebrew, not a forced or literal translation. Keep tickers, company/product names, and established financial terms (e.g. P/E, margin of safety) in English exactly as an investor writing in natural mixed Hebrew/English would — that mixed style is expected, not a fallback. Keep these fixed terms in English exactly as spelled, never translated: DNA, Evidence Strength, Personal Fit, Portfolio Fit, and Strategy (when naming a Strategy principle specifically). This is about the wording only — it does not change which answer you cite or whether evidence is supporting or contradicting.
 
 Ground rules:
-- Only propose a hypothesis if you can point to specific interview answers as evidence. A hypothesis with no evidence is useless — don't propose it.
-- Cite evidence using the exact "Answer ID" given for each answer. Never invent an ID, and never cite an answer as evidence for something it doesn't actually support.
-- Do not overclaim: a hypothesis (and its evidence description) should describe only the behavioral tendency the answer actually shows, never a broader stated preference or goal you're inferring from it. For example, an answer showing more confidence deciding on a company the investor already knew well supports "you tend to feel more confident in familiar names" — it does NOT support "you prefer to avoid unfamiliar companies", a stronger, different claim the answer doesn't establish. This applies to the evidence description too, not just the hypothesis statement: describe what the answer actually says, not the wider conclusion you're drawing from it.
-- Distinguish supporting from contradicting evidence honestly — if an answer partially undercuts a pattern you're proposing, cite it as contradicting, don't omit it.
-- It is completely fine, and expected with a small number of answers, to propose few hypotheses (even none) or hypotheses with only 1-2 pieces of evidence — thin evidence is for the system to flag as low-confidence, not for you to pad or oversell.
-- Write each hypothesis statement the way you'd describe a real tendency to the investor directly ("You tend to...", "You seem to..."), grounded only in what's actually in the answers — never invent numbers, percentages, or facts not present in the text you were given.
+- Only propose a hypothesis if you can point to specific statements as evidence. A hypothesis with no evidence is useless — don't propose it.
+- Cite evidence using the exact "Statement ID" given for each statement. Never invent an ID, and never cite a statement as evidence for something it doesn't actually support.
+- Do not overclaim: a hypothesis (and its evidence description) should describe only the behavioral tendency the statement actually shows, never a broader stated preference or goal you're inferring from it. For example, an answer showing more confidence deciding on a company the investor already knew well supports "you tend to feel more confident in familiar names" — it does NOT support "you prefer to avoid unfamiliar companies", a stronger, different claim the answer doesn't establish. This applies to the evidence description too, not just the hypothesis statement: describe what the statement actually says, not the wider conclusion you're drawing from it.
+- Distinguish supporting from contradicting evidence honestly — if a statement partially undercuts a pattern you're proposing, cite it as contradicting, don't omit it.
+- It is completely fine, and expected with a small number of statements, to propose few hypotheses (even none) or hypotheses with only 1-2 pieces of evidence — thin evidence is for the system to flag as low-confidence, not for you to pad or oversell.
+- Write each hypothesis statement the way you'd describe a real tendency to the investor directly ("You tend to...", "You seem to..."), grounded only in what's actually in the statements — never invent numbers, percentages, or facts not present in the text you were given.
 - Propose at most 5 hypotheses.`;
 
 const OBSERVE_TOOL = {
@@ -171,14 +175,14 @@ const OBSERVE_TOOL = {
               items: {
                 type: "object" as const,
                 properties: {
-                  interviewAnswerId: { type: "string" as const },
+                  statementId: { type: "string" as const, description: "The exact Statement ID of the cited statement." },
                   stance: { type: "string" as const, enum: ["supporting", "contradicting"] },
                   description: {
                     type: "string" as const,
-                    description: "One sentence on how this specific answer supports or contradicts the hypothesis.",
+                    description: "One sentence on how this specific statement supports or contradicts the hypothesis.",
                   },
                 },
-                required: ["interviewAnswerId", "stance", "description"],
+                required: ["statementId", "stance", "description"],
                 additionalProperties: false,
               },
             },
@@ -194,9 +198,9 @@ const OBSERVE_TOOL = {
 };
 
 export async function proposeObservedPrinciples(
-  answers: InterviewAnswerForAnalysis[]
+  statements: InvestorStatementForAnalysis[]
 ): Promise<ProposedObservedPrinciple[]> {
-  if (answers.length === 0) return [];
+  if (statements.length === 0) return [];
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
@@ -207,7 +211,7 @@ export async function proposeObservedPrinciples(
     messages: [
       {
         role: "user",
-        content: `Here are this investor's onboarding interview answers:\n\n${formatAnswers(answers)}`,
+        content: `Here are the statements this investor wrote:\n\n${formatInvestorStatements(statements)}`,
       },
     ],
   });

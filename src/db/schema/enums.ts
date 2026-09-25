@@ -104,6 +104,11 @@ export const linkFactVerdictEnum = pgEnum("link_fact_verdict", ["linked", "indep
 // dated on/after the decision) but never asserts either verdict itself.
 export const executionFactVerdictEnum = pgEnum("execution_fact_verdict", ["executed", "unrelated"]);
 
+// Evidence Reach V1 (OD-1) — which decision-time investor text an Evidence
+// row cites: DecisionSnapshot.user_reasoning_text / risks_considered_text /
+// exit_conditions_text. Never an AI text, never Later Context.
+export const decisionStatementKindEnum = pgEnum("decision_statement_kind", ["reasoning", "risks", "exit_conditions"]);
+
 export const caseStatusEnum = pgEnum("case_status", ["researching", "decided", "archived"]);
 
 export const decisionTypeEnum = pgEnum("decision_type", [

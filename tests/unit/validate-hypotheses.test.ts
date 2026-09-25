@@ -20,8 +20,8 @@ describe("validateProposedHypotheses", () => {
       {
         statement: "You tend to buy after sharp drops.",
         evidence: [
-          { interviewAnswerId: "a1", stance: "supporting", description: "Bought AAPL after a drop." },
-          { interviewAnswerId: "a2", stance: "supporting", description: "Bought MSFT after a drop too." },
+          { statementId: "a1", stance: "supporting", description: "Bought AAPL after a drop." },
+          { statementId: "a2", stance: "supporting", description: "Bought MSFT after a drop too." },
         ],
       },
     ];
@@ -38,8 +38,8 @@ describe("validateProposedHypotheses", () => {
       {
         statement: "You tend to buy after sharp drops.",
         evidence: [
-          { interviewAnswerId: "a1", stance: "supporting", description: "Real citation." },
-          { interviewAnswerId: "made-up-id", stance: "supporting", description: "Hallucinated citation." },
+          { statementId: "a1", stance: "supporting", description: "Real citation." },
+          { statementId: "made-up-id", stance: "supporting", description: "Hallucinated citation." },
         ],
       },
     ];
@@ -53,11 +53,11 @@ describe("validateProposedHypotheses", () => {
     const proposed: ProposedHypothesis[] = [
       {
         statement: "A hypothesis with no real evidence.",
-        evidence: [{ interviewAnswerId: "fake-1", stance: "supporting", description: "Not real." }],
+        evidence: [{ statementId: "fake-1", stance: "supporting", description: "Not real." }],
       },
       {
         statement: "A hypothesis with real evidence.",
-        evidence: [{ interviewAnswerId: "a1", stance: "supporting", description: "Real." }],
+        evidence: [{ statementId: "a1", stance: "supporting", description: "Real." }],
       },
     ];
     const result = validateProposedHypotheses(proposed, resolverFromCaseKeys(caseKeys));
@@ -71,11 +71,11 @@ describe("validateProposedHypotheses", () => {
       {
         statement: "Looks well-evidenced at a glance.",
         evidence: [
-          { interviewAnswerId: "a1", stance: "supporting", description: "x" },
-          { interviewAnswerId: "a2", stance: "supporting", description: "x" },
-          { interviewAnswerId: "a3", stance: "supporting", description: "x" },
-          { interviewAnswerId: "fake-1", stance: "supporting", description: "x" },
-          { interviewAnswerId: "fake-2", stance: "supporting", description: "x" },
+          { statementId: "a1", stance: "supporting", description: "x" },
+          { statementId: "a2", stance: "supporting", description: "x" },
+          { statementId: "a3", stance: "supporting", description: "x" },
+          { statementId: "fake-1", stance: "supporting", description: "x" },
+          { statementId: "fake-2", stance: "supporting", description: "x" },
         ],
       },
     ];
@@ -91,10 +91,10 @@ describe("validateProposedHypotheses", () => {
       {
         statement: "Mostly buys dips, with one exception.",
         evidence: [
-          { interviewAnswerId: "a1", stance: "supporting", description: "x" },
-          { interviewAnswerId: "a2", stance: "supporting", description: "x" },
-          { interviewAnswerId: "a3", stance: "supporting", description: "x" },
-          { interviewAnswerId: "a4", stance: "contradicting", description: "Bought at a high once." },
+          { statementId: "a1", stance: "supporting", description: "x" },
+          { statementId: "a2", stance: "supporting", description: "x" },
+          { statementId: "a3", stance: "supporting", description: "x" },
+          { statementId: "a4", stance: "contradicting", description: "Bought at a high once." },
         ],
       },
     ];
@@ -106,7 +106,7 @@ describe("validateProposedHypotheses", () => {
   it("rejects a hypothesis with no statement text", () => {
     const caseKeys = identityCaseKeys(["a1"]);
     const proposed = [
-      { statement: "", evidence: [{ interviewAnswerId: "a1", stance: "supporting", description: "x" }] },
+      { statement: "", evidence: [{ statementId: "a1", stance: "supporting", description: "x" }] },
     ] as ProposedHypothesis[];
     expect(validateProposedHypotheses(proposed, resolverFromCaseKeys(caseKeys))).toEqual([]);
   });
@@ -132,9 +132,9 @@ describe("validateProposedHypotheses", () => {
       {
         statement: "You tend to buy after sharp drops.",
         evidence: [
-          { interviewAnswerId: "a1", stance: "supporting", description: "Asked about txn-123 in session 1." },
-          { interviewAnswerId: "a2", stance: "supporting", description: "Asked about the same txn-123 again in session 2." },
-          { interviewAnswerId: "a3", stance: "supporting", description: "A genuinely different transaction." },
+          { statementId: "a1", stance: "supporting", description: "Asked about txn-123 in session 1." },
+          { statementId: "a2", stance: "supporting", description: "Asked about the same txn-123 again in session 2." },
+          { statementId: "a3", stance: "supporting", description: "A genuinely different transaction." },
         ],
       },
     ];
@@ -204,9 +204,9 @@ describe("validateProposedHypotheses", () => {
       {
         statement: "You take profits in stages rather than exiting all at once.",
         evidence: [
-          { interviewAnswerId: "answer-buy", stance: "supporting", description: "Entered MP on the initial thesis." },
-          { interviewAnswerId: "answer-sell-1", stance: "supporting", description: "Took partial profit." },
-          { interviewAnswerId: "answer-sell-2", stance: "supporting", description: "Closed the remainder." },
+          { statementId: "answer-buy", stance: "supporting", description: "Entered MP on the initial thesis." },
+          { statementId: "answer-sell-1", stance: "supporting", description: "Took partial profit." },
+          { statementId: "answer-sell-2", stance: "supporting", description: "Closed the remainder." },
         ],
       },
     ];

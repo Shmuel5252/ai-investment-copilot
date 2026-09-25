@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { anthropic } from "@/lib/ai/client";
 import { proposeObservedPrinciples, extractDeclaredPrinciples } from "@/lib/ai/strategy";
 import { proposeDnaHypotheses } from "@/lib/ai/dna";
+import { buildInvestorStatements } from "@/lib/ai/investor-statements";
 import { StructuredOutputError } from "@/lib/ai/structured-output";
 import {
   validateProposedDeclaredPrinciples,
@@ -36,7 +37,7 @@ const CASE_KEYS = new Map([
 const VALID_IDS = new Set(["a1", "a2"]);
 
 const ev = (id: string, stance: string = "supporting", description = "generic description") => ({
-  interviewAnswerId: id,
+  statementId: id,
   stance,
   description,
 });
@@ -77,7 +78,7 @@ const CALLERS: CallerConfig[] = [
     key: "principles",
     label: "observed-principles",
     noToolUseMessage: "AI did not return observed principles via the expected tool call.",
-    call: (a) => proposeObservedPrinciples(a),
+    call: (a) => proposeObservedPrinciples(buildInvestorStatements(a, [])),
     validItem: (n) => ({ statement: `generic observed claim ${n}`, evidence: [ev("a1"), ev("a2", "contradicting")] }),
     domainInvalidItems: evidenceShapedInvalid,
     itemWithHallucinatedCitation: { statement: "claim", evidence: [ev("a1"), ev("hallucinated-id")] },
@@ -112,7 +113,7 @@ const CALLERS: CallerConfig[] = [
     key: "hypotheses",
     label: "hypotheses",
     noToolUseMessage: "AI did not return hypotheses via the expected tool call.",
-    call: (a) => proposeDnaHypotheses(a),
+    call: (a) => proposeDnaHypotheses(buildInvestorStatements(a, [])),
     validItem: (n) => ({ statement: `generic dna claim ${n}`, evidence: [ev("a1"), ev("a2", "contradicting")] }),
     domainInvalidItems: evidenceShapedInvalid,
     itemWithHallucinatedCitation: { statement: "claim", evidence: [ev("a1"), ev("hallucinated-id")] },

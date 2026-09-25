@@ -1,9 +1,11 @@
 import type { EvidenceStrength } from "@/lib/dna/evidence-strength";
 import {
   assessCitations,
+  citationKey,
   type EvidenceIndependenceResolver,
   type IndependenceBasis,
 } from "@/lib/evidence/resolve-independence";
+import type { DecisionStatementRef } from "@/lib/evidence/statement-ref";
 import type { ValidatedObservedPrinciple, ValidatedPrincipleEvidence } from "./validate-principles";
 import type { HypothesisMatchCandidate, HypothesisMatchResult } from "@/lib/ai/dna-identity";
 
@@ -54,7 +56,8 @@ export type ObservedPrincipleMatchFn = (
 ) => Promise<HypothesisMatchResult>;
 
 export interface ExistingEvidenceForCounting {
-  interviewAnswerId: string;
+  interviewAnswerId: string | null;
+  decisionStatement?: DecisionStatementRef | null;
   stance: "supporting" | "contradicting";
 }
 
@@ -116,7 +119,7 @@ function dedupeEvidence(evidence: readonly ValidatedPrincipleEvidence[]): Valida
   const seen = new Set<string>();
   const result: ValidatedPrincipleEvidence[] = [];
   for (const e of evidence) {
-    const key = `${e.interviewAnswerId}::${e.stance}`;
+    const key = citationKey(e);
     if (seen.has(key)) continue;
     seen.add(key);
     result.push(e);
@@ -150,7 +153,7 @@ export async function resolveObservedPrincipleIdentities(
       statement: p.statementText,
       isExisting: true,
       existingEvidenceForCounting: p.evidenceForCounting,
-      rejected: new Set(p.rejectedEvidence.map((e) => `${e.interviewAnswerId}::${e.stance}`)),
+      rejected: new Set(p.rejectedEvidence.map((e) => citationKey(e))),
       touched: false,
       newEvidence: [],
     });
@@ -165,7 +168,7 @@ export async function resolveObservedPrincipleIdentities(
     if (target) {
       target.touched = true;
       target.newEvidence.push(
-        ...principle.evidence.filter((e) => !target.rejected.has(`${e.interviewAnswerId}::${e.stance}`))
+        ...principle.evidence.filter((e) => !target.rejected.has(citationKey(e)))
       );
     } else {
       syntheticCounter += 1;
@@ -205,9 +208,7 @@ export async function resolveObservedPrincipleIdentities(
       // DNA uses: a strict increase in the number of STRONG groups (see
       // resolve-hypothesis-identity.ts) — recording a citation is not
       // proving a new independent case.
-      const resolvableExisting = group.existingEvidenceForCounting.filter((e) =>
-        independence.hasAnswer(e.interviewAnswerId)
-      );
+      const resolvableExisting = group.existingEvidenceForCounting.filter((e) => independence.hasStatement(e));
       const oldGroupCount = independence.resolve(resolvableExisting).groups.length;
       const combinedForCounting = [...resolvableExisting, ...dedupedNewEvidence];
       const combined = assessCitations(independence, combinedForCounting);
@@ -219,12 +220,8 @@ export async function resolveObservedPrincipleIdentities(
         continue;
       }
 
-      const alreadyPersisted = new Set(
-        group.existingEvidenceForCounting.map((e) => `${e.interviewAnswerId}::${e.stance}`)
-      );
-      const evidenceToInsert = dedupedNewEvidence.filter(
-        (e) => !alreadyPersisted.has(`${e.interviewAnswerId}::${e.stance}`)
-      );
+      const alreadyPersisted = new Set(group.existingEvidenceForCounting.map((e) => citationKey(e)));
+      const evidenceToInsert = dedupedNewEvidence.filter((e) => !alreadyPersisted.has(citationKey(e)));
       resolutions.push({
         action: "new_version",
         principleId: group.id,

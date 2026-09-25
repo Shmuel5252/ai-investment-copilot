@@ -137,7 +137,7 @@ describe("1. execution-fact chain is append-only historical truth", () => {
     expect(cycle.cause?.constraint_name).toBe("decision_execution_facts_no_self_supersession");
     expect((await factsOf(d.decisionId)).map((r) => r.id).sort()).toEqual([f1.id, f2.id].sort());
     // and the repository module exposes no update/delete
-    expect(Object.keys(executionRepo).sort()).toEqual(["ExecutionFactValidationError", "insertDecisionExecutionFact", "loadEffectiveExecutionFactsForDecision"]);
+    expect(Object.keys(executionRepo).sort()).toEqual(["ExecutionFactValidationError", "insertDecisionExecutionFact", "loadEffectiveExecutionFactsForDecision", "loadEffectiveExecutionFactsForInvestor"]); // reads only — still no update/delete
   });
 
   it("superseding across decisions, across transactions, or another investor's fact is refused with a neutral message", async () => {
