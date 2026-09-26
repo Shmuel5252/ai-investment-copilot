@@ -154,6 +154,7 @@ Ground rules:
 - It is completely fine, and expected with a small number of statements, to propose few hypotheses (even none) or hypotheses with only 1-2 pieces of evidence — thin evidence is for the system to flag as low-confidence, not for you to pad or oversell.
 - Write each hypothesis statement the way you'd describe a real tendency to the investor directly ("You tend to...", "You seem to..."), grounded only in what's actually in the statements — never invent numbers, percentages, or facts not present in the text you were given.
 - Keep tendency language as tendency: never restate "you tend to" as "you always", "you never" or "in every case" — a universal claim would need every cited statement to establish it, and a single silent instance never contradicts a tendency.
+- Conditional patterns ("when X, you tend to Y"): cite a statement as supporting or contradicting ONLY when the statement itself establishes the material trigger X and the behavior (MATERIAL PRECONDITIONS above). Never fill a missing trigger from ticker or price history, outcomes, Later Context, other statements or general knowledge — evidence qualification is citation-local: one statement, judged by its own words.
 - Propose at most 5 hypotheses.`;
 
 const OBSERVE_TOOL = {

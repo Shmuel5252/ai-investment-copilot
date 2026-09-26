@@ -71,8 +71,8 @@ export interface CarriedCitation extends EvidenceCitation {
 
 export interface CarryGroundingResult {
   citations: CarriedCitation[];
-  /** Every (decision, statement, stance) the gate excluded — reporting only, never evidence. */
-  excluded: { decisionId: string; kind: DecisionStatement["kind"]; stance: "supporting" | "contradicting"; reason: string }[];
+  /** Every (decision, statement, stance) the gate excluded — reporting only, never evidence. `technicalFailure` marks a non-semantic exclusion (call failed / malformed), still fail-closed. */
+  excluded: { decisionId: string; kind: DecisionStatement["kind"]; stance: "supporting" | "contradicting"; reason: string; technicalFailure?: true }[];
   /** Cited decisions with no statement at all (nothing to ground against). */
   decisionsWithoutStatements: string[];
 }
@@ -102,12 +102,12 @@ export async function groundCarryCitations(
       try {
         verdict = await checkGrounding({ hypothesisStatement, stance: c.stance, sourceAnswerText: s.text, sourceKind: "decision_statement" });
       } catch {
-        verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed." };
+        verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed.", technicalFailure: true };
       }
       if (verdict.verdict === "supported") {
         citations.push({ interviewAnswerId: null, decisionStatement: { decisionId: c.decisionId, kind: s.kind }, stance: c.stance, groundingReason: verdict.reason });
       } else {
-        excluded.push({ decisionId: c.decisionId, kind: s.kind, stance: c.stance, reason: verdict.reason });
+        excluded.push({ decisionId: c.decisionId, kind: s.kind, stance: c.stance, reason: verdict.reason, ...(verdict.technicalFailure ? { technicalFailure: true as const } : {}) });
       }
     }
   }

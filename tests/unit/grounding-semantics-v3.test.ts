@@ -120,14 +120,15 @@ const countsOf = (h: { supportingCount: number; contradictingCount: number; evid
 
 describe("contract ids", () => {
   it("bumps the three contracts whose meaning changed and keeps identity/learning untouched", () => {
+    // V3.1 (material preconditions) moved the three ids again; the V3 sentences below are still required verbatim.
     expect(AI_CONTRACTS).toEqual({
-      dnaPropose: "dna-propose-v3-statements",
-      strategyObserve: "strategy-observe-v3-statements",
-      evidenceGrounding: "evidence-grounding-v3-statements",
+      dnaPropose: "dna-propose-v3-1-statements",
+      strategyObserve: "strategy-observe-v3-1-statements",
+      evidenceGrounding: "evidence-grounding-v3-1-statements",
       hypothesisIdentity: "hypothesis-identity-v1",
       learningPropose: "learning-propose-v1",
     });
-    expect(STANCE_SEMANTICS_VERSION).toBe("grounding-semantics-v3");
+    expect(STANCE_SEMANTICS_VERSION).toBe("grounding-semantics-v3-1");
   });
 
   it("the shared rule text states the frozen semantics once", () => {
@@ -337,7 +338,7 @@ describe("remediation provenance shape", () => {
       semanticRule: STANCE_SEMANTICS_VERSION,
       now: new Date("2026-09-25T00:00:00Z"),
     });
-    expect(p).toMatchObject({ generator: "dna.remediateGrounding", model: null, promptContracts: ["evidence-grounding-v3-statements"], revalidatedVersionId: "v1", semanticRule: "grounding-semantics-v3", independencePolicy: "independence-policy-v2", evidenceSourceContract: "evidence-source-v1", generatedAt: "2026-09-25T00:00:00.000Z" });
+    expect(p).toMatchObject({ generator: "dna.remediateGrounding", model: null, promptContracts: ["evidence-grounding-v3-1-statements"], revalidatedVersionId: "v1", semanticRule: "grounding-semantics-v3-1", independencePolicy: "independence-policy-v2", evidenceSourceContract: "evidence-source-v1", generatedAt: "2026-09-25T00:00:00.000Z" });
     expect(p.remediationReason).toContain("grounding-semantics-v3");
     // generation provenance carries none of the remediation-only fields
     const g = buildProvenance({ generator: "dna.generate", model: "m", promptContracts: [AI_CONTRACTS.dnaPropose], sourceTypes: ["interview_answer"] });

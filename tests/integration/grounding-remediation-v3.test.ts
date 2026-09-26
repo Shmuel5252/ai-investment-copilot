@@ -133,7 +133,7 @@ describe("DNA: the c478eba3 shape", () => {
     expect(v2.versionNumber).toBe(2);
     expect(v2.createdBy).toBe("system_grounding_revalidation");
     expect(v2.provenanceJson).toEqual(provenance);
-    expect(v2.provenanceJson).toMatchObject({ generator: "dna.remediateGrounding", model: null, promptContracts: ["evidence-grounding-v3-statements"], revalidatedVersionId: v1.id, semanticRule: "grounding-semantics-v3", independencePolicy: "independence-policy-v2" });
+    expect(v2.provenanceJson).toMatchObject({ generator: "dna.remediateGrounding", model: null, promptContracts: ["evidence-grounding-v3-1-statements"], revalidatedVersionId: v1.id, semanticRule: "grounding-semantics-v3-1", independencePolicy: "independence-policy-v2" });
     expect(v2.changeReason).toContain(avgoRow.id);
 
     // v1 byte-identical, raw rows byte-identical

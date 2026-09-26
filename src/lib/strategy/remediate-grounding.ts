@@ -46,6 +46,8 @@ export interface RemediationNewPrincipleVersion {
 }
 
 export type PrincipleRemediationPlan =
+  /** Grounding Semantics V3.1 — a citation could not be judged (technical, not semantic): nothing may be written. See the DNA planner. */
+  | { action: "technical_failure"; failures: { evidenceId: string; reason: string }[] }
   | { action: "no_op" }
   | { action: "checked_no_change"; checks: RemediationCheckResult[] }
   | { action: "new_version"; checks: RemediationCheckResult[]; version: RemediationNewPrincipleVersion };
@@ -126,12 +128,8 @@ export async function planPrincipleGroundingRemediation(
 
     const sourceAnswerText = answerTextById.get(statementId);
     if (sourceAnswerText === undefined) {
-      checks.push({
-        evidenceId: ev.id,
-        verdict: "unsupported",
-        reason: "Source answer text unavailable — failing closed.",
-      });
-      continue;
+      // Not a semantic verdict — the citation was never judged (Grounding Semantics V3.1).
+      return { action: "technical_failure", failures: [{ evidenceId: ev.id, reason: "Source statement text unavailable — cannot be judged." }] };
     }
 
     let verdict: EvidenceGroundingResult;
@@ -144,8 +142,11 @@ export async function planPrincipleGroundingRemediation(
         // as a decision statement, an answer as an answer (Grounding Semantics V3).
         sourceKind: ev.decisionStatement ? "decision_statement" : "interview_answer",
       });
-    } catch {
-      verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed." };
+    } catch (err) {
+      verdict = { verdict: "unsupported", reason: `Grounding check threw — ${(err as Error)?.message ?? "unknown error"}`, technicalFailure: true };
+    }
+    if (verdict.technicalFailure) {
+      return { action: "technical_failure", failures: [{ evidenceId: ev.id, reason: verdict.reason }] };
     }
 
     checks.push({ evidenceId: ev.id, verdict: verdict.verdict, reason: verdict.reason });

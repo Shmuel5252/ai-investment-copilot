@@ -29,7 +29,7 @@ export type StrategyGroundingCheckFn = (
 export interface StrategyGroundingRunResult {
   principles: ValidatedObservedPrinciple[];
   /** Every citation excluded by grounding, across every principle — for logging/reporting, never for display as if it were still evidence. */
-  excluded: { statement: string; statementId: string; stance: "supporting" | "contradicting"; reason: string }[];
+  excluded: { statement: string; statementId: string; stance: "supporting" | "contradicting"; reason: string; technicalFailure?: true }[];
   /** Principles dropped entirely because zero citations survived grounding. */
   droppedPrinciples: string[];
 }
@@ -82,7 +82,7 @@ export async function groundValidatedObservedPrinciples(
           sourceKind: evidence.decisionStatement ? "decision_statement" : "interview_answer",
         });
       } catch {
-        verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed." };
+        verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed.", technicalFailure: true };
       }
 
       if (verdict.verdict === "supported") {
@@ -93,6 +93,7 @@ export async function groundValidatedObservedPrinciples(
           statementId,
           stance: evidence.stance,
           reason: verdict.reason,
+          ...(verdict.technicalFailure ? { technicalFailure: true as const } : {}),
         });
       }
     }

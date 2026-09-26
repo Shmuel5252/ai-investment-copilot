@@ -128,7 +128,11 @@ SESSION_SECRET=          # חתימת cookie session
   `src/lib/ai/stance-rules.ts` ומוזרק לשני ה-proposers ולשער ה-grounding —
   לא מעתיקים אותו לפרומפט אחר. נמצא בפועל: נימוק AVGO נשמר כסותר רק כי לא
   הזכיר מחיר (`c478eba3` v1, 2026-09-25) — היסטוריה, מתוקן ב-remediation
-  append-only בלבד. ר' `docs/data-model.md` §2.
+  append-only בלבד. ר' `docs/data-model.md` §2. **V3.1 (תנאי-קדם מהותיים):**
+  claim מותנה ("כש-X → נוטה ל-Y") נתמך/נסתר רק ע"י הצהרה שמבססת בעצמה את
+  הטריגר X; התנהגות כש-X לא ידוע = NEITHER, citation-local. כלי ה-grounding
+  `strict`; כשל טכני (ערך מחוץ ל-enum, כלי שגוי, כשל קריאה) ≠ unsupported —
+  לא נספר, לא נכתב כ-check ולא מייצר גרסה.
 - Historical records (ר' `docs/data-model.md` §10 לרשימה המדויקת) לא
   נדרסים לעולם — repository layer חושף רק `insert` עליהם. עקיפה ב-SQL
   ישיר כפופה לכלל הצר ב-Autonomous Working Rules (גישת SQL ישירה

@@ -75,7 +75,20 @@ export interface EvidenceGroundingResult {
   verdict: EvidenceGroundingVerdict;
   /** One sentence, grounded in the real answer text — audit trail for why, never itself trusted as anything beyond an explanation. */
   reason: string;
+  /**
+   * Grounding Semantics V3.1 — TECHNICAL INVALID RESPONSE, not a semantic
+   * verdict: the call failed, no tool call came back, the wrong tool was
+   * called, or the value was outside the tool schema (the supervised run's
+   * call #12 returned "contradicting"). `verdict` is still "unsupported" so
+   * every consumer fails closed, but a technical failure is never evidence
+   * that the citation was unsupported: generation excludes it and reports it
+   * as technical, and remediation refuses to persist any check row or
+   * version from it (src/lib/dna/remediate-grounding.ts).
+   */
+  technicalFailure?: true;
 }
+
+export const GROUNDING_TOOL_NAME = "record_grounding_verdict";
 
 const GROUNDING_SYSTEM_PROMPT = `You check whether a single real statement the investor wrote themselves, in its own actual words, genuinely grounds one specific claimed relationship — a hypothesis statement PLUS a specific stance, supporting or contradicting — not whether a separately-written description of it sounds plausible.
 
@@ -87,15 +100,25 @@ You judge ONLY the stance you were given: "supported" means the statement affirm
 
 The two stances are judged by DIFFERENT rules. Read the stance you were given and apply only the matching rule below — never apply the "supporting" test to a "contradicting" citation or vice versa:
 
-- Stance = "supporting": the citation is grounded only when the statement's own words provide evidence FOR the hypothesis claim — genuinely establishing the behavior described. If the statement is silent on a material part of the claim, doesn't clearly match it, or actually contains details that undercut it (for example: the position wasn't actually profitable, the original thesis didn't actually hold, no real alternative is described, an external target was missed rather than met), it is NOT grounded.
+- Stance = "supporting": the citation is grounded only when the statement's own words provide evidence FOR the hypothesis claim — genuinely establishing the behavior described. If the statement is silent on a material part of the claim, doesn't clearly match it, or actually contains details that undercut it (for example: the position wasn't actually profitable, the original thesis didn't actually hold, no real alternative is described, an external target was missed rather than met), it is NOT grounded. When the claim is conditional ("when X, tends to Y"), the statement must itself establish the material precondition X and the behavior Y: Y shown while X is unknown does not prove the conditional pattern and is unsupported.
 
-- Stance = "contradicting": the citation is grounded only when the statement itself affirmatively establishes the opposite or a clearly inconsistent belief/action — the investor's own words must positively show that they believed or did something inconsistent with the claim in that instance. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. When the hypothesis pairs a headline behavior with an attributed motive or manner ("does X because of Y, rather than Z"), a clear counter-example to the headline behavior is enough on its own to ground the contradiction — do not additionally require the answer to state an alternative motive for the counter-example, and do not reject the citation merely because the motive clause cannot be evaluated when the described behavior never happened in this instance; an unobservable secondary clause is not the same as an unproven one. Absence of mention is not evidence of absence: a statement that merely does not mention the claimed consideration or behavior, that describes a different action without showing it was taken in disregard of the claimed principle, that is vague or ambiguous, or that expresses uncertainty establishes nothing against the claim and must be judged unsupported. A decision statement is a partial record — do not infer decision-process facts it does not record. Do not transform a tendency claim ("tends to", "generally", "often") into a universal one ("always") to make a silent instance look like a counter-example. Reject a contradicting citation if the statement is silent on the material behavioral claim it is supposed to contradict, if it contradicts only a minor or non-material detail while leaving that material behavior unaddressed, if it is actually consistent with / supports the hypothesis instead of going against it, or if there is insufficient affirmative evidence of the opposite.
+- Stance = "contradicting": the citation is grounded only when the statement itself affirmatively establishes the opposite or a clearly inconsistent belief/action — the investor's own words must positively show that they believed or did something inconsistent with the claim in that instance. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. When the hypothesis pairs a headline behavior with an attributed motive or manner ("does X because of Y, rather than Z"), a clear counter-example to the headline behavior is enough on its own to ground the contradiction — do not additionally require the answer to state an alternative motive for the counter-example, and do not reject the citation merely because the motive clause cannot be evaluated when the described behavior never happened in this instance; an unobservable secondary clause is not the same as an unproven one. Absence of mention is not evidence of absence: a statement that merely does not mention the claimed consideration or behavior, that describes a different action without showing it was taken in disregard of the claimed principle, that is vague or ambiguous, or that expresses uncertainty establishes nothing against the claim and must be judged unsupported. A decision statement is a partial record — do not infer decision-process facts it does not record. Do not transform a tendency claim ("tends to", "generally", "often") into a universal one ("always") to make a silent instance look like a counter-example. Apply MATERIAL PRECONDITIONS before judging: identify the claim's own trigger conditions (only those the claim contains — never add one), require the statement to affirmatively establish them, and only then ask whether it shows the opposite behavior; behavior outside the trigger conditions, or while the trigger is unknown, is not a counter-example and is unsupported. Reject a contradicting citation if the statement is silent on the material behavioral claim it is supposed to contradict, if it contradicts only a minor or non-material detail while leaving that material behavior unaddressed, if it is actually consistent with / supports the hypothesis instead of going against it, or if there is insufficient affirmative evidence of the opposite.
 
 Do not soften your verdict because the claim sounds like a reasonable investing pattern in general — judge strictly against this one statement's own words. If there is insufficient affirmative evidence for the claimed stance, return unsupported. Respond only with the structured verdict.`;
 
-const GROUNDING_TOOL = {
-  name: "record_grounding_verdict",
+// Strict tool use (Grounding Semantics V3.1). Root cause of the supervised
+// run's call #12: this tool was the only production tool sent WITHOUT
+// `strict: true`, so its enum was advisory and the model emitted
+// "contradicting" — a value the schema does not allow — which only the parser
+// caught. The collection generators (dna.ts, strategy.ts) already send
+// strict tools; with `strict: true` the API constrains generation to the
+// schema, so an out-of-enum verdict cannot be produced at the boundary. The
+// parser below stays fail-closed as defense in depth and additionally
+// labels such a result a TECHNICAL failure, never a semantic verdict.
+export const GROUNDING_TOOL = {
+  name: GROUNDING_TOOL_NAME,
   description: "Record whether the real statement text actually grounds the claimed stance.",
+  strict: true,
   input_schema: {
     type: "object" as const,
     properties: {
@@ -110,6 +133,7 @@ const GROUNDING_TOOL = {
       },
     },
     required: ["verdict", "reason"],
+    additionalProperties: false,
   },
 };
 
@@ -117,22 +141,29 @@ function isValidVerdict(value: unknown): value is EvidenceGroundingVerdict {
   return value === "supported" || value === "unsupported";
 }
 
+const technical = (reason: string): EvidenceGroundingResult => ({ verdict: "unsupported", reason, technicalFailure: true });
+
 // Pure — no network call — exported so the fail-closed parsing itself
-// (missing tool_use, wrong shape, invalid enum value) is directly unit
-// tested without mocking the Anthropic client at all. This is the exact
+// (missing tool_use, wrong tool, wrong shape, invalid enum value) is directly
+// unit tested without mocking the Anthropic client at all. This is the exact
 // logic checkEvidenceGrounding() below runs on a real response; a test
 // exercising this function IS exercising production logic, not a
-// parallel reimplementation of it.
+// parallel reimplementation of it. Every rejection here is a TECHNICAL
+// failure (technicalFailure: true): the model did not deliver a verdict in
+// the contract's form, so nothing semantic can be concluded either way.
 export function parseGroundingResponse(
-  toolUse: { type: string; input?: unknown } | undefined
+  toolUse: { type: string; name?: string; input?: unknown } | undefined
 ): EvidenceGroundingResult {
   if (!toolUse || toolUse.type !== "tool_use") {
-    return { verdict: "unsupported", reason: "Grounding check returned no structured verdict — failing closed." };
+    return technical("Grounding check returned no structured verdict — failing closed.");
+  }
+  if (toolUse.name !== undefined && toolUse.name !== GROUNDING_TOOL_NAME) {
+    return technical(`Grounding check returned a call to the wrong tool (${toolUse.name}) — failing closed.`);
   }
 
-  const raw = toolUse.input as { verdict?: unknown; reason?: unknown };
-  if (!isValidVerdict(raw.verdict) || typeof raw.reason !== "string") {
-    return { verdict: "unsupported", reason: "Grounding check returned a malformed verdict — failing closed." };
+  const raw = toolUse.input as { verdict?: unknown; reason?: unknown } | null | undefined;
+  if (!raw || typeof raw !== "object" || !isValidVerdict(raw.verdict) || typeof raw.reason !== "string") {
+    return technical("Grounding check returned a malformed verdict — failing closed.");
   }
 
   return { verdict: raw.verdict, reason: raw.reason };
@@ -160,7 +191,8 @@ export async function checkEvidenceGrounding(
     return parseGroundingResponse(toolUse);
   } catch {
     // Network error, API error, rate limit, anything — never let a
-    // grounding-check failure silently default to accepting the citation.
-    return { verdict: "unsupported", reason: "Grounding check call failed — failing closed." };
+    // grounding-check failure silently default to accepting the citation,
+    // and never let it pass as a semantic verdict either (technical).
+    return { verdict: "unsupported", reason: "Grounding check call failed — failing closed.", technicalFailure: true };
   }
 }

@@ -57,6 +57,15 @@ export interface RemediationNewVersion {
 }
 
 export type RemediationPlan =
+  // Grounding Semantics V3.1 — TECHNICAL INVALID RESPONSE. At least one
+  // citation could not be judged (the call failed, the model returned no
+  // tool call, the wrong tool, or a value outside the schema, or the source
+  // text was unavailable). This is not a semantic verdict, so nothing may be
+  // written from it: no version, no check row — a fail-closed "unsupported"
+  // persisted as a check would become historical evidence that the citation
+  // was unsupported, which is false. The planner stops at the first such
+  // failure; a later supervised run re-judges the identity.
+  | { action: "technical_failure"; failures: { evidenceId: string; reason: string }[] }
   // Already checked before, and re-running grounding now produces the
   // exact same effective evidence set — nothing to write at all, not
   // even a repeat grounding-check row (idempotency: re-running
@@ -168,14 +177,11 @@ export async function planGroundingRemediation(
 
     const sourceAnswerText = answerTextById.get(statementId);
     if (sourceAnswerText === undefined) {
-      // Shouldn't happen for a real, persisted citation — fail closed,
-      // same convention as ground-evidence.ts's own defensive branch.
-      checks.push({
-        evidenceId: ev.id,
-        verdict: "unsupported",
-        reason: "Source answer text unavailable — failing closed.",
-      });
-      continue;
+      // Shouldn't happen for a real, persisted citation. Not a semantic
+      // verdict (the citation was never judged) — a technical failure that
+      // stops the plan (Grounding Semantics V3.1), never a persisted
+      // "unsupported".
+      return { action: "technical_failure", failures: [{ evidenceId: ev.id, reason: "Source statement text unavailable — cannot be judged." }] };
     }
 
     let verdict: EvidenceGroundingResult;
@@ -189,8 +195,11 @@ export async function planGroundingRemediation(
         // interview answer (Grounding Semantics V3, sourceKind propagation).
         sourceKind: ev.decisionStatement ? "decision_statement" : "interview_answer",
       });
-    } catch {
-      verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed." };
+    } catch (err) {
+      verdict = { verdict: "unsupported", reason: `Grounding check threw — ${(err as Error)?.message ?? "unknown error"}`, technicalFailure: true };
+    }
+    if (verdict.technicalFailure) {
+      return { action: "technical_failure", failures: [{ evidenceId: ev.id, reason: verdict.reason }] };
     }
 
     checks.push({ evidenceId: ev.id, verdict: verdict.verdict, reason: verdict.reason });

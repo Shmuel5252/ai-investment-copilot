@@ -351,12 +351,32 @@ describe("planGroundingRemediation", () => {
       checkGrounding
     );
 
-    // Baseline was "everything counts" (never checked); the thrown call
-    // fails closed to unsupported, which IS a material change from the
-    // legacy baseline -> a new version excluding it.
-    expect(plan.action).toBe("new_version");
-    if (plan.action !== "new_version") throw new Error("expected new_version");
-    expect(plan.version.supportingEvidenceCount).toBe(0);
-    expect(plan.version.evidenceStrength).toBe("insufficient_evidence");
+    // Grounding Semantics V3.1: a thrown call is a TECHNICAL failure, not a
+    // semantic "unsupported" — no version, no check row may come out of it
+    // (before V3.1 this produced a new version excluding the citation, which
+    // would have persisted "unsupported" as evidence of a judgment never made).
+    expect(plan).toEqual({ action: "technical_failure", failures: [{ evidenceId: "ev-1", reason: expect.stringContaining("Grounding check threw") }] });
+  });
+
+  it("V3.1: a gate result flagged technicalFailure (malformed / wrong tool / call failed) stops the plan with no checks and no version", async () => {
+    const rawEvidence: PersistedEvidenceForRemediation[] = [
+      { id: "ev-1", interviewAnswerId: "a1", stance: "supporting" },
+      { id: "ev-2", interviewAnswerId: "a2", stance: "contradicting" },
+    ];
+    const checkGrounding: RemediationGroundingFn = async (input) =>
+      input.stance === "contradicting"
+        ? { verdict: "unsupported", reason: "Grounding check returned a malformed verdict — failing closed.", technicalFailure: true }
+        : { verdict: "supported", reason: "ok" };
+    const plan = await planGroundingRemediation(
+      { currentVersion: currentVersion("claim"), rawEvidence, answerTextById: new Map([["a1", "t1"], ["a2", "t2"]]), independence: resolverFromCaseKeys(new Map([["a1", "X#1"], ["a2", "Y#1"]])), alreadyGroundedEvidenceIds: null },
+      checkGrounding
+    );
+    expect(plan).toEqual({ action: "technical_failure", failures: [{ evidenceId: "ev-2", reason: "Grounding check returned a malformed verdict — failing closed." }] });
+    // and a citation whose source text is unavailable is likewise never judged
+    const missing = await planGroundingRemediation(
+      { currentVersion: currentVersion("claim"), rawEvidence, answerTextById: new Map([["a1", "t1"]]), independence: resolverFromCaseKeys(new Map([["a1", "X#1"], ["a2", "Y#1"]])), alreadyGroundedEvidenceIds: null },
+      async () => ({ verdict: "supported", reason: "ok" })
+    );
+    expect(missing).toEqual({ action: "technical_failure", failures: [{ evidenceId: "ev-2", reason: expect.stringContaining("unavailable") }] });
   });
 });

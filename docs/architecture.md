@@ -412,6 +412,13 @@ insufficient_evidence; ה-AI ראה 2 מוצהרים + 4 מאומתים בלבד
   שמרה נימוק AVGO כסותר על בסיס שתיקה (`c478eba3` v1) — ההיסטוריה נשארת;
   התיקון = remediation append-only מפוקחת עם provenance (ר' `docs/data-model.md`
   §2), לא rewrite.
+- **Grounding Semantics V3.1 (הכרעת Owner, הוקפא 2026-09-25):** claim מותנה
+  ("כש-X → נוטה ל-Y") נתמך רק ע"י הצהרה שמבססת בעצמה את X ואת Y, ונסתר רק
+  ע"י הצהרה שמבססת את X ואז מראה לא-Y; התנהגות כש-X לא ידוע = NEITHER (לא
+  מסיקים טריגר; לא מוסיפים תנאי שה-claim לא מכיל; citation-local — אין שילוב
+  בין הצהרות). כלי ה-grounding נשלח `strict` (enum נאכף בגבול ה-API) וכשל
+  טכני (ערך מחוץ ל-schema, כלי שגוי, כשל קריאה) מובחן מ-unsupported סמנטי —
+  לא נספר ולא נכתב לעולם. חוזים `*-v3-1-statements`. ר' `docs/data-model.md` §2.
 - **לא נבנה בכוונה:** הצהרות החלטה נכנסות ל-DNA/Strategy רק ביצירה מחדש (אין
   backfill לגרסאות קיימות); Learning עדיין מקובץ לפי סקטור; Prior Record v2,
   Outcome, Market Scanner — לא.

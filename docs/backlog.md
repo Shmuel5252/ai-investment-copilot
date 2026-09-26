@@ -392,13 +392,29 @@ FMP טרי), `portfolioStateJson`/Portfolio Fit, Market Context, גרסאות DN
    נטייה ≠ "תמיד"; חוזים v3; remediation append-only עם provenance (ר' `docs/data-model.md` §2). **remediation
    מפוקחת (v3, AI אמיתי) עדיין לא רצה** — מועמדים: `c478eba3`/AVGO (חובה), `d5941418`/08860759 (חובה),
    `5cee68a2`/b865a5a2 (חובה), ושלוש הסתירות החיוביות (`7c3665ca`, `173720c6`, `3653aeed`) כדי ש-v3 יאשר
-   אותן ולא יניח.
+   אותן ולא יניח. **בוצע 2026-09-25 (v3, AI אמיתי, 14 קריאות):** `c478eba3` v2, `5cee68a2` v2, `173720c6` v2;
+   `d5941418`, `7c3665ca` checked_no_change; `3653aeed` לא נכתב (קריאה #12 החזירה `contradicting` מחוץ ל-enum).
+7. **OD-R7 — Grounding Semantics V3.1: תנאי-קדם מהותיים + strict tool** (הוקפא 2026-09-25): claim מותנה נתמך/נסתר
+   רק כשההצהרה מבססת בעצמה את הטריגר; פעולה כש-הטריגר לא ידוע = NEITHER; citation-local; כלי grounding strict;
+   כשל טכני ≠ unsupported (לא נכתב). **Revalidation מפוקחת V3.1 (AI אמיתי) עדיין לא רצה** — סט יעד מומלץ:
+   `d5941418` (חובה — #4 אישר סתירה ללא טריגר), `173720c6` (חובה — v2 נשען על #11 מפוקפק; v2 נשמר כהיסטוריה),
+   `3653aeed` (חובה — ניסיון חוזר **אחד** אחרי strict), `7c3665ca` (סימטריה: ציטוט SPCX תומך ב-"כל עוד
+   המניה ממשיכה לעלות" בלי שהטקסט מבסס עלייה), `c478eba3` ו-`5cee68a2` (אחידות חוזה — תוצאה צפויה ללא שינוי).
+   v3 v2-ים ושורות ה-check שלהם נשארים כפי שהם.
 **חוב V1 מקובל (נשאר):** גרסאות Learning ישנות בלי provenance מקבלות טביעה משורות ה-identity (re-baseline
 חד-פעמי, append בלבד); ריצת generate שהמודל לא הציע בה דבר לא משאירה עקבה (ה-nudge "צור מחדש" נשאר);
 Learning עדיין מקובץ לפי סקטור; הצהרות החלטה נכנסות ל-DNA/Strategy רק ביצירה מחדש; שתי שורות
 `source_learning_insight_id` היסטוריות (סינתטיות) נשארות; מיגרציה 0017 חייבת להיות מוחלת לפני פריסת הקוד.
 
 ## נבנה
+- **Grounding Semantics V3.1 — תנאי-קדם מהותיים + strict grounding tool + כשל טכני** (2026-09-25, OD-R7;
+  `src/lib/ai/stance-rules.ts`, `src/lib/ai/dna-grounding.ts`, `docs/data-model.md` §2): הכלל הקנוני מרחיב ל-MATERIAL
+  PRECONDITIONS (ארבעה שלבים, מקורות פסולים, שתי דוגמאות, citation-local) וסימטריה ל-supporting; ה-proposers לא ממלאים
+  טריגר חסר; חוזים `*-v3-1-statements`; כלי ה-grounding `strict: true` + `additionalProperties: false`; `parseGroundingResponse`
+  מסמן `technicalFailure` (כולל כלי שגוי) ושני ה-remediation planners מחזירים `technical_failure` בלי checks/גרסה;
+  שערי היצירה וה-carry מדווחים החרגה טכנית. טסטים: מקרי-תקיפה A–H + קצוות + fixture בצורת d5941418 דרך ה-pipeline
+  האמיתי, strict tool, parser, כשל טכני ב-planners ובאינטגרציה (כלום לא נכתב). **לא בוצע:** revalidation V3.1
+  אמיתית (שער מפוקח נפרד); אין מיגרציה, אין שינוי ספי ביטחון, אין rewrite.
 - **Grounding Semantics V3 — סתירה דורשת ראיה חיובית** (2026-09-25, OD-R6; `src/lib/ai/stance-rules.ts`,
   `docs/data-model.md` §2, `docs/architecture.md` §2.11): כלל stance אחד משותף לשני ה-proposers ולשער ה-grounding;
   חוזים `*-v3-statements`; שני ה-remediation planners מעבירים `sourceKind` נכון (הצהרת החלטה לא מתויגת כתשובה);

@@ -32,8 +32,8 @@ export interface GroundedEvidence extends ValidatedEvidence {
 
 export interface GroundingRunResult {
   hypotheses: ValidatedHypothesis[];
-  /** Every citation excluded by grounding, across every hypothesis — for logging/reporting, never for display as if it were still evidence. */
-  excluded: { statement: string; statementId: string; stance: "supporting" | "contradicting"; reason: string }[];
+  /** Every citation excluded by grounding, across every hypothesis — for logging/reporting, never for display as if it were still evidence. `technicalFailure` marks an exclusion that is NOT a semantic verdict (call failed / malformed / wrong tool) — still excluded, fail-closed. */
+  excluded: { statement: string; statementId: string; stance: "supporting" | "contradicting"; reason: string; technicalFailure?: true }[];
   /** Hypotheses dropped entirely because zero citations survived grounding. */
   droppedHypotheses: string[];
 }
@@ -96,7 +96,7 @@ export async function groundValidatedHypotheses(
           sourceKind: evidence.decisionStatement ? "decision_statement" : "interview_answer",
         });
       } catch {
-        verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed." };
+        verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed.", technicalFailure: true };
       }
 
       if (verdict.verdict === "supported") {
@@ -107,6 +107,7 @@ export async function groundValidatedHypotheses(
           statementId,
           stance: evidence.stance,
           reason: verdict.reason,
+          ...(verdict.technicalFailure ? { technicalFailure: true as const } : {}),
         });
       }
     }

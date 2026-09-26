@@ -187,9 +187,16 @@ describe("planPrincipleGroundingRemediation", () => {
       checkGrounding
     );
 
-    expect(plan.action).toBe("new_version");
-    if (plan.action !== "new_version") throw new Error("expected new_version");
-    expect(plan.version.supportingEvidenceCount).toBe(0);
-    expect(plan.version.evidenceStrength).toBe("insufficient_evidence");
+    // Grounding Semantics V3.1: technical failure, not a semantic verdict — nothing may be written.
+    expect(plan).toEqual({ action: "technical_failure", failures: [{ evidenceId: "ev-1", reason: expect.stringContaining("Grounding check threw") }] });
+  });
+
+  it("V3.1: a technicalFailure-flagged gate result stops the plan with no checks and no version", async () => {
+    const rawEvidence: PersistedEvidenceForRemediation[] = [{ id: "ev-1", interviewAnswerId: "a1", stance: "contradicting" }];
+    const plan = await planPrincipleGroundingRemediation(
+      { currentVersion: currentVersion("Some claim."), rawEvidence, answerTextById: new Map([["a1", "t1"]]), independence: resolverFromCaseKeys(new Map([["a1", "X#1"]])), alreadyGroundedEvidenceIds: null },
+      async () => ({ verdict: "unsupported", reason: "Grounding check returned a malformed verdict — failing closed.", technicalFailure: true })
+    );
+    expect(plan).toEqual({ action: "technical_failure", failures: [{ evidenceId: "ev-1", reason: "Grounding check returned a malformed verdict — failing closed." }] });
   });
 });
