@@ -419,6 +419,38 @@ insufficient_evidence; ה-AI ראה 2 מוצהרים + 4 מאומתים בלבד
   בין הצהרות). כלי ה-grounding נשלח `strict` (enum נאכף בגבול ה-API) וכשל
   טכני (ערך מחוץ ל-schema, כלי שגוי, כשל קריאה) מובחן מ-unsupported סמנטי —
   לא נספר ולא נכתב לעולם. חוזים `*-v3-1-statements`. ר' `docs/data-model.md` §2.
+- **Grounding Semantics V3.2 (הכרעות Owner OD-V32-1..8, הוקפא 2026-09-27):**
+  **התאמה חלקית = NEITHER** — citation מכשיר claim שלם רק כשמילות המשקיע
+  מבססות כל רכיב מהותי שה-stance דורש: תנאי-קדם ב-AND כולם, ב-OR ענף אחד
+  לפחות; מניע/בסיס נדרש לתמיכה ולא לסתירה; התפקיד (תנאי מול מניע) נקבע
+  מניסוח ה-claim, ותפקיד עמום נדרש (fail closed); `especially when` / `even if`
+  אינם תנאי-קדם. ה-proposers מציעים טענה התנהגותית אחת ל-claim (תנאי-קדם
+  מורכבים מותרים, צירוף נטיות נפרדות לא). **מסלול השאלה:** `question_text`
+  נשמר עם כל תשובה והוצג ל-proposers, אבל נשמט במפת הטקסטים של ה-routers ולא
+  הגיע לשער ולא ל-planners; מעכשיו הוא עובר לצד התשובה כ-`contextText`
+  (`buildStatementContextById`), בסעיף נפרד `CONTEXT — NOT EVIDENCE` — מפענח
+  למה התשובה מתייחסת ולעולם לא מספק רכיב; להצהרת החלטה אין הקשר. ההקשר לא
+  נשמר כ-Evidence, אינו case ולא נספר. חוזים `*-v3-2-statements`. **הבהרת
+  contrast:** `without` / `rather than` אינם רכיב נפרד אוטומטית — תכונה
+  התנהגותית עצמאית נדרשת לתמיכה ב-claim כולו, ניסוח-מחדש/שלילה של ההתנהגות
+  הראשית לא נספר פעמיים, סתירה לא דורשת את ה-contrast, תפקיד עמום ⇒ נדרש.
+  ר' `docs/data-model.md` §2.
+- **OD-R9 — Grounding Judgment Audit Ledger (`grounding_judgments`, מיגרציה
+  0018, הוקפא 2026-09-27):** יומן append-only, **ביקורת בלבד**. שורה אחת לכל
+  שיפוט grounding תקף טכנית בריצת remediation/revalidation מורשית ונשמרת —
+  בכל תוצאה: `new_version`, `checked_no_change` וגם `no_op` (שעד כה לא השאיר
+  עקבה). **גבול מקור-האמת:** effective evidence, S/C, ביטחון, נראות,
+  generation, Learning carry, Decision AI, Prior Record ו-remediation ממשיכים
+  להיקבע ממודל הגרסאות וה-checks בלבד; שום התנהגות לא משתנה בגלל קיום שורת
+  ביקורת (`tests/unit/grounding-judgments.test.ts` אוכף מי רשאי בכלל לקרוא
+  לטבלה). **זרימה:** ה-planners טהורים ומחזירים `judgments` בכל תוצאה שנשפטה;
+  ריצה מתכננת את כל הזהויות, מאמתת את הריצה כולה, ורק אז מחילה — **זהות אחת
+  לטרנזקציה** (`applyDnaGroundingRemediation` /
+  `applyStrategyGroundingRemediation`): הכתיבה הסמנטית ושורות הביקורת נכתבות
+  יחד או בכלל לא. אין טרנזקציה אחת ל-19 זהויות: כשל בזהות אחת משאיר את
+  שהושלמו שלמות ומשויכות לאותו `run_id`. `run_id` = uuid שנבחר פעם אחת לריצה;
+  ניסיון חוזר זהה = replay (כלום לא נכתב), שיפוט שונה תחת אותה ריצה = נדחה.
+  כשל טכני לעולם לא נכתב. אין backfill היסטורי.
 - **לא נבנה בכוונה:** הצהרות החלטה נכנסות ל-DNA/Strategy רק ביצירה מחדש (אין
   backfill לגרסאות קיימות); Learning עדיין מקובץ לפי סקטור; Prior Record v2,
   Outcome, Market Scanner — לא.

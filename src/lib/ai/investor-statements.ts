@@ -47,6 +47,18 @@ export function buildInvestorStatements(
   ];
 }
 
+// Grounding Semantics V3.2 (OD-V32-7) — Statement ID -> the interview
+// question the answer responded to, for the grounding gate's CONTEXT section
+// only. Read straight from the persisted answer row (question_text), never
+// reconstructed. Interview answers only: a decision statement has no
+// question and therefore no entry. The question is not a statement, has no
+// Statement ID of its own, and is never evidence.
+export function buildStatementContextById(
+  answers: readonly { id: string; questionText: string }[]
+): Map<string, string> {
+  return new Map(answers.filter((a) => a.questionText.trim() !== "").map((a) => [a.id, a.questionText]));
+}
+
 export function formatInvestorStatements(statements: readonly InvestorStatementForAnalysis[]): string {
   return statements
     .map((s) =>

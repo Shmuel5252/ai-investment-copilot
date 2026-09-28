@@ -5,7 +5,7 @@ import {
   type IndependenceBasis,
 } from "@/lib/evidence/resolve-independence";
 import type { EvidenceGroundingCheckInput, EvidenceGroundingResult } from "@/lib/ai/dna-grounding";
-import type { PersistedEvidenceForRemediation } from "@/lib/dna/remediate-grounding";
+import type { GroundingJudgment, PersistedEvidenceForRemediation } from "@/lib/dna/remediate-grounding";
 import { statementIdOf } from "@/lib/evidence/statement-ref";
 
 // Strategy Grounding + Identity Hardening task — the Strategy-specific
@@ -16,7 +16,7 @@ import { statementIdOf } from "@/lib/evidence/statement-ref";
 // loop, which has no ids to persist against). PersistedEvidenceForRemediation
 // is reused directly from the DNA module — it's already fully generic
 // ({id, interviewAnswerId, stance}), carrying no DNA-specific semantics.
-export type { PersistedEvidenceForRemediation };
+export type { GroundingJudgment, PersistedEvidenceForRemediation };
 
 export type StrategyRemediationGroundingFn = (
   input: EvidenceGroundingCheckInput
@@ -48,9 +48,10 @@ export interface RemediationNewPrincipleVersion {
 export type PrincipleRemediationPlan =
   /** Grounding Semantics V3.1 — a citation could not be judged (technical, not semantic): nothing may be written. See the DNA planner. */
   | { action: "technical_failure"; failures: { evidenceId: string; reason: string }[] }
-  | { action: "no_op" }
-  | { action: "checked_no_change"; checks: RemediationCheckResult[] }
-  | { action: "new_version"; checks: RemediationCheckResult[]; version: RemediationNewPrincipleVersion };
+  /** OD-R9: every judged outcome carries what the gate judged, for the audit ledger — see the DNA planner. */
+  | { action: "no_op"; judgments: GroundingJudgment[] }
+  | { action: "checked_no_change"; checks: RemediationCheckResult[]; judgments: GroundingJudgment[] }
+  | { action: "new_version"; checks: RemediationCheckResult[]; judgments: GroundingJudgment[]; version: RemediationNewPrincipleVersion };
 
 export interface PlanPrincipleGroundingRemediationInput {
   currentVersion: CurrentPrincipleVersionForRemediation;
@@ -61,6 +62,8 @@ export interface PlanPrincipleGroundingRemediationInput {
   independence: EvidenceIndependenceResolver;
   /** Evidence ids already logged "supported" against currentVersion.id, or null if this version has never been checked at all. */
   alreadyGroundedEvidenceIds: ReadonlySet<string> | null;
+  /** Grounding Semantics V3.2 (OD-V32-7): Statement ID -> the interview question, CONTEXT ONLY for the gate. Looked up for interview answers only; never evidence, never a check row, never counted. */
+  contextTextById?: ReadonlyMap<string, string>;
 }
 
 function setsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
@@ -95,15 +98,18 @@ function buildChangeReason(
 }
 
 // Fail-closed, like every other grounding-adjacent function: a citation
-// this function cannot judge (missing answer text, a thrown grounding
-// call) is treated as unsupported, never silently kept.
+// this function cannot judge (missing statement text, a thrown or
+// technically invalid grounding call) stops the plan as a technical failure
+// and nothing is written from it (Grounding Semantics V3.1) — it is never
+// silently kept and never persisted as "unsupported".
 export async function planPrincipleGroundingRemediation(
   input: PlanPrincipleGroundingRemediationInput,
   checkGrounding: StrategyRemediationGroundingFn
 ): Promise<PrincipleRemediationPlan> {
-  const { currentVersion, rawEvidence, answerTextById, independence, alreadyGroundedEvidenceIds } = input;
+  const { currentVersion, rawEvidence, answerTextById, independence, alreadyGroundedEvidenceIds, contextTextById } = input;
 
   const checks: RemediationCheckResult[] = [];
+  const judgments: GroundingJudgment[] = [];
   const freshSupportedIds = new Set<string>();
 
   for (const ev of rawEvidence) {
@@ -132,6 +138,8 @@ export async function planPrincipleGroundingRemediation(
       return { action: "technical_failure", failures: [{ evidenceId: ev.id, reason: "Source statement text unavailable — cannot be judged." }] };
     }
 
+    const contextText = ev.decisionStatement ? undefined : contextTextById?.get(statementId);
+
     let verdict: EvidenceGroundingResult;
     try {
       verdict = await checkGrounding({
@@ -141,6 +149,8 @@ export async function planPrincipleGroundingRemediation(
         // Same rule as the DNA planner: a decision statement reaches the gate
         // as a decision statement, an answer as an answer (Grounding Semantics V3).
         sourceKind: ev.decisionStatement ? "decision_statement" : "interview_answer",
+        // V3.2 (OD-V32-7): the question is context for an interview answer only.
+        ...(contextText !== undefined ? { contextText } : {}),
       });
     } catch (err) {
       verdict = { verdict: "unsupported", reason: `Grounding check threw — ${(err as Error)?.message ?? "unknown error"}`, technicalFailure: true };
@@ -150,6 +160,8 @@ export async function planPrincipleGroundingRemediation(
     }
 
     checks.push({ evidenceId: ev.id, verdict: verdict.verdict, reason: verdict.reason });
+    // OD-R9: what the gate judged, for the audit ledger — every outcome carries it, no_op included.
+    judgments.push({ evidenceId: ev.id, verdict: verdict.verdict, reason: verdict.reason, contextSupplied: contextText !== undefined && contextText.trim() !== "" });
     if (verdict.verdict === "supported") freshSupportedIds.add(ev.id);
   }
 
@@ -157,7 +169,7 @@ export async function planPrincipleGroundingRemediation(
   const materiallyChanged = !setsEqual(baselineIds, freshSupportedIds);
 
   if (!materiallyChanged) {
-    return alreadyGroundedEvidenceIds === null ? { action: "checked_no_change", checks } : { action: "no_op" };
+    return alreadyGroundedEvidenceIds === null ? { action: "checked_no_change", checks, judgments } : { action: "no_op", judgments };
   }
 
   const survivingEvidence = rawEvidence.filter((e) => freshSupportedIds.has(e.id));
@@ -169,6 +181,7 @@ export async function planPrincipleGroundingRemediation(
   return {
     action: "new_version",
     checks,
+    judgments,
     version: {
       statementText: currentVersion.statementText,
       principleType: currentVersion.principleType,

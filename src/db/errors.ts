@@ -40,6 +40,20 @@ export class PredictionNotFoundError extends Error {}
 export class PredictionNotReentryConditionError extends Error {}
 export class PredictionAlreadyResolvedError extends Error {}
 
+// OD-R9 (applyDnaGroundingRemediation / applyStrategyGroundingRemediation).
+// Thrown before or inside the apply transaction, so nothing is written when
+// they escape:
+//   GroundingTechnicalFailureError — the plan is a technical failure: nothing
+//     was judged for that identity, so there is nothing to persist;
+//   GroundingJudgmentConflictError — this run already recorded a judgment for
+//     one of these citations and it is NOT the same judgment (a retry can
+//     never masquerade as the recorded one; an identical retry replays);
+//   GroundingRunMismatchError — the run id already has rows written under a
+//     different contract, rule, model or code version.
+export class GroundingTechnicalFailureError extends Error {}
+export class GroundingJudgmentConflictError extends Error {}
+export class GroundingRunMismatchError extends Error {}
+
 // Thrown by an identity-version append whose counting was computed against a
 // base state that has since changed — the identity's latest version is no
 // longer the one the generation counted against (another generation,

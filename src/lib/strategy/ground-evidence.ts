@@ -47,7 +47,9 @@ export async function groundValidatedObservedPrinciples(
   principles: readonly ValidatedObservedPrinciple[],
   answerTextById: ReadonlyMap<string, string>,
   independence: EvidenceIndependenceResolver,
-  checkGrounding: StrategyGroundingCheckFn
+  checkGrounding: StrategyGroundingCheckFn,
+  /** Grounding Semantics V3.2 (OD-V32-7): Statement ID -> the interview question, CONTEXT ONLY. Looked up for interview answers only; never evidence, never counted, never persisted. */
+  contextTextById?: ReadonlyMap<string, string>
 ): Promise<StrategyGroundingRunResult> {
   const result: ValidatedObservedPrinciple[] = [];
   const excluded: StrategyGroundingRunResult["excluded"] = [];
@@ -73,6 +75,8 @@ export async function groundValidatedObservedPrinciples(
         continue;
       }
 
+      const contextText = evidence.decisionStatement ? undefined : contextTextById?.get(statementId);
+
       let verdict: EvidenceGroundingResult;
       try {
         verdict = await checkGrounding({
@@ -80,6 +84,8 @@ export async function groundValidatedObservedPrinciples(
           stance: evidence.stance,
           sourceAnswerText,
           sourceKind: evidence.decisionStatement ? "decision_statement" : "interview_answer",
+          // V3.2 (OD-V32-7): the question is context for an interview answer only.
+          ...(contextText !== undefined ? { contextText } : {}),
         });
       } catch {
         verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed.", technicalFailure: true };

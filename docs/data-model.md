@@ -194,6 +194,97 @@ source_learning_insight_id, decision_id}` + `manual_note_text?` (CHECK, מקור
   ההתנהגות הזו כבר התרחשה נכון בריצה המפוקחת (3653aeed לא נכתב) ומקובעת בטסטים.
   היסטוריה: `c478eba3` v2, `5cee68a2` v2, `173720c6` v2 וכל שורות ה-check של v3
   נשארות כפי שהן; V3.1 רק מוסיף גרסאות/checks חדשים ב-remediation מפוקחת.
+- **Grounding Semantics V3.2 — claims מורכבים + שאלת הראיון כהקשר (הכרעות
+  Owner OD-V32-1..8, הוקפא 2026-09-27; מרחיב את V3/V3.1, לא מחליף):** נמצא
+  ב-revalidation המפוקחת של V3.1 (2026-09-27, 14 קריאות, 0 כשלים טכניים):
+  סתירה אושרה ל-claim "מחזיק כל עוד המניה עולה **ואתה מאמין בחברה**" מהצהרה
+  שלא ביססה אמונה בחברה (`7c3665ca`), ותמיכה אושרה לעיקרון שרכיב ה-momentum
+  שלו לא הופיע בהצהרה (`3653aeed`) — **התאמה חלקית** שקודמה לראיה ל-claim כולו.
+  **OD-V32-1 — התאמה חלקית = NEITHER:** citation נספר רק כשמילות המשקיע
+  מבססות **כל** רכיב מהותי שה-stance דורש; רכיב חסר / עמום / מוסק / מסופק רק
+  מההקשר = לא מבוסס. **OD-V32-2:** `WHEN (X AND Z) -> Y` — תמיכה: X+Z+Y;
+  סתירה: X+Z+התנהגות שאינה עקבית עם Y; X+Y, Z+Y או X+לא-Y בלבד = NEITHER.
+  `WHEN (X OR Z) -> Y` — תמיכה: ענף אחד לפחות + Y; סתירה: ענף אחד לפחות +
+  התנהגות שאינה עקבית עם Y; ראיה לענף אחד לא אומרת דבר על האחר. **OD-V32-3:**
+  `Y because Z` — תמיכה דורשת גם את Z כמניע/בסיס (Y לבד = התאמה חלקית); סתירה
+  לא דורשת את Z, ואי-ביסוס Z אינו סתירה. **OD-V32-4 — התפקיד נקבע מניסוח
+  ה-claim:** רכיב בתוך `when / if / after / while / as long as` הוא תנאי-קדם;
+  רכיב שמסומן `because / based on / out of / in order to` הוא מניע / בסיס /
+  מטרה; לא מסווגים מחדש תנאי כמניע בגלל מקור ה-claim; תפקיד עמום ⇒ נדרש
+  (fail closed). **OD-V32-5:** `especially when` / `even if` אינם תנאי-קדם
+  אוטומטיים ואינם מרחיבים את מה שההצהרה מבססת. **הבהרת contrast (הוקפאה עם
+  OD-R9):** `without` / `rather than` אינם רכיב מהותי נפרד רק מפני שהם סמן
+  ניגוד — קובעים את תפקידם ב-claim: תכונה התנהגותית **עצמאית** ("without a
+  predefined exit rule") חייבת להתבסס כדי **לתמוך** ב-claim כולו; ניסוח-מחדש או
+  שלילה של ההתנהגות הראשית ("cut rather than hold") אינו דרישה נוספת ולא
+  נספר פעמיים; **סתירה** דורשת רק את הרכיבים שהכללים דורשים, לא את ה-contrast;
+  תפקיד עמום ⇒ נדרש (fail closed). **OD-V32-6 — atomicity
+  ב-proposers** (`CLAIM_ATOMICITY_RULES`, טקסט אחד לשני ה-proposers): טענה
+  התנהגותית אחת הניתנת לבדיקה עצמאית, עם הטריגרים שלה; תנאי-קדם מורכבים
+  לגיטימיים; לא מצרפים נטיות נפרדות. אין classifier דטרמיניסטי ל-atomicity (היה
+  heuristic) — הגיבוי בקוד הוא כלל ההתאמה החלקית בשער. **OD-V32-7 — שאלת
+  הראיון = הקשר, לעולם לא ראיה:** `interview_answers.question_text` (שמור, NOT
+  NULL) מגיע לשער כ-`contextText`; הבקשה מתויגת `CLAIM / STANCE / SOURCE KIND /
+  INVESTOR EVIDENCE / CONTEXT — NOT EVIDENCE`. ההקשר רשאי רק לפענח למה התשובה
+  מתייחסת (כינוי, הפעולה/הנושא שנשאל, הנחת-שאלה דקדוקית); הוא לא מבסס מניע /
+  אמונה / כלל / נטייה / טריגר / העדפת סיכון / משמעת יציאה / ביטחון; עובדות
+  מחושבות או שנוסחו ע"י AI בשאלה אינן ראיית משקיע. **נבחר (שמרני):** "כן" /
+  "לא" בלבד לא מבסס רכיב — רק ניסוח של המשקיע עצמו. להצהרת החלטה אין הקשר
+  (השדה נזרק בשער גם אם הועבר); הקשר חסר לא מומצא. ההקשר לא נשמר כ-Evidence,
+  אינו case, לא תורם ל-S/C ולא משנה זהות ראיה. חוזים:
+  `evidence-grounding-v3-2-statements`, `dna-propose-v3-2-statements`,
+  `strategy-observe-v3-2-statements`; `STANCE_SEMANTICS_VERSION =
+  grounding-semantics-v3-2`; `hypothesis-identity-v1` ו-`learning-propose-v1`
+  ללא שינוי. כלי ה-grounding נשאר strict וכשל טכני נשאר מובחן. **ללא מיגרציה,
+  ללא שינוי ספים, ללא rewrite.** היסטוריה: `d5941418` v2, `7c3665ca` v3,
+  `3653aeed` v4 (V3.1) וכל שורות ה-check הקיימות נשארות כפי שהן. **OD-V32-8 —
+  חוב provenance (נסגר ב-OD-R9, למטה):** שורות ה-check אינן נושאות את החוזה
+  שתחתיו נשפטו, ו-`UNIQUE(version, evidence)` מונע שורה שנייה לאותה גרסה — לכן
+  `no_op` (ו-`checked_no_change` על גרסה שנוצרה תחת חוזה ישן) לא השאירו עקבה של
+  החוזה החדש, ואין מקום append-only קיים שמתאים בלי גרסה פיקטיבית.
+- **GroundingJudgment** (append-only, `grounding_judgments` — OD-R9, מיגרציה
+  0018, הוקפא 2026-09-27) — **יומן ביקורת בלבד, לעולם לא מקור אמת.** `id,
+  run_id, dna_hypothesis_version_id? | strategy_principle_version_id? (CHECK:
+  בדיוק אחד — הגרסה שנשפטה), evidence_id (FK), verdict(supported|unsupported),
+  reason, context_supplied, contract, semantic_rule, model, code_version?,
+  planner_action(no_op|checked_no_change|new_version),
+  resulting_dna_hypothesis_version_id? | resulting_strategy_principle_version_id?
+  (CHECK: קיים אם ורק אם `new_version`, מאותו סוג artifact, שונה מהגרסה
+  שנשפטה), judged_at`. `UNIQUE(run_id, evidence_id)`. שורה אחת לכל שיפוט
+  grounding **תקף טכנית** שנעשה בריצת remediation/revalidation מורשית ונשמרת:
+  "בריצה R, ראיה E של גרסה V נשפטה תחת חוזה C עם verdict X" — בכל תוצאה,
+  כולל `no_op`. **מה לא נשמר בכוונה:** סוג ה-artifact, ה-identity, המשקיע,
+  ה-stance וסוג המקור — כולם נגזרים מהגרסה ומשורת ה-Evidence (immutable);
+  טקסט המשקיע, שאלת הראיון, טקסט ה-claim וגוף ה-prompt — לעולם לא מועתקים
+  (`context_supplied` אומר רק *האם* שאלה הועברה כהקשר). `reason` הוא משפט
+  ההסבר של השער — אותו artifact ביקורת שטבלאות ה-check כבר שומרות — והוא
+  לעולם לא ראיה, לא אמת של המשקיע, ולא מוזן חזרה ל-grounding; אין
+  chain-of-thought ואין transcript. **כשל טכני לא נכתב** (אין לו ערך ב-enum:
+  לא ב-`grounding_verdict` ולא ב-`grounding_planner_action`). **זהות ריצה:**
+  `run_id` = uuid שהריצה בוחרת **פעם אחת** (`buildGroundingRun`,
+  `src/lib/evidence/grounding-run.ts`; החוזה וגרסת הכלל נלקחים מהקוד הרץ, לא
+  מהקורא) — לעולם לא נגזר מ-timestamp; revalidation מאוחרת, גם תחת אותו חוזה,
+  היא `run_id` חדש. **Idempotency:** אותה ריצה + אותם שיפוטים = replay (כלום
+  לא נכתב, גם לא גרסה שנייה); שיפוט שונה/חלקי/נוסף תחת אותה ריצה נדחה
+  (`GroundingJudgmentConflictError`); `run_id` שכבר נכתב תחת חוזה/כלל/מודל/
+  גרסת-קוד אחרים נדחה (`GroundingRunMismatchError`). אין latest-wins ואין
+  UPDATE. **טרנזקציה:** `applyDnaGroundingRemediation` /
+  `applyStrategyGroundingRemediation` (`src/db/repositories/grounding-judgments.ts`)
+  — זהות אחת לטרנזקציה, תחת נעילת `FOR UPDATE` על שורת ה-identity ובדיקה
+  שהגרסה שנשפטה עדיין האחרונה (`StaleIdentityVersionError`): הגרסה החדשה +
+  ה-checks שלה (`new_version`), או שורות ה-check על הגרסה שנשפטה
+  (`checked_no_change`), או כלום (`no_op`) — **יחד עם** שורות הביקורת, או בכלל
+  לא. תכנון (ה-planners) לא כותב דבר. **גבול מקור-האמת:** הטבלה לא נקראת ע"י
+  effective evidence, S/C, ביטחון, נראות, `dna.generate`,
+  `strategy.generateObserved`, Learning carry, Decision AI, Prior Record או
+  remediation; אין לה relation ב-`relations.ts`. **אין backfill היסטורי:**
+  שיפוטי v2/v3/v3-1 לא משוחזרים; OD-R9 מתחיל פרוספקטיבית אחרי 0018 (דוחות
+  הריצות הקודמות נשארים הראיה החיצונית להן). **מיגרציה 0018 — תוספתית בלבד**
+  (`CREATE TYPE` + `CREATE TABLE` + 5 FK; בלי `UPDATE`/`DELETE`/backfill, בלי
+  שינוי בטבלה קיימת). **סדר פריסה:** להחיל 0018 **לפני** הרצת קוד שכותב ליומן;
+  קוד ישן עובד מול ה-schema החדש (הטבלה פשוט לא בשימוש). **Rollback:** את
+  הקוד אפשר להחזיר בלי להחזיר את המיגרציה; הסרת הטבלה וה-enum מותרת רק כל עוד
+  היומן ריק — אחרי שנכתבה בו שורה הוא היסטוריה ואינו נמחק.
 - נוצר ע"י: קוד (מדפוסי עסקאות) + AI (מפרשנות ראיון, תמיד עם source_id
   אמיתי). נצרך ע"י: חישוב Evidence Strength, כל "View Evidence".
 - **Raw vs. Effective evidence (DNA Grounding Remediation, Autonomous
@@ -838,6 +929,7 @@ FOR UPDATE` על התשובה הקודמת, בטרנזקציה אחת עם ה-in
   `LaterContext`, `Evidence`, `DNAHypothesisVersion`,
   `StrategyPrincipleVersion`, `StrategyVersion`, `LearningInsightVersion`,
   `InterviewAnswer`, `DNAEvidenceGroundingCheck`, `StrategyEvidenceGroundingCheck`,
+  `GroundingJudgment`,
   `TransactionLinkFact`, `TransactionLinkFactMember`, `CorporateAction`,
   `DecisionExecutionFact`.
 - **`ON DELETE RESTRICT`**: `strategy_version_id`, `market_context_id`,

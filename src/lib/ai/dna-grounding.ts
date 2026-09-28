@@ -67,6 +67,15 @@ export interface EvidenceGroundingCheckInput {
   sourceKind?: "interview_answer" | "decision_statement";
   /** The real, persisted InterviewAnswer.answerText — the sole source of truth. Never the AI-generated evidence description. */
   sourceAnswerText: string;
+  /**
+   * Grounding Semantics V3.2 (OD-V32-7): the interview question the answer
+   * responded to — CONTEXT ONLY, never evidence. It may resolve what the
+   * answer refers to; it never supplies a claim component. Interview answers
+   * only: a decision statement has no question, and the gate drops this field
+   * for one even if a caller passes it. Never persisted as evidence, never a
+   * citation, never counted.
+   */
+  contextText?: string;
 }
 
 export type EvidenceGroundingVerdict = "supported" | "unsupported";
@@ -92,7 +101,7 @@ export const GROUNDING_TOOL_NAME = "record_grounding_verdict";
 
 const GROUNDING_SYSTEM_PROMPT = `You check whether a single real statement the investor wrote themselves, in its own actual words, genuinely grounds one specific claimed relationship — a hypothesis statement PLUS a specific stance, supporting or contradicting — not whether a separately-written description of it sounds plausible.
 
-You will be given the hypothesis statement, the stance being claimed (supporting or contradicting), the kind of statement (an interview answer about a trade, or what the investor wrote when recording a decision: their reasoning, the risks they considered, or their exit conditions), and the real, verbatim statement text. The statement text is the ONLY source of truth — you have not been given and must ignore any other characterization of what it says. A decision statement shows what the investor believed, considered or planned at decision time; it never shows what happened afterwards, so a claim about outcomes, results or execution is not grounded by it.
+You will be given five labelled parts: CLAIM (the hypothesis statement), STANCE (the stance being claimed, supporting or contradicting), SOURCE KIND (an interview answer about a trade, or a decision statement — what the investor wrote when recording a decision: their reasoning, the risks they considered, or their exit conditions), INVESTOR EVIDENCE (the real, verbatim statement text) and CONTEXT — NOT EVIDENCE (for an interview answer, the question it responded to; otherwise none). INVESTOR EVIDENCE is the ONLY source of evidence — you have not been given and must ignore any other characterization of what it says. CONTEXT is never evidence: it may resolve what the investor's answer refers to, and nothing else (INTERVIEW QUESTION — CONTEXT, NEVER EVIDENCE below). A decision statement shows what the investor believed, considered or planned at decision time; it never shows what happened afterwards, so a claim about outcomes, results or execution is not grounded by it.
 
 ${AFFIRMATIVE_STANCE_RULES}
 
@@ -100,9 +109,9 @@ You judge ONLY the stance you were given: "supported" means the statement affirm
 
 The two stances are judged by DIFFERENT rules. Read the stance you were given and apply only the matching rule below — never apply the "supporting" test to a "contradicting" citation or vice versa:
 
-- Stance = "supporting": the citation is grounded only when the statement's own words provide evidence FOR the hypothesis claim — genuinely establishing the behavior described. If the statement is silent on a material part of the claim, doesn't clearly match it, or actually contains details that undercut it (for example: the position wasn't actually profitable, the original thesis didn't actually hold, no real alternative is described, an external target was missed rather than met), it is NOT grounded. When the claim is conditional ("when X, tends to Y"), the statement must itself establish the material precondition X and the behavior Y: Y shown while X is unknown does not prove the conditional pattern and is unsupported.
+- Stance = "supporting": the citation is grounded only when the statement's own words provide evidence FOR the hypothesis claim — genuinely establishing the behavior described. If the statement is silent on a material part of the claim, doesn't clearly match it, or actually contains details that undercut it (for example: the position wasn't actually profitable, the original thesis didn't actually hold, no real alternative is described, an external target was missed rather than met), it is NOT grounded. When the claim is conditional ("when X, tends to Y"), the statement must itself establish the material precondition X and the behavior Y: Y shown while X is unknown does not prove the conditional pattern and is unsupported. Apply COMPOUND CLAIMS: the statement must establish every material component the claim asserts — a partial match is unsupported.
 
-- Stance = "contradicting": the citation is grounded only when the statement itself affirmatively establishes the opposite or a clearly inconsistent belief/action — the investor's own words must positively show that they believed or did something inconsistent with the claim in that instance. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. When the hypothesis pairs a headline behavior with an attributed motive or manner ("does X because of Y, rather than Z"), a clear counter-example to the headline behavior is enough on its own to ground the contradiction — do not additionally require the answer to state an alternative motive for the counter-example, and do not reject the citation merely because the motive clause cannot be evaluated when the described behavior never happened in this instance; an unobservable secondary clause is not the same as an unproven one. Absence of mention is not evidence of absence: a statement that merely does not mention the claimed consideration or behavior, that describes a different action without showing it was taken in disregard of the claimed principle, that is vague or ambiguous, or that expresses uncertainty establishes nothing against the claim and must be judged unsupported. A decision statement is a partial record — do not infer decision-process facts it does not record. Do not transform a tendency claim ("tends to", "generally", "often") into a universal one ("always") to make a silent instance look like a counter-example. Apply MATERIAL PRECONDITIONS before judging: identify the claim's own trigger conditions (only those the claim contains — never add one), require the statement to affirmatively establish them, and only then ask whether it shows the opposite behavior; behavior outside the trigger conditions, or while the trigger is unknown, is not a counter-example and is unsupported. Reject a contradicting citation if the statement is silent on the material behavioral claim it is supposed to contradict, if it contradicts only a minor or non-material detail while leaving that material behavior unaddressed, if it is actually consistent with / supports the hypothesis instead of going against it, or if there is insufficient affirmative evidence of the opposite.
+- Stance = "contradicting": the citation is grounded only when the statement itself affirmatively establishes the opposite or a clearly inconsistent belief/action — the investor's own words must positively show that they believed or did something inconsistent with the claim in that instance. Going against the hypothesis is the CORRECT, INTENDED outcome for a contradicting citation — never reject it merely because it fails to support the hypothesis; that is not the test and never has been. When the hypothesis pairs a headline behavior with an attributed motive or manner ("does X because of Y, rather than Z"), a clear counter-example to the headline behavior is enough on its own to ground the contradiction — do not additionally require the answer to state an alternative motive for the counter-example, and do not reject the citation merely because the motive clause cannot be evaluated when the described behavior never happened in this instance; an unobservable secondary clause is not the same as an unproven one. Absence of mention is not evidence of absence: a statement that merely does not mention the claimed consideration or behavior, that describes a different action without showing it was taken in disregard of the claimed principle, that is vague or ambiguous, or that expresses uncertainty establishes nothing against the claim and must be judged unsupported. A decision statement is a partial record — do not infer decision-process facts it does not record. Do not transform a tendency claim ("tends to", "generally", "often") into a universal one ("always") to make a silent instance look like a counter-example. Apply COMPOUND CLAIMS before using this motive rule: a component the claim words as a condition (inside "when", "if", "after", "while" or "as long as") is a precondition the statement must establish, never an attributed motive to set aside. Apply MATERIAL PRECONDITIONS before judging: identify the claim's own trigger conditions (only those the claim contains — never add one), require the statement to affirmatively establish them, and only then ask whether it shows the opposite behavior; behavior outside the trigger conditions, or while the trigger is unknown, is not a counter-example and is unsupported. Reject a contradicting citation if the statement is silent on the material behavioral claim it is supposed to contradict, if it contradicts only a minor or non-material detail while leaving that material behavior unaddressed, if it is actually consistent with / supports the hypothesis instead of going against it, or if there is insufficient affirmative evidence of the opposite.
 
 Do not soften your verdict because the claim sounds like a reasonable investing pattern in general — judge strictly against this one statement's own words. If there is insufficient affirmative evidence for the claimed stance, return unsupported. Respond only with the structured verdict.`;
 
@@ -169,6 +178,29 @@ export function parseGroundingResponse(
   return { verdict: raw.verdict, reason: raw.reason };
 }
 
+// Grounding Semantics V3.2 (OD-V32-7) — the request's evidence/context
+// boundary. Pure and exported so the exact wire text is unit tested without
+// a client. Five labelled parts; the investor's text and the question never
+// share a section. A decision statement never carries context: the field is
+// dropped here, at the one place every caller passes through.
+export const NO_CONTEXT = "(none)";
+
+export function buildGroundingUserMessage(input: EvidenceGroundingCheckInput): string {
+  const isDecisionStatement = input.sourceKind === "decision_statement";
+  const context = isDecisionStatement ? "" : (input.contextText ?? "").trim();
+  return [
+    `CLAIM: ${input.hypothesisStatement}`,
+    `STANCE: ${input.stance}`,
+    `SOURCE KIND: ${isDecisionStatement ? "decision statement (what the investor wrote when recording a decision)" : "interview answer"}`,
+    "",
+    "INVESTOR EVIDENCE (verbatim — the only source of evidence):",
+    input.sourceAnswerText,
+    "",
+    "CONTEXT — NOT EVIDENCE (the interview question the answer responded to; it may resolve what the answer refers to and never supplies a claim component):",
+    context === "" ? NO_CONTEXT : context,
+  ].join("\n");
+}
+
 export async function checkEvidenceGrounding(
   input: EvidenceGroundingCheckInput
 ): Promise<EvidenceGroundingResult> {
@@ -182,7 +214,7 @@ export async function checkEvidenceGrounding(
       messages: [
         {
           role: "user",
-          content: `Hypothesis statement: ${input.hypothesisStatement}\nClaimed stance: ${input.stance}\nStatement kind: ${input.sourceKind === "decision_statement" ? "decision statement (what the investor wrote when recording a decision)" : "interview answer"}\n\nReal investor statement (verbatim, the only source of truth):\n${input.sourceAnswerText}`,
+          content: buildGroundingUserMessage(input),
         },
       ],
     });

@@ -1,7 +1,8 @@
 // Grounding Semantics V3.1 — on the authorized test DB: (1) a technical
 // grounding failure during remediation writes NOTHING (no version, no check
 // row) and leaves the identity exactly as it was; (2) a normal V3.1
-// remediation persists the v3-1 contract and rule version in provenance.
+// remediation persists the CURRENT contract and rule version in provenance
+// (v3-2 since Grounding Semantics V3.2; the technical-failure rule is unchanged).
 // Deterministic injected gates, zero AI calls.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -84,7 +85,7 @@ describe("technical failure during remediation", () => {
     expect([plan2.version.supportingEvidenceCount, plan2.version.contradictingEvidenceCount]).toEqual([1, 0]);
     const provenance = buildProvenance({ generator: "dna.remediateGrounding", model: null, promptContracts: [AI_CONTRACTS.evidenceGrounding], sourceTypes: ["decision_statement"], revalidatedVersionId: v1.id, remediationReason: `${STANCE_SEMANTICS_VERSION}: material preconditions`, semanticRule: STANCE_SEMANTICS_VERSION });
     const { version: v2 } = await insertDnaHypothesisVersionWithGroundingChecks(db, hypothesis.id, plan2.version, plan2.checks, provenance);
-    expect(v2.provenanceJson).toMatchObject({ generator: "dna.remediateGrounding", promptContracts: ["evidence-grounding-v3-1-statements"], semanticRule: "grounding-semantics-v3-1", revalidatedVersionId: v1.id, model: null });
+    expect(v2.provenanceJson).toMatchObject({ generator: "dna.remediateGrounding", promptContracts: ["evidence-grounding-v3-2-statements"], semanticRule: "grounding-semantics-v3-2", revalidatedVersionId: v1.id, model: null });
     expect(await db.query.dnaHypothesisVersions.findFirst({ where: (v, { eq }) => eq(v.id, v1.id) })).toEqual(v1);
   });
 });

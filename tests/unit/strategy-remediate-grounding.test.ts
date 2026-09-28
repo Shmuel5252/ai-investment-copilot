@@ -140,7 +140,8 @@ describe("planPrincipleGroundingRemediation", () => {
       checkGrounding
     );
 
-    expect(plan).toEqual({ action: "no_op" });
+    expect(plan.action).toBe("no_op");
+    expect(Object.keys(plan).sort()).toEqual(["action", "judgments"]); // OD-R9: no version, no checks — only what the gate judged, for the audit ledger
   });
 
   it("a citation with no linkable InterviewAnswer always gets a complete check row (supported by convention), never silently absent", async () => {

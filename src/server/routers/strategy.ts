@@ -33,7 +33,7 @@ import {
 import { isUniqueViolation, StaleIdentityVersionError } from "@/db/errors";
 import { loadIndependenceResolver } from "@/lib/evidence/load-independence-resolver";
 import { listDecisionStatementsForInvestor } from "@/db/repositories/decision-statements";
-import { buildInvestorStatements } from "@/lib/ai/investor-statements";
+import { buildInvestorStatements, buildStatementContextById } from "@/lib/ai/investor-statements";
 import { AI_CONTRACTS } from "@/lib/ai/contracts";
 import { CLAUDE_MODEL } from "@/lib/ai/client";
 import { buildProvenance } from "@/lib/evidence/provenance";
@@ -151,11 +151,15 @@ export const strategyRouter = router({
     // against the REAL persisted answerText, never the AI's own
     // description.
     const statementTextById = new Map(statements.map((s) => [s.id, s.text]));
+    // Grounding Semantics V3.2 (OD-V32-7): same boundary as dna.ts — the
+    // question is CONTEXT ONLY for an interview answer, never evidence.
+    const statementContextById = buildStatementContextById(answers);
     const { principles: grounded } = await groundValidatedObservedPrinciples(
       structurallyValidated,
       statementTextById,
       independence,
-      checkEvidenceGrounding
+      checkEvidenceGrounding,
+      statementContextById
     );
 
     // Identity Resolution — matches each grounded proposal against this

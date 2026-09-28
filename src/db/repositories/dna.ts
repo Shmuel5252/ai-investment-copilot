@@ -346,7 +346,8 @@ async function assertEvidenceBelongsToHypothesis(
 // rather than trusting a second, independently-supplied value that could
 // disagree with it.
 export async function insertGroundingChecksForVersion(
-  db: typeof Db,
+  // DbOrTx (OD-R9): the audit apply path runs this inside its own transaction.
+  db: DbOrTx,
   dnaHypothesisVersionId: string,
   checks: readonly RemediationCheckResult[]
 ) {
@@ -404,7 +405,8 @@ export async function insertGroundingChecksForVersion(
 // version_number) backstop against a genuine concurrent-write race
 // (isUniqueViolation() at the call site, identical convention).
 export async function insertDnaHypothesisVersionWithGroundingChecks(
-  db: typeof Db,
+  // DbOrTx (OD-R9): the audit apply path runs this inside its own transaction.
+  db: DbOrTx,
   dnaHypothesisId: string,
   version: RemediationNewVersion,
   checks: readonly RemediationCheckResult[],

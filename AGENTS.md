@@ -132,7 +132,21 @@ SESSION_SECRET=          # חתימת cookie session
   claim מותנה ("כש-X → נוטה ל-Y") נתמך/נסתר רק ע"י הצהרה שמבססת בעצמה את
   הטריגר X; התנהגות כש-X לא ידוע = NEITHER, citation-local. כלי ה-grounding
   `strict`; כשל טכני (ערך מחוץ ל-enum, כלי שגוי, כשל קריאה) ≠ unsupported —
-  לא נספר, לא נכתב כ-check ולא מייצר גרסה.
+  לא נספר, לא נכתב כ-check ולא מייצר גרסה. **V3.2 (claims מורכבים + הקשר
+  שאלה, הוקפא 2026-09-27):** התאמה חלקית = NEITHER — citation נספר רק כשמילות
+  המשקיע מבססות **כל** רכיב מהותי שה-stance דורש (AND: הכול; OR: ענף אחד לפחות;
+  מניע נדרש לתמיכה ולא לסתירה; התפקיד נקבע מניסוח ה-claim, עמום ⇒ נדרש).
+  ה-proposers מציעים טענה התנהגותית אחת ל-claim (`CLAIM_ATOMICITY_RULES`, אותו
+  קובץ). שאלת הראיון מגיעה לשער כ-`contextText` בסעיף `CONTEXT — NOT EVIDENCE`
+  — הקשר בלבד, לעולם לא ראיה, ולעולם לא להצהרת החלטה. `without` / `rather than`
+  אינם רכיב נפרד אוטומטית: תכונה עצמאית נדרשת לתמיכה, ניסוח-מחדש של ההתנהגות
+  לא נספר פעמיים, עמום ⇒ נדרש. **OD-R9 — `grounding_judgments` (מיגרציה 0018)
+  הוא יומן ביקורת בלבד:** שורה לכל שיפוט grounding תקף בריצה מורשית (גם
+  `no_op`), נכתבת רק דרך `applyDnaGroundingRemediation` /
+  `applyStrategyGroundingRemediation` (`src/db/repositories/grounding-judgments.ts`),
+  זהות אחת לטרנזקציה. **לעולם לא מקור אמת** — שום צרכן סמנטי (effective
+  evidence, S/C, ביטחון, נראות, generation, carry, Decision AI, Prior Record,
+  remediation) לא קורא אותה; כשל טכני לעולם לא נרשם בה.
 - Historical records (ר' `docs/data-model.md` §10 לרשימה המדויקת) לא
   נדרסים לעולם — repository layer חושף רק `insert` עליהם. עקיפה ב-SQL
   ישיר כפופה לכלל הצר ב-Autonomous Working Rules (גישת SQL ישירה

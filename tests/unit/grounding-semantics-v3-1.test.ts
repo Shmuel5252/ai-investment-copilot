@@ -102,13 +102,14 @@ async function runStrategy(claim: string, cites: ReturnType<typeof cite>[]) {
 const sc = (h: { supportingCount: number; contradictingCount: number } | undefined) => (h ? [h.supportingCount, h.contradictingCount] : null);
 
 describe("V3.1 contract ids and canonical rule", () => {
-  it("bumps the three semantic contracts to v3-1 and leaves identity/learning alone", () => {
-    expect(AI_CONTRACTS.evidenceGrounding).toBe("evidence-grounding-v3-1-statements");
-    expect(AI_CONTRACTS.dnaPropose).toBe("dna-propose-v3-1-statements");
-    expect(AI_CONTRACTS.strategyObserve).toBe("strategy-observe-v3-1-statements");
+  it("the three semantic contracts move together (v3-2 since V3.2) and identity/learning stay alone", () => {
+    // V3.2 (compound claims + question context) moved the three ids again; every V3.1 sentence below is still required verbatim.
+    expect(AI_CONTRACTS.evidenceGrounding).toBe("evidence-grounding-v3-2-statements");
+    expect(AI_CONTRACTS.dnaPropose).toBe("dna-propose-v3-2-statements");
+    expect(AI_CONTRACTS.strategyObserve).toBe("strategy-observe-v3-2-statements");
     expect(AI_CONTRACTS.hypothesisIdentity).toBe("hypothesis-identity-v1");
     expect(AI_CONTRACTS.learningPropose).toBe("learning-propose-v1");
-    expect(STANCE_SEMANTICS_VERSION).toBe("grounding-semantics-v3-1");
+    expect(STANCE_SEMANTICS_VERSION).toBe("grounding-semantics-v3-2");
   });
 
   it("the shared rule defines material preconditions, the four-step test, the disqualified sources, both examples and citation-local qualification", () => {

@@ -120,15 +120,15 @@ const countsOf = (h: { supportingCount: number; contradictingCount: number; evid
 
 describe("contract ids", () => {
   it("bumps the three contracts whose meaning changed and keeps identity/learning untouched", () => {
-    // V3.1 (material preconditions) moved the three ids again; the V3 sentences below are still required verbatim.
+    // V3.1 (material preconditions) and V3.2 (compound claims + question context) moved the three ids again; the V3 sentences below are still required verbatim.
     expect(AI_CONTRACTS).toEqual({
-      dnaPropose: "dna-propose-v3-1-statements",
-      strategyObserve: "strategy-observe-v3-1-statements",
-      evidenceGrounding: "evidence-grounding-v3-1-statements",
+      dnaPropose: "dna-propose-v3-2-statements",
+      strategyObserve: "strategy-observe-v3-2-statements",
+      evidenceGrounding: "evidence-grounding-v3-2-statements",
       hypothesisIdentity: "hypothesis-identity-v1",
       learningPropose: "learning-propose-v1",
     });
-    expect(STANCE_SEMANTICS_VERSION).toBe("grounding-semantics-v3-1");
+    expect(STANCE_SEMANTICS_VERSION).toBe("grounding-semantics-v3-2");
   });
 
   it("the shared rule text states the frozen semantics once", () => {
@@ -169,14 +169,14 @@ describe("grounding gate contract (mocked client, prompt capture only)", () => {
       /never reject it merely because it fails to support/,
     ]) expect(call.system).toMatch(re);
     expect(call.tools[0].input_schema.properties.verdict.enum).toEqual(["supported", "unsupported"]);
-    expect(call.messages[0].content).toContain("Statement kind: decision statement (what the investor wrote when recording a decision)");
+    expect(call.messages[0].content).toContain("SOURCE KIND: decision statement (what the investor wrote when recording a decision)"); // V3.2 labelled request
     expect(call.messages[0].content).toContain(T.PARTIAL_REASONING);
   });
 
   it("labels an interview answer as an interview answer", async () => {
     create.mockResolvedValueOnce({ content: [{ type: "tool_use", input: { verdict: "supported", reason: "r" } }] });
     await checkEvidenceGrounding({ hypothesisStatement: CLAIM, stance: "supporting", sourceAnswerText: T.A });
-    expect(create.mock.calls[0]![0].messages[0].content).toContain("Statement kind: interview answer");
+    expect(create.mock.calls[0]![0].messages[0].content).toContain("SOURCE KIND: interview answer"); // V3.2 labelled request
   });
 });
 
@@ -338,7 +338,7 @@ describe("remediation provenance shape", () => {
       semanticRule: STANCE_SEMANTICS_VERSION,
       now: new Date("2026-09-25T00:00:00Z"),
     });
-    expect(p).toMatchObject({ generator: "dna.remediateGrounding", model: null, promptContracts: ["evidence-grounding-v3-1-statements"], revalidatedVersionId: "v1", semanticRule: "grounding-semantics-v3-1", independencePolicy: "independence-policy-v2", evidenceSourceContract: "evidence-source-v1", generatedAt: "2026-09-25T00:00:00.000Z" });
+    expect(p).toMatchObject({ generator: "dna.remediateGrounding", model: null, promptContracts: ["evidence-grounding-v3-2-statements"], revalidatedVersionId: "v1", semanticRule: "grounding-semantics-v3-2", independencePolicy: "independence-policy-v2", evidenceSourceContract: "evidence-source-v1", generatedAt: "2026-09-25T00:00:00.000Z" });
     expect(p.remediationReason).toContain("grounding-semantics-v3");
     // generation provenance carries none of the remediation-only fields
     const g = buildProvenance({ generator: "dna.generate", model: "m", promptContracts: [AI_CONTRACTS.dnaPropose], sourceTypes: ["interview_answer"] });

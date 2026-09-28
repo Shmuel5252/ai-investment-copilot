@@ -412,7 +412,8 @@ async function assertEvidenceBelongsToPrinciple(
 // rather than trusting a second, independently-supplied value that could
 // disagree with it.
 export async function insertGroundingChecksForPrincipleVersion(
-  db: typeof Db,
+  // DbOrTx (OD-R9): the audit apply path runs this inside its own transaction.
+  db: DbOrTx,
   strategyPrincipleVersionId: string,
   checks: readonly RemediationCheckResult[]
 ) {
@@ -461,7 +462,8 @@ export async function insertGroundingChecksForPrincipleVersion(
 // strategy_evidence_grounding_checks rows the ordinary generateObserved
 // path has no concept of.
 export async function insertObservedPrincipleVersionWithGroundingChecks(
-  db: typeof Db,
+  // DbOrTx (OD-R9): the audit apply path runs this inside its own transaction.
+  db: DbOrTx,
   strategyPrincipleId: string,
   version: RemediationNewPrincipleVersion,
   checks: readonly RemediationCheckResult[],

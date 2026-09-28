@@ -100,6 +100,7 @@ export async function groundCarryCitations(
     for (const s of own) {
       let verdict: EvidenceGroundingResult;
       try {
+        // Same gate, same V3.2 semantics. A decision statement has no question, so no contextText is ever passed (OD-V32-7).
         verdict = await checkGrounding({ hypothesisStatement, stance: c.stance, sourceAnswerText: s.text, sourceKind: "decision_statement" });
       } catch {
         verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed.", technicalFailure: true };

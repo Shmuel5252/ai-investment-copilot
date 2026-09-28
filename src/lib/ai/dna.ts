@@ -1,7 +1,7 @@
 import { anthropic, CLAUDE_MODEL } from "./client";
 import { normalizeStructuredCollection } from "./structured-output";
 import { formatInvestorStatements, INVESTOR_STATEMENT_RULES, type InvestorStatementForAnalysis } from "./investor-statements";
-import { AFFIRMATIVE_STANCE_RULES } from "./stance-rules";
+import { AFFIRMATIVE_STANCE_RULES, CLAIM_ATOMICITY_RULES } from "./stance-rules";
 
 export interface ProposedEvidence {
   /** An interview-answer uuid or a "decision:<id>:<kind>" statement id — parsed and validated in code, never trusted. */
@@ -32,7 +32,10 @@ Ground rules:
 - Write each hypothesis statement the way you'd describe a real tendency to the investor directly ("You tend to...", "You seem to prefer..."), grounded only in what's actually in the statements — never invent numbers, percentages, or facts not present in the text you were given.
 - Keep tendency language as tendency: never restate "you tend to" as "you always", "you never" or "in every case" — a universal claim would need every cited statement to establish it, and a single silent instance never contradicts a tendency.
 - Conditional patterns ("when X, you tend to Y"): cite a statement as supporting or contradicting ONLY when the statement itself establishes the material trigger X and the behavior (MATERIAL PRECONDITIONS above). Never fill a missing trigger from ticker or price history, outcomes, Later Context, other statements or general knowledge — evidence qualification is citation-local: one statement, judged by its own words.
-- Propose at most 5 hypotheses.`;
+- Compound claims and questions: cite a statement for a claim ONLY when it establishes every material component that stance requires (COMPOUND CLAIMS above) — a partial match is not cited. The question shown with an interview answer is context, never evidence: it tells you what the answer is about, and it never supplies a trigger, motive, belief or fact the investor's own words do not state.
+- Propose at most 5 hypotheses.
+
+${CLAIM_ATOMICITY_RULES}`;
 
 const PROPOSE_TOOL = {
   name: "propose_hypotheses",

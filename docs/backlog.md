@@ -400,13 +400,63 @@ FMP טרי), `portfolioStateJson`/Portfolio Fit, Market Context, גרסאות DN
    `d5941418` (חובה — #4 אישר סתירה ללא טריגר), `173720c6` (חובה — v2 נשען על #11 מפוקפק; v2 נשמר כהיסטוריה),
    `3653aeed` (חובה — ניסיון חוזר **אחד** אחרי strict), `7c3665ca` (סימטריה: ציטוט SPCX תומך ב-"כל עוד
    המניה ממשיכה לעלות" בלי שהטקסט מבסס עלייה), `c478eba3` ו-`5cee68a2` (אחידות חוזה — תוצאה צפויה ללא שינוי).
-   v3 v2-ים ושורות ה-check שלהם נשארים כפי שהם.
+   v3 v2-ים ושורות ה-check שלהם נשארים כפי שהם. **בוצע 2026-09-27 (v3-1, AI אמיתי, 14 קריאות, 0 כשלים טכניים,
+   0 retries):** `d5941418` v2, `7c3665ca` v3, `3653aeed` v4; `c478eba3`, `5cee68a2`, `173720c6` = `no_op`.
+   סקירה אחרי הריצה מצאה שלושה verdicts מפוקפקים על claims מורכבים — הובילה ל-V3.2 (OD-R8).
+8. **OD-R8 — Grounding Semantics V3.2: claims מורכבים + שאלת הראיון כהקשר** (OD-V32-1..7, הוקפא 2026-09-27):
+   התאמה חלקית = NEITHER; סמנטיקת AND / OR; מניע נדרש לתמיכה ולא לסתירה; התפקיד נקבע מניסוח ה-claim, עמום ⇒
+   נדרש; atomicity ב-proposers; שאלת הראיון מגיעה לשער כ-`contextText`, הקשר בלבד. **Revalidation מפוקחת
+   V3.2 (AI אמיתי) עדיין לא רצה.** סט יעד (ניתוח read-only דטרמיניסטי, 2026-09-27; 19 claims פעילים מבוססי-ראיה
+   של המשקיע האמיתי: 6 atomic, 5 תנאי-קדם מורכבים לגיטימיים, 8 מורכבים-מדי/עמומים; אף אחד לא גלוי ל-AI, S מרבי 2):
+   **מינימום לפי ארבעת הקריטריונים של V3.2 — 18 identities, 36 ציטוטים גולמיים** (33 תשובות ראיון, 3 הצהרות
+   החלטה): DNA `01656115`, `5cee68a2`, `699cdb50`, `7c3665ca`, `ace307a1`, `afb0d5c4`, `c478eba3`, `cd9fcbe6`,
+   `d5941418`, `e1239589`, `e4adb58e`; Strategy `0eb9807c`, `173720c6`, `3653aeed`, `39c061d0`, `5b64985b`,
+   `646e7663`, `a48426b1`. **מומלץ לאחידות חוזה — כל ה-19, 38 ציטוטים** (33 תשובות ראיון, 5 הצהרות החלטה;
+   מוסיף את `18524a79`: atomic, שתי הצהרות החלטה, נשפט רק תחת v2). אושר מחדש אחרי הבהרת ה-contrast
+   (2026-09-27): 5 claims עם contrast עצמאי (`5cee68a2`, `7c3665ca`, `ace307a1`, `173720c6`, `3653aeed`), 3 עם
+   contrast שמנסח-מחדש את ההתנהגות (`cd9fcbe6`, `5b64985b`, `646e7663`), 1 scope (`699cdb50`). לכל 38 הציטוטים יש טקסט מקור; לכל תשובת ראיון יש שאלה שמורה. אין לכלול תוצאות
+   צפויות בשום בקשת מודל. עד שהריצה תושלם — לא להריץ `dna.generate` / `strategy.generateObserved` (ל-`ace307a1`
+   ול-`3653aeed` S=2, C=0: case תומך אחד נוסף = `moderate`).
+9. **OD-R9 — Grounding Judgment Audit Ledger (OD-V32-8; מומש 2026-09-27 — קוד + מיגרציה 0018 כתובה;
+   המיגרציה **לא הוחלה** על ה-DB האמיתי):** `*_evidence_grounding_checks` שומרות `(version, evidence,
+   verdict, reason, checked_at)` עם `UNIQUE(version, evidence)` ובלי חוזה; לכן `no_op` לא יכול היה להיכתב,
+   ו-`checked_no_change` נכתב על גרסה שה-provenance שלה מציין חוזה ישן. **נבנה:** טבלת append-only
+   `grounding_judgments` — יומן ביקורת בלבד, `UNIQUE(run_id, evidence_id)`, לעולם לא נקראת לחישוב effective
+   evidence (ר' `docs/data-model.md` §2). חלופה שנדחתה: עמודת `contract` + הרחבת ה-UNIQUE בטבלאות ה-check —
+   משנה את משמעות הטבלה שממנה נגזר effective evidence. **סדר פריסה בטוח:** (1) checkpoint ב-Git ל-V3.2 +
+   OD-R9; (2) החלת מיגרציה 0018 על ה-DB האמיתי (תוספתית; הוכחה על clone: 34 טבלאות ו-10,117 שורות זהות
+   byte-for-byte, ledger 18 → 19); (3) רק אז ה-revalidation המפוקחת של V3.2 דרך
+   `applyDnaGroundingRemediation` / `applyStrategyGroundingRemediation` עם `run_id` אחד לריצה. **חוב שנשאר:**
+   אין backfill לשיפוטי v2/v3/v3-1 (בכוונה); אין רשומת כשל ברמת-ריצה (כשל טכני מדווח ע"י ה-runner ולא נכתב);
+   ה-runner המפוקח עצמו לא נבנה.
 **חוב V1 מקובל (נשאר):** גרסאות Learning ישנות בלי provenance מקבלות טביעה משורות ה-identity (re-baseline
 חד-פעמי, append בלבד); ריצת generate שהמודל לא הציע בה דבר לא משאירה עקבה (ה-nudge "צור מחדש" נשאר);
 Learning עדיין מקובץ לפי סקטור; הצהרות החלטה נכנסות ל-DNA/Strategy רק ביצירה מחדש; שתי שורות
 `source_learning_insight_id` היסטוריות (סינתטיות) נשארות; מיגרציה 0017 חייבת להיות מוחלת לפני פריסת הקוד.
 
 ## נבנה
+- **Grounding Semantics V3.2 — claims מורכבים + atomicity + שאלת הראיון כהקשר** (2026-09-27, OD-R8;
+  `src/lib/ai/stance-rules.ts`, `src/lib/ai/dna-grounding.ts`, `src/lib/ai/investor-statements.ts`,
+  `docs/data-model.md` §2): הכלל הקנוני מרחיב ל-COMPOUND CLAIMS (התאמה חלקית = NEITHER, AND / OR, מניע,
+  תפקיד לפי ניסוח, scope) ול-INTERVIEW QUESTION — CONTEXT, NEVER EVIDENCE; `CLAIM_ATOMICITY_RULES` לשני
+  ה-proposers; חוזים `*-v3-2-statements`; בקשת השער מתויגת בחמישה סעיפים (`buildGroundingUserMessage`);
+  `contextText` עובר דרך שני שערי היצירה, שני ה-planners ושני ה-routers (`buildStatementContextById`), לעולם לא
+  להצהרת החלטה ולא ל-carry; כלי ה-grounding נשאר strict. טסטים: מקרי-תקיפה AND / OR / מניע / עמום / חלקי,
+  מקרי-תקיפה A–G להקשר השאלה, fixtures מנוקים בצורת קריאות 8 ו-13, atomicity, planners, carry, ואינטגרציה דרך
+  ה-routers האמיתיים ו-remediation על DB (כלום לא נכתב בכשל טכני; גרסאות ישנות זהות byte-for-byte). תוקנה גם
+  הערת-כותרת מיושנת בשני ה-planners. הבהרת contrast (`without` / `rather than`) הוקפאה והוטמעה בכלל הקנוני
+  עם טסטים דטרמיניסטיים. **לא בוצע:** revalidation V3.2 אמיתית (שער מפוקח נפרד); אין שינוי ספי ביטחון, אין
+  rewrite. provenance ל-`no_op` — ר' OD-R9 מיד למטה.
+- **OD-R9 — Grounding Judgment Audit Ledger** (2026-09-27; `src/db/schema/grounding-judgments.ts`,
+  `src/db/repositories/grounding-judgments.ts`, `src/lib/evidence/grounding-run.ts`, מיגרציה
+  `0018_grounding_judgments`, `docs/data-model.md` §2): טבלת append-only `grounding_judgments` + enum
+  `grounding_planner_action`; שני ה-planners מחזירים `judgments` בכל תוצאה שנשפטה (כולל `no_op`);
+  `applyDnaGroundingRemediation` / `applyStrategyGroundingRemediation` כותבים את הכתיבה הסמנטית ואת שורות
+  הביקורת בטרנזקציה אחת לזהות, עם replay / conflict / stale / run-mismatch; ארבע פונקציות ה-insert הקיימות
+  מקבלות `DbOrTx`. טסטים: צורת המיגרציה וכל constraint בשמו, `no_op`, `checked_no_change`, `new_version`,
+  replay ו-conflict, כשל טכני (אפס כתיבות), rollback, stale, ריצה על כמה זהויות, ובידוד קריאה (שורת ביקורת
+  עוינת לא משנה שום קריאה סמנטית; טסט ארכיטקטורה על מי רשאי לקרוא לטבלה). מיגרציה: fresh chain 0000 → 0018
+  ו-upgrade 0017 → 0018 על clone של ה-DB האמיתי. **לא בוצע:** החלת 0018 על ה-DB האמיתי; ה-runner המפוקח.
 - **Grounding Semantics V3.1 — תנאי-קדם מהותיים + strict grounding tool + כשל טכני** (2026-09-25, OD-R7;
   `src/lib/ai/stance-rules.ts`, `src/lib/ai/dna-grounding.ts`, `docs/data-model.md` §2): הכלל הקנוני מרחיב ל-MATERIAL
   PRECONDITIONS (ארבעה שלבים, מקורות פסולים, שתי דוגמאות, citation-local) וסימטריה ל-supporting; ה-proposers לא ממלאים

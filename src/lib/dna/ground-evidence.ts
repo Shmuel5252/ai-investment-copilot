@@ -54,7 +54,9 @@ export async function groundValidatedHypotheses(
   hypotheses: readonly ValidatedHypothesis[],
   answerTextById: ReadonlyMap<string, string>,
   independence: EvidenceIndependenceResolver,
-  checkGrounding: GroundingCheckFn
+  checkGrounding: GroundingCheckFn,
+  /** Grounding Semantics V3.2 (OD-V32-7): Statement ID -> the interview question, CONTEXT ONLY. Looked up for interview answers only; never evidence, never counted, never persisted. */
+  contextTextById?: ReadonlyMap<string, string>
 ): Promise<GroundingRunResult> {
   const result: ValidatedHypothesis[] = [];
   const excluded: GroundingRunResult["excluded"] = [];
@@ -80,6 +82,8 @@ export async function groundValidatedHypotheses(
         continue;
       }
 
+      const contextText = evidence.decisionStatement ? undefined : contextTextById?.get(statementId);
+
       // Defense in depth: the real checkEvidenceGrounding() already never
       // throws (it has its own internal fail-closed try/catch), but this
       // orchestrator takes the check as an injected dependency — if a
@@ -94,6 +98,8 @@ export async function groundValidatedHypotheses(
           stance: evidence.stance,
           sourceAnswerText,
           sourceKind: evidence.decisionStatement ? "decision_statement" : "interview_answer",
+          // V3.2 (OD-V32-7): the question is context for an interview answer only.
+          ...(contextText !== undefined ? { contextText } : {}),
         });
       } catch {
         verdict = { verdict: "unsupported", reason: "Grounding check threw — failing closed.", technicalFailure: true };

@@ -133,7 +133,7 @@ describe("DNA: the c478eba3 shape", () => {
     expect(v2.versionNumber).toBe(2);
     expect(v2.createdBy).toBe("system_grounding_revalidation");
     expect(v2.provenanceJson).toEqual(provenance);
-    expect(v2.provenanceJson).toMatchObject({ generator: "dna.remediateGrounding", model: null, promptContracts: ["evidence-grounding-v3-1-statements"], revalidatedVersionId: v1.id, semanticRule: "grounding-semantics-v3-1", independencePolicy: "independence-policy-v2" });
+    expect(v2.provenanceJson).toMatchObject({ generator: "dna.remediateGrounding", model: null, promptContracts: ["evidence-grounding-v3-2-statements"], revalidatedVersionId: v1.id, semanticRule: "grounding-semantics-v3-2", independencePolicy: "independence-policy-v2" });
     expect(v2.changeReason).toContain(avgoRow.id);
 
     // v1 byte-identical, raw rows byte-identical
@@ -148,7 +148,8 @@ describe("DNA: the c478eba3 shape", () => {
 
     // idempotent: the same gate against the already-checked v2 state writes nothing
     const again = await planGroundingRemediation({ ...planInput(), currentVersion: { id: v2.id, statementText: v2.statementText }, alreadyGroundedEvidenceIds: new Set(checks.filter((c) => c.verdict === "supported").map((c) => c.evidenceId)) }, v3Gate([]));
-    expect(again).toEqual({ action: "no_op" });
+    expect(again.action).toBe("no_op");
+    expect(Object.keys(again).sort()).toEqual(["action", "judgments"]); // OD-R9: no version, no checks — only what the gate judged, for the audit ledger
     expect((await getLatestDnaHypothesisVersion(db, hypothesis.id))!.id).toBe(v2.id);
 
     // atomic: a check row for another identity's evidence rolls the whole version back
@@ -217,7 +218,8 @@ describe("Strategy: the observed-principle mirror", () => {
     expect((await getEffectiveEvidenceForStrategyPrincipleVersion(db, principle.id, v1.id)).map((e) => e.id).sort()).toEqual([avgoRow.id, sndkRow.id].sort());
     const checks = await getGroundingChecksForStrategyPrincipleVersion(db, v2.id);
     const again = await planPrincipleGroundingRemediation({ currentVersion: { id: v2.id, statementText: v2.statementText, principleType: "observed" }, rawEvidence, answerTextById: textById, independence, alreadyGroundedEvidenceIds: new Set(checks.filter((c) => c.verdict === "supported").map((c) => c.evidenceId)) }, v3Gate([]));
-    expect(again).toEqual({ action: "no_op" });
+    expect(again.action).toBe("no_op");
+    expect(Object.keys(again).sort()).toEqual(["action", "judgments"]); // OD-R9: no version, no checks — only what the gate judged, for the audit ledger
     expect((await getLatestStrategyPrincipleVersion(db, principle.id))!.id).toBe(v2.id);
 
     const { principle: other } = await insertObservedPrincipleWithEvidence(db, investorId, { statement: "other", evidence: [ds(sndk, "supporting")], supportingCount: 1, contradictingCount: 0, evidenceStrength: "insufficient_evidence", independenceBasis: assessCitations(independence, [ds(sndk, "supporting")]).independenceBasis });

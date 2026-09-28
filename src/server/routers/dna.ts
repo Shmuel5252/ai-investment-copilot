@@ -23,7 +23,7 @@ import {
 } from "@/lib/dna/resolve-hypothesis-identity";
 import { loadIndependenceResolver } from "@/lib/evidence/load-independence-resolver";
 import { listDecisionStatementsForInvestor } from "@/db/repositories/decision-statements";
-import { buildInvestorStatements } from "@/lib/ai/investor-statements";
+import { buildInvestorStatements, buildStatementContextById } from "@/lib/ai/investor-statements";
 import { AI_CONTRACTS } from "@/lib/ai/contracts";
 import { CLAUDE_MODEL } from "@/lib/ai/client";
 import { buildProvenance } from "@/lib/evidence/provenance";
@@ -86,11 +86,16 @@ export const dnaRouter = router({
     // Statement ID: a decision statement is grounded against the text the
     // investor wrote, exactly like an answer.
     const statementTextById = new Map(statements.map((s) => [s.id, s.text]));
+    // Grounding Semantics V3.2 (OD-V32-7): the persisted interview question
+    // travels beside the answer as CONTEXT ONLY — it resolves what the answer
+    // refers to and never supplies a claim component. Answers only.
+    const statementContextById = buildStatementContextById(answers);
     const { hypotheses: grounded } = await groundValidatedHypotheses(
       structurallyValidated,
       statementTextById,
       independence,
-      checkEvidenceGrounding
+      checkEvidenceGrounding,
+      statementContextById
     );
 
     // Hypothesis Identity (same task) — every past generate() call

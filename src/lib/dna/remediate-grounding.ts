@@ -47,6 +47,21 @@ export interface RemediationCheckResult {
   reason: string;
 }
 
+// OD-R9 — what the grounding gate actually judged for one citation, in the
+// form the audit ledger (grounding_judgments) persists. Real gate judgments
+// only: a citation with no investor statement gets a "supported by
+// convention" check row and NO judgment, and a technical failure is never a
+// judgment. AUDIT ONLY: a judgment is never read back into effective
+// evidence, counts, tiers, visibility or any later grounding — those come from
+// the version and check rows alone.
+export interface GroundingJudgment {
+  evidenceId: string;
+  verdict: "supported" | "unsupported";
+  reason: string;
+  /** Whether an interview question reached the gate as context for this citation (OD-V32-7). */
+  contextSupplied: boolean;
+}
+
 export interface RemediationNewVersion {
   statementText: string;
   evidenceStrength: EvidenceStrength;
@@ -67,24 +82,26 @@ export type RemediationPlan =
   // failure; a later supervised run re-judges the identity.
   | { action: "technical_failure"; failures: { evidenceId: string; reason: string }[] }
   // Already checked before, and re-running grounding now produces the
-  // exact same effective evidence set — nothing to write at all, not
-  // even a repeat grounding-check row (idempotency: re-running
-  // remediation against an already-remediated, unchanged state is a
-  // true no-op).
-  | { action: "no_op" }
+  // exact same effective evidence set — no version and no repeat
+  // grounding-check row (idempotency: re-running remediation against an
+  // already-remediated, unchanged state changes nothing semantic). The
+  // judgments are still returned (OD-R9): in an authorized persisted run
+  // they are the one durable record that these citations were re-judged
+  // under the current contract.
+  | { action: "no_op"; judgments: GroundingJudgment[] }
   // Never checked before, and every raw citation survives grounding —
   // the legacy baseline ("all raw evidence counts") already matches the
   // grounded result, so no new version is warranted, but the check rows
   // are still worth persisting: without them this version stays
   // indistinguishable from one that was never checked at all.
-  | { action: "checked_no_change"; checks: RemediationCheckResult[] }
+  | { action: "checked_no_change"; checks: RemediationCheckResult[]; judgments: GroundingJudgment[] }
   // The effective evidence set differs from what the current version
   // reflects — grounds a new append-only version (statementText carried
   // over unchanged; only the evidence composition/counts differ) plus
   // the grounding-check rows that justify it, including checks for
   // citations that still survive (an auditor must be able to see the
   // full picture for the new version, not only what changed).
-  | { action: "new_version"; checks: RemediationCheckResult[]; version: RemediationNewVersion };
+  | { action: "new_version"; checks: RemediationCheckResult[]; judgments: GroundingJudgment[]; version: RemediationNewVersion };
 
 export interface PlanGroundingRemediationInput {
   currentVersion: CurrentVersionForRemediation;
@@ -102,6 +119,8 @@ export interface PlanGroundingRemediationInput {
    * task relied on (getEvidenceForDnaHypothesis's unfiltered read).
    */
   alreadyGroundedEvidenceIds: ReadonlySet<string> | null;
+  /** Grounding Semantics V3.2 (OD-V32-7): Statement ID -> the interview question, CONTEXT ONLY for the gate. Looked up for interview answers only; never evidence, never a check row, never counted. */
+  contextTextById?: ReadonlyMap<string, string>;
 }
 
 function setsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
@@ -136,15 +155,18 @@ function buildChangeReason(
 }
 
 // Fail-closed, like every other grounding-adjacent function: a citation
-// this function cannot judge (missing answer text, a thrown grounding
-// call) is treated as unsupported, never silently kept.
+// this function cannot judge (missing statement text, a thrown or
+// technically invalid grounding call) stops the plan as a technical failure
+// and nothing is written from it (Grounding Semantics V3.1) — it is never
+// silently kept and never persisted as "unsupported".
 export async function planGroundingRemediation(
   input: PlanGroundingRemediationInput,
   checkGrounding: RemediationGroundingFn
 ): Promise<RemediationPlan> {
-  const { currentVersion, rawEvidence, answerTextById, independence, alreadyGroundedEvidenceIds } = input;
+  const { currentVersion, rawEvidence, answerTextById, independence, alreadyGroundedEvidenceIds, contextTextById } = input;
 
   const checks: RemediationCheckResult[] = [];
+  const judgments: GroundingJudgment[] = [];
   const freshSupportedIds = new Set<string>();
 
   for (const ev of rawEvidence) {
@@ -184,6 +206,8 @@ export async function planGroundingRemediation(
       return { action: "technical_failure", failures: [{ evidenceId: ev.id, reason: "Source statement text unavailable — cannot be judged." }] };
     }
 
+    const contextText = ev.decisionStatement ? undefined : contextTextById?.get(statementId);
+
     let verdict: EvidenceGroundingResult;
     try {
       verdict = await checkGrounding({
@@ -194,6 +218,8 @@ export async function planGroundingRemediation(
         // (partial record, decision-time process) — never relabelled as an
         // interview answer (Grounding Semantics V3, sourceKind propagation).
         sourceKind: ev.decisionStatement ? "decision_statement" : "interview_answer",
+        // V3.2 (OD-V32-7): the question is context for an interview answer only.
+        ...(contextText !== undefined ? { contextText } : {}),
       });
     } catch (err) {
       verdict = { verdict: "unsupported", reason: `Grounding check threw — ${(err as Error)?.message ?? "unknown error"}`, technicalFailure: true };
@@ -203,6 +229,8 @@ export async function planGroundingRemediation(
     }
 
     checks.push({ evidenceId: ev.id, verdict: verdict.verdict, reason: verdict.reason });
+    // OD-R9: what the gate judged, for the audit ledger — every outcome carries it, no_op included.
+    judgments.push({ evidenceId: ev.id, verdict: verdict.verdict, reason: verdict.reason, contextSupplied: contextText !== undefined && contextText.trim() !== "" });
     if (verdict.verdict === "supported") freshSupportedIds.add(ev.id);
   }
 
@@ -210,7 +238,7 @@ export async function planGroundingRemediation(
   const materiallyChanged = !setsEqual(baselineIds, freshSupportedIds);
 
   if (!materiallyChanged) {
-    return alreadyGroundedEvidenceIds === null ? { action: "checked_no_change", checks } : { action: "no_op" };
+    return alreadyGroundedEvidenceIds === null ? { action: "checked_no_change", checks, judgments } : { action: "no_op", judgments };
   }
 
   const survivingEvidence = rawEvidence.filter((e) => freshSupportedIds.has(e.id));
@@ -222,6 +250,7 @@ export async function planGroundingRemediation(
   return {
     action: "new_version",
     checks,
+    judgments,
     version: {
       statementText: currentVersion.statementText,
       evidenceStrength: assessed.evidenceStrength,

@@ -25,6 +25,13 @@ export const evidenceStanceEnum = pgEnum("evidence_stance", ["supporting", "cont
 // grounds that claim).
 export const groundingVerdictEnum = pgEnum("grounding_verdict", ["supported", "unsupported"]);
 
+// OD-R9 — what the remediation planner decided for the identity a grounding
+// judgment belongs to (src/lib/dna/remediate-grounding.ts). Recorded in the
+// audit ledger (grounding_judgments) only. "technical_failure" is deliberately
+// NOT a value: a technically invalid call is never a judgment and is never
+// written there.
+export const groundingPlannerActionEnum = pgEnum("grounding_planner_action", ["no_op", "checked_no_change", "new_version"]);
+
 export const dnaHypothesisStatusEnum = pgEnum("dna_hypothesis_status", [
   "active",
   "user_rejected",
