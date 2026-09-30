@@ -635,145 +635,220 @@ export const importFieldLabel: Record<string, string> = {
 export const importPage = {
   title: "ייבוא היסטוריית מסחר",
   description:
-    "העלה היסטוריית מסחר חלקית (למשל 6–12 החודשים האחרונים). אם פוזיציה נפתחה לפני החלון שאתה מעלה, תתבקש להזין את יתרת הפתיחה שלה בנפרד — לעולם לא מניחים שהקובץ הוא כל התיק שלך.",
-  fileModeTab: "ייבוא מקובץ",
-  manualModeTab: "הזנה ידנית",
-  rowsDetectedLabel: "שורות זוהו. מפה את העמודות שלך למטה (ניחוש ראשוני כבר מולא):",
-  validatingLabel: "מאמת...",
-  notMappedOption: "— לא ממופה —",
-  previewFirstRows: "תצוגה מקדימה של השורות הראשונות",
-  validateButton: "אמת",
-  validRowsLabel: "שורות תקינות,",
-  invalidRowsLabel: "שורות לא תקינות.",
-  fixRowsInstruction: "תקן את השורות האלה בקובץ ה-CSV והעלה מחדש:",
+    "שחזור היסטוריית העסקאות שלך, מקובץ של הברוקר או בהזנה ידנית. היסטוריה חלקית היא תקינה: אם פוזיציה נפתחה לפני החלון שאתה מעלה, תתבקש להזין בנפרד מה החזקת בתחילתו. המערכת לעולם לא מניחה שהקובץ הוא כל התיק.",
+  modeLabel: "איך להוסיף עסקאות",
+  fileMode: "ייבוא מקובץ",
+  fileModeHint: "קובץ CSV מהברוקר, עם עמודה לכל שדה.",
+  manualMode: "הזנה ידנית",
+  manualModeHint: "עסקאות קנייה ומכירה שאתה מקליד בעצמך.",
+  // upload
+  uploadTitle: "בחירת קובץ",
+  uploadLabel: "קובץ CSV",
+  uploadHelp:
+    "הקובץ משמש להכנת הייבוא ולאישורו. המערכת שומרת את העסקאות ואת שם הקובץ, לא את הקובץ עצמו.",
+  readingFile: "קורא את הקובץ...",
+  // mapping
+  mappingTitle: "מיפוי עמודות",
+  mappingRowsPrefix: "נמצאו בקובץ",
+  mappingRowsSuffix: "שורות.",
+  mappingHint:
+    "לכל שדה בחר את העמודה בקובץ שמספקת אותו. המערכת מילאה ניחוש ראשוני לפי שמות העמודות; אפשר לשנות כל בחירה. המיפוי משמש לייבוא הזה בלבד ואינו נשמר.",
+  mappingRequiredNote: "תאריך וסוג עסקה חובה. שאר השדות לפי מה שיש בקובץ.",
+  notMappedOption: "לא ממופה",
+  previewRowsSummary: "השורות הראשונות בקובץ, כפי שנקראו",
+  previewRowPrefix: "שורה",
+  checkButton: "בדוק את הקובץ",
+  changeFileButton: "בחר קובץ אחר",
+  backToMappingButton: "חזרה למיפוי",
+  // review
+  reviewTitle: "בדיקה מקדימה",
+  advisoryNote: "זו בדיקה מקדימה. בזמן האישור המערכת בודקת מחדש מול המידע העדכני.",
+  checking: "בודק את הקובץ...",
+  rowsTotal: "שורות בקובץ",
+  rowsValid: "שורות תקינות",
+  rowsInvalid: "שורות לא תקינות",
+  splitsConsidered: "פיצולי מניה רשומים שנלקחו בחשבון",
+  invalidTitle: "שורות שצריך לתקן",
+  invalidHint:
+    "האישור לא יתקבל כל עוד יש שורה לא תקינה. תקן אותן בקובץ והעלה אותו מחדש. הודעות הבדיקה מוצגות כפי שהמערכת כתבה אותן.",
   rowLabel: "שורה",
-  openingStateInstruction:
-    "לטיקרים האלה יש מכירה (SELL) שלא מוסברת על ידי הקובץ הזה בלבד — כנראה פוזיציה שנפתחה לפני החלון המיובא. הזן מה החזקת ממש לפני תאריך ההתחלה של הקובץ (מדווח עצמית, מסומן ככזה — לא נגזר מהיסטוריית עסקאות):",
-  quantityPlaceholder: "כמות",
-  costBasisPlaceholder: "עלות בסיס למניה",
-  confirmImportButton: "אשר ייבוא",
-  importingButton: "מייבא...",
-  importedLabel: "עסקאות יובאו.",
-  skippedExactLabel: "שורות דולגו כי כבר היו בהיסטוריה (כפילות מדויקת).",
-  skippedSameLabel: "שורות דולגו כי אישרת שהן אותן עסקאות שהוזנו ידנית.",
-  currentPositions: "פוזיציות נוכחיות:",
+  // opening states
+  openingTitle: "מה החזקת בתחילת החלון",
+  openingHint:
+    "לטיקרים האלה יש מכירה שהקובץ לבדו לא מסביר, כנראה כי הפוזיציה נפתחה לפני החלון. הזן מה החזקת ממש לפני תחילת הקובץ. זה מידע שאתה מצהיר עליו, והוא נשמר ככזה.",
+  openingSeparateNote:
+    "יתרות הפתיחה נשמרות אחרי שהעסקאות נשמרו, כפעולה נפרדת. אם תשאיר טיקר ריק, העסקאות יישמרו והמכירות שלו יסומנו כחורגות מההחזקה הידועה.",
+  openingQuantity: "כמות",
+  openingCostBasis: "עלות למניה (אופציונלי)",
+  openingConfidence: "ודאות העלות",
+  openingAsOf: "נכון לתאריך",
+  // confirm
+  confirmTitle: "אישור",
+  confirmExplanation:
+    "באישור המערכת קוראת את הקובץ מחדש, מאמתת כל שורה, בודקת שוב מול ההיסטוריה העדכנית ושומרת את העסקאות בפעולה אחת. אם משהו השתנה מאז הבדיקה המקדימה, התוצאה עשויה להיות שונה, או שהאישור יסורב.",
+  confirmOpeningNote: "יתרות הפתיחה שהזנת יישמרו אחרי העסקאות, בנפרד.",
+  estimatePrefix: "לפי הבדיקה המקדימה ייכנסו להיסטוריה",
+  estimateSuffix: "שורות.",
+  blockedInvalid: "יש שורות לא תקינות בקובץ.",
+  blockedUnresolved: "יש שורות שממתינות להכרעה שלך.",
+  blockedRefresh: "רענן את מצב ההיסטוריה לפני ניסיון נוסף.",
+  confirmButton: "אשר ושמור את העסקאות",
+  confirmingButton: "שומר...",
+  // failure
+  refusedTitle: "האישור סורב. שום דבר לא נשמר.",
+  uncertainTitle: "האישור לא הושלם כצפוי. ייתכן שחלק מהמידע כבר נשמר.",
+  uncertainBody:
+    "רענן את המצב ובדוק אותו לפני ניסיון נוסף. אם העסקאות כבר נשמרו, אישור חוזר ידלג על כפילויות מדויקות, אבל יתרות פתיחה יישמרו שוב.",
+  manualUncertainBody:
+    "רענן את המצב ובדוק אותו לפני ניסיון נוסף. אם העסקאות כבר נשמרו, שליחה חוזרת תסומן ככפילות ותדרוש את ההכרעה שלך.",
+  refreshButton: "רענן את המצב",
+  refreshingButton: "מרענן...",
+  // done
+  doneTitle: "העסקאות נשמרו",
+  doneTransactionsTitle: "העסקאות",
+  doneImported: "עסקאות נוספו להיסטוריה",
+  doneSeparate: "מתוכן סומנו על ידך כעסקאות נפרדות",
+  doneSkippedExact: "שורות דולגו כי כבר היו בהיסטוריה",
+  doneSkippedSame: "שורות דולגו כי אישרת שהן עסקאות קיימות",
+  doneFile: "קובץ",
+  doneOpeningTitle: "יתרות פתיחה",
+  doneOpeningSaved: "יתרות פתיחה נשמרו אחרי העסקאות, בפעולה נפרדת.",
+  doneOpeningNone: "לא הוזנו יתרות פתיחה בייבוא הזה.",
+  positionsSummary: "הפוזיציות כפי שחושבו אחרי השמירה",
+  positionsAvgCost: "עלות ממוצעת",
+  positionsCash: "מזומן",
+  noPositions: "אין פוזיציות פתוחות.",
+  journalNext: "אם תרצה לתעד למה נכנסת לפוזיציות, אפשר להוסיף את הנימוק ביומן הפוזיציות.",
+  journalLink: "ליומן הפוזיציות",
+  importAnotherButton: "ייבא קובץ נוסף",
 };
 
-// --- History freshness (History Refresh V1) — /import and the Dashboard
-// import card. Facts about how far the persisted history reaches; never a
-// broker-sync claim and never a statement that the portfolio is current
-// beyond the latest transaction date. ---
+// --- History status (History Refresh V1) on /import. Facts about how far
+// the persisted history reaches: orientation, never a score, a broker-sync
+// claim, or a statement that the portfolio is current. ---
 export const historyFreshness = {
   title: "מצב ההיסטוריה",
-  upToDatePrefix: "היסטוריית העסקאות מעודכנת עד",
-  agePrefix: "עודכנה לפני",
-  ageSuffixDays: "ימים",
-  ageToday: "עודכנה היום",
-  transactionsSuffix: "עסקאות בסך הכול",
-  latestBatchPrefix: "הייבוא האחרון:",
-  latestBatchWindow: "מכסה",
-  latestBatchTo: "עד",
-  latestBatchRows: "שורות נוספו",
-  manualPrefix: "הזנה ידנית:",
-  manualSuffix: "עסקאות, האחרונה ב-",
-  noHistory: "עדיין אין היסטוריית עסקאות — ייבא קובץ או הזן עסקאות ידנית.",
-  disclaimer: "המערכת יודעת רק מה שיובא או הוזן; היא לא מסונכרנת עם הברוקר.",
+  latestTransaction: "העסקה האחרונה הידועה",
+  age: "לפני",
+  ageDays: "ימים",
+  ageToday: "היום",
+  totalTransactions: "עסקאות בהיסטוריה",
+  latestFile: "הקובץ האחרון שיובא",
+  latestFileWindow: "טווח התאריכים בקובץ",
+  latestFileRows: "שורות שנוספו ממנו",
+  manualEntries: "עסקאות שהוזנו ידנית",
+  manualLatestPrefix: "האחרונה ב-",
+  to: "עד",
+  noHistoryTitle: "עדיין אין היסטוריית עסקאות",
+  noHistory: "זה הייבוא הראשון. אפשר להתחיל מקובץ של הברוקר או להזין עסקאות ידנית.",
+  disclaimer: "המערכת יודעת רק מה שיובא או הוזן כאן; היא לא מחוברת לברוקר.",
 };
 
-// --- Stock splits (Import Blockers V1) — src/app/import/page.tsx. One
-// kind only; the investor records a fact from a named source and confirms
-// it explicitly; the original BUY/SELL rows are never touched. ---
+// --- Stock splits (Import Blockers V1) on /import. One kind only; the
+// investor records a fact from a named source and confirms it explicitly;
+// the original BUY/SELL rows are never touched. ---
 export const corporateActionsPage = {
   title: "פיצולי מניה",
   description:
-    "פיצול (או פיצול הפוך) שבוצע בנייר שאתה מחזיק. הרישום הוא עובדה בלתי ניתנת לשינוי עם מקור מזוהה; העסקאות המקוריות לא נערכות — חישוב הפוזיציות מיישם את היחס מתאריך התחילה.",
+    "פיצול (או פיצול הפוך) שבוצע בנייר שהחזקת. המערכת לא מזהה פיצולים לבד: אתה רושם עובדה ממקור שאתה מציין, והרישום אינו ניתן לשינוי. העסקאות המקוריות לא נערכות; חישוב הפוזיציות מיישם את היחס מתאריך התחילה.",
+  listTitle: "פיצולים רשומים",
   none: "לא נרשמו פיצולים.",
+  recordedOnPrefix: "נרשם ב-",
+  formTitle: "רישום פיצול",
   tickerLabel: "טיקר",
   effectiveDateLabel: "תאריך תחילה",
-  effectiveDateHint: "היום הראשון שבו הכמויות מבוטאות ביחידות שאחרי הפיצול",
-  ratioLabel: "יחס",
-  ratioHint: "לדוגמה 4 : 1 = ארבע מניות חדשות על כל מניה; פיצול הפוך = 1 : 10",
+  effectiveDateHint: "היום הראשון שבו הכמויות מבוטאות ביחידות שאחרי הפיצול.",
+  ratioNumerator: "מניות אחרי",
+  ratioDenominator: "מניות לפני",
+  ratioHint: "לדוגמה 4 : 1 הן ארבע מניות חדשות על כל מניה; פיצול הפוך הוא 1 : 10.",
   sourceLabel: "מקור העובדה",
-  sourceIssuer: "הודעת החברה / דיווח רגולטורי",
+  sourceIssuer: "הודעת החברה או דיווח רגולטורי",
   sourceBroker: "דוח ברוקר",
   sourceUser: "הצהרה שלי",
-  evidenceLabel: "ראיה (ציטוט המקור)",
-  evidencePlaceholder: "לדוגמה: הודעת החברה על פיצול 4:1, מסחר מותאם מ-…; דוח ברוקר: שורת ההחזקה לפני התאריך ושורת המכירה אחריו",
+  evidenceLabel: "ראיה (ציטוט מהמקור)",
+  evidencePlaceholder: "לדוגמה: הודעת החברה על פיצול 4:1; או שורת ההחזקה בדוח הברוקר לפני התאריך ושורת המכירה אחריו",
   confirmLabel: "אני מאשר שהיחס והתאריך נלקחו מהמקור שצוין ולא הוסקו מכמויות בלבד",
   recordButton: "רשום פיצול",
   recordingButton: "רושם...",
-  recordedLabel: "נרשם.",
-  listHeading: "פיצולים רשומים",
-  recordedOnLabel: "נרשם ב",
+  uniqueNote: "לכל טיקר אפשר לרשום פיצול אחד בכל תאריך.",
+  uncertainBody: "רענן את הדף ובדוק ברשימה אם הפיצול נרשם לפני ניסיון נוסף.",
 };
 
-// --- Transaction reconciliation (History Refresh V1) — shared by CSV
-// review and manual entry in src/app/import/page.tsx. ---
+// --- Transaction reconciliation (History Refresh V1) — shared by the file
+// review and manual entry on /import. ---
 export const reconciliation = {
   heading: "התאמה מול ההיסטוריה הקיימת",
   explanation:
-    "לפני ההוספה כל שורה מושווית לעסקאות שכבר במערכת. כפילות מדויקת מדולגת אוטומטית; שורה שאולי תואמת עסקה שהזנת ידנית דורשת את ההכרעה שלך — המערכת לא מנחשת.",
+    "כל שורה הושוותה לעסקאות שכבר במערכת. כפילות מדויקת של עסקה קיימת מדולגת; שורה שאולי תואמת עסקה קיימת דורשת את ההכרעה שלך, והמערכת לא מנחשת. בזמן האישור ההשוואה נעשית שוב.",
+  manualExplanation:
+    "כל שורה הושוותה לעסקאות שכבר במערכת ולשורות הקודמות בטופס. שורה זהה או שאולי תואמת דורשת את ההכרעה שלך. בזמן השמירה ההשוואה נעשית שוב.",
   newCount: "חדשות",
-  exactCount: "כפילויות מדויקות (ידולגו)",
-  probableCount: "התאמות אפשריות לעסקה ידנית",
+  exactCount: "כפילויות מדויקות",
+  probableCount: "התאמות אפשריות",
   ambiguousCount: "לא חד-משמעיות",
-  willInsertPrefix: "ייכנסו להיסטוריה:",
-  willInsertSuffix: "שורות",
+  willInsertPrefix: "לפי הבדיקה המקדימה ייכנסו",
+  willInsertSuffix: "שורות.",
   unresolvedNote: "יש שורות שדורשות הכרעה לפני האישור.",
+  decisionsTitle: "שורות שדורשות הכרעה",
   rowPrefix: "שורה",
-  probableRowNote: "אולי אותה עסקה שהוזנה ידנית:",
-  ambiguousRowNote: "יותר מעסקה קיימת אחת יכולה להתאים — בחר איזו, או סמן כעסקה נפרדת:",
+  probableRowNote: "אולי אותה עסקה שכבר קיימת:",
+  ambiguousRowNote: "יותר מעסקה קיימת אחת יכולה להתאים. בחר איזו, או סמן כעסקה נפרדת.",
   exactRowNote: "זהה לעסקה שכבר קיימת במערכת.",
   exactWithinBatchNote: "זהה לשורה קודמת בטופס הזה.",
-  sameChoice: "זו אותה עסקה — השאר את הידנית ודלג על שורה זו",
-  separateChoice: "זו עסקה נפרדת — הוסף גם אותה",
-  manualSameChoice: "זו אותה עסקה — אל תשמור שוב",
-  manualSeparateChoice: "זו עסקה זהה נפרדת בכוונה — שמור בכל זאת",
-  candidateLabel: "עסקה קיימת:",
+  sameChoice: "זו אותה עסקה: השאר את הקיימת ודלג על השורה",
+  separateChoice: "זו עסקה נפרדת: הוסף גם אותה",
+  manualSameChoice: "זו אותה עסקה: אל תשמור שוב",
+  manualSeparateChoice: "זו עסקה זהה נפרדת בכוונה: שמור בכל זאת",
+  candidateLabel: "עסקה קיימת",
+  chooseCandidate: "בחר עסקה קיימת",
   manualSource: "הוזנה ידנית",
   csvSource: "מקובץ",
-  chooseCandidate: "— בחר עסקה קיימת —",
 };
 
-// --- Same-day ordering collision resolution (Investment Episode
-// Independence design) — shared between file-mode (import.validate's
-// collisionGroups) and manual mode (import.checkManualEntryCollisions) in
-// src/app/import/page.tsx, one set of strings for both since it's the
-// same UI concept in both places. ---
+// --- Same-day ordering (Investment Episode Independence design) — shared
+// by the file review and manual entry on /import. ---
 export const collisionResolution = {
-  heading: "יותר מעסקה אחת באותו טיקר באותו תאריך",
+  heading: "כמה עסקאות באותו טיקר באותו יום",
   explanation:
-    "לשורות האלה אין למערכת דרך לדעת איזו התרחשה קודם. אפשר להזין מספר סדר (1, 2, ...) לכל שורה חדשה אם ידוע — כל השורות בקבוצה צריכות מספר שונה. אם לא כולן יקבלו מספר, כל הקבוצה תישמר כ\"סדר לא ידוע\", וזה תקין לגמרי.",
-  existingRowLabel: "עסקה קיימת כבר במערכת:",
-  orderPlaceholder: "סדר",
+    "כדי לשחזר את ההחזקות נכון, המערכת צריכה לדעת באיזה סדר התרחשו עסקאות של אותו יום. אין לה שעות, ולכן היא לא מנחשת.",
+  declareHint:
+    "אם אתה יודע את הסדר, תן לכל שורה מספר שונה (1, 2, ...). אם לא כל השורות יקבלו מספר, הקבוצה תישמר עם סדר לא ידוע, וזה תקין.",
+  orderLabel: "סדר",
+  existingNote:
+    "הקבוצה כוללת עסקה שכבר שמורה, ולכן לא מזינים כאן סדר: כל העסקאות בקבוצה יישמרו עם סדר שלא נרשם.",
+  existingOrderedNote:
+    "לעסקאות הקיימות ביום הזה כבר נקבע סדר, והמערכת עדיין לא תומכת בהוספת עסקה נוספת לאותו יום. האישור יסורב כל עוד השורה הזו בקובץ.",
+  existingRow: "עסקה שכבר שמורה",
 };
 
-// --- Manual Historical Entry (src/app/import/page.tsx, manual mode) —
-// Actual trades only, never hypothetical/what-if scenarios
-// (docs/backlog.md). ---
-
+// --- Manual Historical Entry on /import — actual trades only, never
+// hypothetical scenarios (docs/backlog.md). ---
 export const manualEntryPage = {
+  title: "הזנה ידנית",
   description:
-    "הזן עסקאות היסטוריות אמיתיות שביצעת בפועל — לא תרחישים היפותטיים. כל שורה נשמרת בדיוק כמו עסקה שיובאה מקובץ, ומשפיעה על חישובי התיק באותו אופן.",
+    "עסקאות היסטוריות שביצעת בפועל, לא תרחישים. כל שורה נשמרת כמו עסקה מקובץ ומשפיעה על חישובי התיק באותו אופן, עם סימון שהיא הוזנה ידנית. הסכום מחושב במערכת מהכמות והמחיר.",
+  rowTitle: "עסקה",
   tickerLabel: "טיקר",
   typeLabel: "סוג",
   quantityLabel: "כמות",
   priceLabel: "מחיר למניה",
   dateLabel: "תאריך",
   notesLabel: "הערה כללית (אופציונלי)",
-  notesPlaceholder:
-    "הערה כללית על הרשומה — לא כאן מספרים את הסיפור/הרציונל של ההשקעה. לכך משמש \"ספר לי למה\" אחרי השמירה.",
+  notesPlaceholder: "הערה על הרשומה. את הסיבה שנכנסת לפוזיציה כותבים ביומן הפוזיציות.",
   buyOption: "קנייה",
   sellOption: "מכירה",
   addRowButton: "הוסף שורה",
   removeRowButton: "הסר שורה",
+  incompleteNote: "הבדיקה מול ההיסטוריה הקיימת תרוץ כשכל השורות מלאות.",
   submitButton: "שמור עסקאות",
   savingButton: "שומר...",
-  provenanceBadge: "הוזן ידנית",
-  provenanceExplanation: "הנתונים הוזנו ידנית ולא יובאו מקובץ מסחר.",
-  savedCountLabel: "עסקאות נשמרו.",
-  skippedCountLabel: "שורות לא נשמרו כי אישרת שהן אותן עסקאות שכבר במערכת.",
+  provenance: "הוזן ידנית",
+  savedTitle: "העסקאות נשמרו",
+  savedCountLabel: "עסקאות נשמרו",
+  skippedCountLabel: "שורות לא נשמרו כי אישרת שהן עסקאות קיימות",
   enterMoreButton: "הזן עוד עסקאות",
+  journalNext:
+    "אם תרצה לתעד למה נכנסת, אפשר להוסיף את הנימוק ביומן הפוזיציות. עסקה שאינה חלק מפוזיציה עם קנייה בהיסטוריה לא תופיע שם כפוזיציה שאפשר לתעד.",
 };
 
 // --- "Tell me why" — user-initiated historical rationale
