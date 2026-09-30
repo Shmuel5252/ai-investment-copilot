@@ -1,33 +1,6 @@
-import { cx } from "@/components/ui/cx";
-
-// Small pieces the Decision regions share. Feature-local: a global Disclosure
-// primitive was named as a candidate in the unit 3 review, not authorized.
-
-// Native <details> with the same summary treatment the shared Prior Record
-// block uses: a chevron that turns when open, no browser marker.
-export function Disclosure({
-  summary,
-  children,
-  open = false,
-  className,
-}: {
-  summary: React.ReactNode;
-  children: React.ReactNode;
-  open?: boolean;
-  className?: string;
-}) {
-  return (
-    <details open={open} className={cx("group", className)}>
-      <summary className="flex cursor-pointer list-none items-center gap-2 py-1 text-sm font-semibold text-ink-2 [&::-webkit-details-marker]:hidden">
-        <span aria-hidden="true" className="text-xs text-muted transition-transform group-open:-rotate-90">
-          ‹
-        </span>
-        {summary}
-      </summary>
-      <div className="mt-2 flex flex-col gap-3">{children}</div>
-    </details>
-  );
-}
+// Small formatting helpers the Decision regions share. Disclosure moved to
+// src/components/ui/disclosure.tsx (unit 6A), ActionError to
+// src/components/ui/action-error.tsx (unit 5).
 
 export const day = (d: string | Date) => new Date(d).toLocaleDateString("he-IL");
 export const dateTime = (d: string | Date) => new Date(d).toLocaleString("he-IL");

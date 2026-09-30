@@ -893,23 +893,107 @@ export const interviewPage = {
   completeSuffix: "שאלות. התשובות האלה יזינו את השערות ה-DNA שלך בשלב הבא.",
 };
 
-// --- Investor DNA (src/app/dna/page.tsx) ---
+// --- Investor DNA (src/components/dna + src/components/claims, Frontend V1
+// unit 6A). A DNA statement is a claim about a possible recurring pattern,
+// shown with the current strength of its evidence. Chrome only: statements,
+// AI citation summaries and change reasons stay as stored. ---
 
 export const dnaPage = {
   title: "DNA משקיע",
   description:
-    "השערות על איך אתה חושב ומתנהג כמשקיע — מוצעות על ידי AI מתוך ראיון הפתיחה שלך, אבל תמיד מגובות רק בראיות שאפשר לבדוק. שום דבר כאן לא מוצג כמוכח; דפוסים חלשים או דלים מסומנים ככאלה.",
-  generateButton: "צור השערות מהראיון",
-  analyzingButton: "מנתח תשובות ראיון...",
-  createdLabel: "השערות נוצרו",
-  droppedPrefix: "(",
-  droppedSuffix: "הוצעו אך נפסלו בשל ראיות לא תקפות)",
-  supportingLabel: "תומכות",
-  contradictingLabel: "סותרות",
-  viewEvidence: "הצג ראיות",
-  hideEvidence: "הסתר ראיות",
-  disagree: "לא מסכים",
-  noHypothesesYet: "אין עדיין השערות — השלם את ראיון הפתיחה, ואז צור כמה.",
+    "טענות על דפוסים אפשריים באופן שבו אתה משקיע, כל אחת עם הראיות שתומכות בה ושסותרות אותה. Evidence Strength מתאר כמה הראיות חזקות לטענה, לא ציון שלך כמשקיע.",
+  // generate
+  generateTitle: "עדכון הטענות",
+  generateHint:
+    "ה-AI קורא את תשובות הראיון שלך ואת מה שכתבת בזמן ההחלטות (נימוק, סיכונים, תנאי יציאה), ומציע טענות עם ציטוטים. כל ציטוט נבדק מול הטקסט שלך, והקוד סופר מקרים עצמאיים וקובע את Evidence Strength. הרצה יכולה ליצור טענה חדשה, להוסיף גרסה לטענה קיימת, להשאיר טענה כפי שהיא או לפסול הצעה.",
+  generateButton: "הרץ עדכון",
+  generatingButton: "מנתח את ההצהרות שלך...",
+  resultCreated: "נוצרו",
+  resultVersioned: "עודכנו בגרסה חדשה",
+  resultUnchanged: "נשארו ללא שינוי",
+  resultDropped: "הצעות נפסלו",
+  resultNothingNew: "לא נמצא שום דבר חדש בהרצה הזו.",
+  // groups
+  usedTitle: "טענות שהמערכת משתמשת בהן",
+  usedHint: "יש להן מספיק מקרים עצמאיים, והמערכת נשענת עליהן בניתוחים.",
+  usedEmpty: "כרגע אין טענה עם מספיק מקרים עצמאיים כדי שהמערכת תשתמש בה כדפוס. זה מצב תקין.",
+  belowTitle: "טענות שעדיין מתחת לסף הראיות",
+  belowHint: "מוצגות לך, אבל המערכת לא מתייחסת אליהן כדפוס ולא נשענת עליהן בניתוחים.",
+  belowEmpty: "אין טענות מתחת לסף.",
+  orderHint: "בסדר שבו המערכת מחזירה אותן. הסדר אינו דירוג.",
+  // row
+  supportingCasesSuffix: "מקרים עצמאיים תומכים",
+  contradictingSuffix: "סותרים",
+  citedSuffix: "הצהרות מצוטטות",
+  casesNote: "כמה ציטוטים על אותו אירוע או אותה החלטה נספרים כמקרה עצמאי אחד.",
+  usedByAi: "המערכת משתמשת בטענה הזו בניתוחים.",
+  notUsedByAi: "המערכת לא משתמשת בטענה הזו כרגע. לא כי היא שגויה, אלא כי הראיות מתחת לסף.",
+  reachUnknown: "מצב השימוש בטענה לא זמין כרגע.",
+  // disclosure
+  evidenceTitle: "מה עומד מאחורי הטענה",
+  versionPrefix: "גרסה",
+  versionCreatedPrefix: "נוצרה ב-",
+  changeReasonLabel: "סיבת העדכון, כפי שנשמרה:",
+  provenanceMissing: "לגרסה הזו לא נשמר פירוט של ההרצה שיצרה אותה.",
+  provenanceGeneratedPrefix: "הרצה מתועדת מ-",
+  basisMissing: "לגרסה הזו לא נשמר פירוט של קיבוץ המקרים העצמאיים.",
+  basisRangePrefix: "הספירה היא הערכה זהירה: עד",
+  basisRangeSuffix: "מקרים תומכים אם אין תלות בין חלק מהם.",
+  sourcesPrefix: "מקורות:",
+  interviewAnswers: "תשובות ראיון",
+  decisionStatements: "הצהרות מזמן החלטה",
+  distancePrefix: "כדי לעבור לרמה",
+  distanceMiddle: "נדרשים עוד",
+  distanceSuffix: "מקרים עצמאיים תומכים, אם לא יתווספו סתירות.",
+  unresolvedSuffix: "החלטות מצוטטות עם עסקאות מועמדות שלא סווגו. הן לא נספרות לאף צד עד לסיווג.",
+  citationsTitle: "הציטוטים",
+  citationsEmpty: "לגרסה הזו אין ציטוטים שנספרים.",
+  aiSummaryLabel: "סיכום AI של הציטוט",
+  answerTextUnavailable: "הטקסט המקורי של התשובה אינו זמין במסך הזה.",
+  openDecision: "פתח את ההחלטה",
+  evidenceFailed: "לא הצלחנו לטעון את הציטוטים.",
+  // reject
+  rejectButton: "אני לא מסכים עם הטענה",
+  rejectConfirmTitle: "להסיר את הטענה מהרשימה?",
+  rejectConfirmText: "הטענה תפסיק להופיע כפעילה, והמערכת לא תשתמש בה. ההיסטוריה שלה לא נמחקת, אבל כרגע אין באתר פעולה להחזיר אותה.",
+  rejectConfirm: "כן, להסיר",
+  rejectCancel: "ביטול",
+  rejecting: "מסיר...",
+  // empty
+  emptyTitle: "עוד אין טענות DNA",
+  emptyHint: "טענות מוצעות מתוך תשובות הראיון שלך ומהטקסטים שכתבת בזמן ההחלטות. אחרי ראיון הפתיחה אפשר להריץ עדכון.",
+  openInterview: "לראיון הפתיחה",
+  // rule footnote
+  ruleTitle: "איך נקבע Evidence Strength",
+  ruleText:
+    "הקוד סופר מקרים עצמאיים שתומכים בטענה ומקרים שסותרים אותה. פחות משלושה מקרים תומכים: ראיות בלתי מספיקות. סתירה לעולם לא מעלה את הרמה. הרמה מתארת את הביטחון בטענה, לא אותך.",
+};
+
+// dna_created_by — who or what produced a DNA statement version.
+export const dnaCreatedByLabel: Record<string, string> = {
+  ai_generated: "הוצעה על ידי ה-AI מתוך ההצהרות שלך",
+  user_correction: "תיקון שלך",
+  system_grounding_revalidation: "בדיקה חוזרת של הציטוטים מול הטקסט שלך",
+  system_confidence_recalculation: "חישוב מחדש של Evidence Strength",
+  system_independence_recalculation: "חישוב מחדש של המקרים העצמאיים",
+};
+
+// Where one citation comes from.
+export const evidenceSourceLabel: Record<string, string> = {
+  interview_answer: "תשובת ראיון",
+  decision_statement: "הצהרה מזמן החלטה",
+  decision_review: "Review",
+  transaction: "עסקה",
+  learning_insight: "תובנת למידה",
+  manual_note: "הערה ידנית",
+  none: "ללא מקור מקושר",
+};
+
+// decision_statement_kind — which of the three decision-time texts.
+export const decisionStatementKindLabel: Record<string, string> = {
+  reasoning: "הנימוק",
+  risks: "הסיכונים",
+  exit_conditions: "תנאי היציאה",
 };
 
 // --- Baseline Strategy (src/app/strategy/page.tsx) ---

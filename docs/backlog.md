@@ -346,6 +346,10 @@ scratch מבודד (כולל מקביליות 8-כיוונית); dry-run אמי�
 `statementText`+tier בלבד; snapshots/bundles מצביעים על גרסאות, לא על ראיה.
 לכן זו בעיית **תצוגה/provenance אנושית**, לא השפעה על חשיבה. תיקון עתידי:
 להציג את קטע התשובה המקורית לצד התיאור, או לתייג כ"סיכום AI".
+**עדכון 2026-09-30 (Frontend V1 יחידה 6A):** עמוד ה-DNA מתייג את התיאור כ"סיכום AI של הציטוט" ואומר
+שהטקסט המקורי של תשובת ראיון אינו זמין במסך. **הפער שנשאר:** אין read path שמחזיר את `answer_text`
+מאחורי ציטוט (אין procedure לתשובה לפי id או לכל התשובות של המשקיע), ולכן הצגת הקטע המקורי דורשת
+procedure חדש — backend, לא frontend.
 
 ---
 ### ~~Decision Review — אין הגנה מפני הגשה כפולה, ו-Review+פתרון Predictions אינם טרנזקציה אחת (נמצא 2026-09-23)~~ — נבנה (Decision Review Integrity V1, 2026-09-24; ר' "נבנה")
@@ -501,6 +505,25 @@ weak edges (לא נמדד).
 מועמד ל-hardening: להחזיר את ה-Case הקיים כשהרעיון כבר קודם, לעטוף את יצירת ה-Case ועדכון הרעיון
 בטרנזקציה אחת, והגנת ייחודיות מתאימה — באותו דפוס של `cases.createFromCondition` (אינדקס ייחודי חלקי +
 fallback על unique violation). דורש יחידה נפרדת.
+
+### DNA ו-Strategy — פערי backend שנמצאו בחקירת Frontend V1 יחידה 6 (נמצא 2026-09-30)
+תיעוד בלבד, **לא תוקן** (Backend Intelligence V1 קפוא). כל פריט דורש יחידה נפרדת:
+1. **`dna.evidence` בלי scoping לבעלות** — מקבל `dnaHypothesisId` ומחזיר את הציטוטים בלי לבדוק שהטענה שייכת
+   למשקיע המחובר. כל שאר ה-routers (cases, decisions, reviews) בודקים בעלות.
+2. **`dna.reject` בלי scoping לבעלות** — אותו פער, על פעולת כתיבה: מזהה ידוע מספיק כדי לסמן טענה של משקיע
+   אחר כ-`user_rejected`.
+3. **`strategy.evidence` בלי scoping לבעלות** — אותו פער כמו (1).
+4. **אין read path לגרסאות Strategy היסטוריות** — `getStrategyVersionPrinciples` קיים ב-repository בלבד; אין
+   procedure שמחזיר bundles קודמים או את העקרונות שבהם. עמוד ה-Strategy יכול לומר שגרסאות קודמות נשמרות,
+   לא להציג אותן.
+5. **`strategy.confirmDeclared` על ניסוח שכבר קיים** — ה-slug של הניסוח מתנגש ב-`UNIQUE(investor_id, key)`,
+   והשגיאה עולה כ-500 גולמי במקום החזרת העיקרון הקיים.
+6. **עקרונות Observed מטשטשים את הגבול מול DNA** — אותו מנוע, אותם מקורות, אותה עצמאות; הם טענות על דפוס,
+   לא כללים שהמשקיע בחר, אבל מוצגים תחת Strategy. דורש הכרעת Owner היכן הם שייכים.
+7. **ל-`dna.list` אין סדר מוגדר** — `listActiveDnaHypothesesForInvestor` בלי `orderBy`; העמוד שומר את הסדר
+   המוחזר ולא מתאר אותו כסדר כרונולוגי או כדירוג.
+8. **טענות DNA שנדחו לא ניתנות לרשימה או לשחזור** — `dna.reject` חד-כיווני; אין procedure שמחזיר טענות
+   `user_rejected` ואין פעולת שחזור. עמוד ה-DNA אומר זאת לפני האישור.
 
 ## נבנה
 - **Frontend V1, יחידה 1 — Design system + App shell + RTL foundation** (2026-09-30): `dir="rtl"`/`lang="he"` פעם
