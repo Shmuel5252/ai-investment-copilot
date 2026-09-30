@@ -1,34 +1,168 @@
 @import "tailwindcss";
 
-/* Direction A ("יומן אנליטי" — Analyst Journal), chosen for the UI/RTL
-   redesign task. Registered as theme tokens only — Tailwind v4 turns
-   each `--color-journal-*` custom property into opt-in utilities
-   (bg-journal-bg, text-journal-ink, ...), it does not touch `body`,
-   `html`, or any existing selector. Nothing renders differently until a
-   component explicitly uses one of these classes, so pages/sections
-   that haven't been redesigned yet — including the Decision Review
-   section living inside the same file as the redesigned Decision
-   Snapshot — are unaffected by construction. */
+/* ---------------------------------------------------------------------------
+   Design foundation — "יומן אנליטי" (Analyst Journal), matured into a system
+   (Frontend V1, unit 1). One visual world for the whole app: paper ground,
+   ink text, a single navy accent for actions and the current selection, and
+   a restrained semantic vocabulary for status and Evidence Strength tiers.
+
+   Everything below is a Tailwind v4 theme token: `--color-paper` becomes
+   `bg-paper` / `text-paper` / `border-paper`, `--font-sans` becomes
+   `font-sans`, and so on. The older `--color-journal-*` names are kept as
+   aliases of the same values so the six pages redesigned before the shell
+   existed keep rendering byte-for-byte until each is redesigned in its own
+   unit. New code uses the short names.
+   ------------------------------------------------------------------------ */
 @theme {
+  /* type — loaded once in src/app/layout.tsx through next/font variables */
+  --font-sans: var(--font-assistant), "Assistant", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-frank-ruhl), "Frank Ruhl Libre", Georgia, serif;
+
+  /* ground and surfaces */
+  --color-paper: #faf6ef;
+  --color-surface: #ffffff;
+  --color-surface-2: #f2ede2; /* the second neutral layer: sidebar, toolbars, table heads */
+  --color-surface-3: #ebe4d5; /* pressed / selected rows on the second layer */
+
+  /* rules */
+  --color-rule: #e4dccb;
+  --color-rule-strong: #cbbfa6;
+  --color-control: #8f8268; /* borders of inputs and selects: 3:1 against paper and white */
+
+  /* ink */
+  --color-ink: #2b2621;
+  --color-ink-2: #514941;
+  --color-muted: #6a6158;
+
+  /* the one accent: actions, current selection, links */
+  --color-accent: #2f3b57;
+  --color-accent-hover: #24304a;
+  --color-accent-soft: #e5e9f1;
+  --color-accent-ink: #ffffff;
+
+  /* semantic status — ink-weight text on a soft field of the same hue */
+  --color-positive: #2c6444;
+  --color-positive-soft: #e2efe6;
+  --color-caution: #8a5410;
+  --color-caution-soft: #f6e9d2;
+  --color-negative: #973a2e;
+  --color-negative-soft: #f6e1dc;
+  --color-info: #2f3b57;
+  --color-info-soft: #e5e9f1;
+  --color-neutral: #6b635a;
+  --color-neutral-soft: #eee8dc;
+
+  /* Evidence Strength tiers (docs/data-model.md §2). The tier itself is
+     always computed in code; these are only how each tier looks. */
+  --color-tier-insufficient: #6b635a;
+  --color-tier-insufficient-soft: #efe9dd;
+  --color-tier-weak: #8a5410;
+  --color-tier-weak-soft: #f6e9d2;
+  --color-tier-moderate: #2f3b57;
+  --color-tier-moderate-soft: #e5e9f1;
+  --color-tier-strong: #2c6444;
+  --color-tier-strong-soft: #e2efe6;
+
+  /* legacy aliases (see the note above) */
   --color-journal-bg: #faf6ef;
   --color-journal-surface: #ffffff;
   --color-journal-rule: #e4dccb;
   --color-journal-ink: #2b2621;
   --color-journal-muted: #7a7168;
   --color-journal-accent: #2f3b57;
+
+  /* radii and shadow: one shape language */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --shadow-panel: 0 1px 2px rgb(43 38 33 / 0.06), 0 8px 24px -12px rgb(43 38 33 / 0.18);
+}
+
+/* ---------------------------------------------------------------------------
+   Base. The shell owns direction and language (html[dir=rtl][lang=he] in
+   src/app/layout.tsx); pages no longer wrap themselves. Numbers, tickers,
+   prices and dates inside Hebrew text still go through <Num>
+   (src/components/num.tsx), which forces an LTR run.
+   ------------------------------------------------------------------------ */
+@layer base {
+  html {
+    color-scheme: light;
+    scrollbar-color: var(--color-rule-strong) transparent;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-ink);
+  }
+
+  /* keyboard focus is always visible, in the accent, on every control */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  a,
+  button,
+  input,
+  select,
+  textarea,
+  summary {
+    transition:
+      background-color 160ms ease-out,
+      border-color 160ms ease-out,
+      color 160ms ease-out,
+      box-shadow 160ms ease-out;
+  }
+
+  a {
+    text-underline-offset: 0.15em;
+    text-decoration-thickness: 1px;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* financial figures: lining, tabular numerals so columns of numbers align */
+  .num {
+    font-variant-numeric: lining-nums tabular-nums;
+  }
 }
 
 /* Explicit legacy-look pin for a not-yet-redesigned section that lives
    inside an otherwise-redesigned page (today: the Decision Review
    section in src/app/decisions/[id]/page.tsx — see that file's
-   `.legacy-scope` wrapper). Correct today by construction (no base
-   body/html rule above), but kept explicit on purpose: if a future
-   redesign pass ever adds a body/html-level rule (font, color,
-   background) as part of full rollout, this class still wins locally
-   and Decision Review keeps looking exactly as it does today until
-   someone deliberately redesigns it too. Values are today's actual
-   effective defaults (browser/Tailwind-preflight default sans stack,
-   default black text, white background) — not a guess. */
+   `.legacy-scope` wrapper). The body rule above now sets font, color and
+   background app-wide, which is exactly the case this pin was written
+   for: Decision Review keeps today's default look until someone
+   deliberately redesigns it too. Values are the pre-shell effective
+   defaults (browser/Tailwind-preflight default sans stack, default black
+   text, white background) — not a guess. */
 .legacy-scope {
   font-family:
     ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",

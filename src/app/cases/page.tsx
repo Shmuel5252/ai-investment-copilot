@@ -28,8 +28,6 @@ export default function CasesPage() {
 
   return (
     <main
-      dir="rtl"
-      lang="he"
       className={`${sansBody.className} mx-auto flex max-w-2xl flex-col gap-6 px-4 py-12 text-journal-ink`}
     >
       <BackLink href="/" label={nav.home} />

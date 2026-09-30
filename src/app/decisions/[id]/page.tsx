@@ -127,7 +127,7 @@ export default function DecisionDetailPage() {
           Everything in this wrapper, including Later Context, is in
           scope for the redesign. Decision Review below is not: see the
           wrapper further down. */}
-      <div dir="rtl" lang="he" className={`${sansBody.className} flex flex-col gap-8 text-journal-ink`}>
+      <div className={`${sansBody.className} flex flex-col gap-8 text-journal-ink`}>
         <BackLink href="/decisions" label={nav.allDecisions} />
 
         <div className="flex flex-col gap-2 border-b border-journal-rule pb-6">

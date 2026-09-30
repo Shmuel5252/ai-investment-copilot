@@ -152,7 +152,7 @@ those stay debug/admin-only if ever shown directly.
 Priority: non-blocking UI/product gap; engine correctness already
 verified on real SNDK review data.
 
-### Dashboard — תווית "Learning Insights" בניווט צריכה עדכון כש-Learning Insight יתורגם
+### ~~Dashboard — תווית "Learning Insights" בניווט צריכה עדכון כש-Learning Insight יתורגם~~ — נבנה (Frontend V1 יחידה 1: הניווט עבר ל-shell ותוויתו "תובנות למידה"; ר' "נבנה")
 **נמצא:** 2026-08-23, תוך כדי redesign ה-Dashboard. `src/app/page.tsx`
 משאיר את תווית הניווט ל-`/learning` באנגלית במפורש (`{ href:
 "/learning", label: "Learning Insights" }`), עקבי עם זה שהעמוד עצמו
@@ -475,6 +475,15 @@ weak edges (לא נמדד).
 נשמרו; דורש הכרעת Owner ויחידה נפרדת. **לא חוסם את Frontend V1.** לא נבדק אם קיים מקרה כזה בנתונים האמיתיים.
 
 ## נבנה
+- **Frontend V1, יחידה 1 — Design system + App shell + RTL foundation** (2026-09-30): `dir="rtl"`/`lang="he"` פעם
+  אחת ב-`src/app/layout.tsx`, והעמודים לא עוטפים את עצמם יותר; shell משותף (`src/components/shell/`: סרגל צד בקצה
+  ההתחלה בדסקטופ, drawer ב-`<dialog>` במובייל, מצב פעיל מ-`nav-config.ts`, שם משתמש והתנתקות); טוקנים ב-`globals.css`
+  (paper/surface/ink/accent, סטטוסים, שכבות Evidence Strength; ה-aliases `journal-*` נשמרו כדי שששת העמודים שעוצבו
+  קודם לא ישתנו); רכיבי בסיס ב-`src/components/ui/` (PageHeader/PageShell, Section, Card, Button, Badge +
+  EvidenceTierBadge, Status/Notice, Field/Input/Textarea/Select, Table/KeyValues, Empty/Skeleton/Error/HelpText);
+  `/styleguide` לפיתוח בלבד (404 בייצור, נתוני דוגמה); עמוד הכניסה נבנה על הרכיבים החדשים. **לא שונה:** backend,
+  סכמה, חוזי AI, סמנטיקת ראיות. **פשרות זמניות:** העמודים הקיימים רק הסירו את עטיפת ה-RTL (וה-Dashboard את
+  הניווט וההתנתקות הכפולים) ושומרים עמודה צרה `max-w-2xl` ומופעי גופן מקומיים עד ליחידת העיצוב של כל עמוד.
 - **Grounding Semantics V3.2 — claims מורכבים + atomicity + שאלת הראיון כהקשר** (2026-09-27, OD-R8;
   `src/lib/ai/stance-rules.ts`, `src/lib/ai/dna-grounding.ts`, `src/lib/ai/investor-statements.ts`,
   `docs/data-model.md` §2): הכלל הקנוני מרחיב ל-COMPOUND CLAIMS (התאמה חלקית = NEITHER, AND / OR, מניע,

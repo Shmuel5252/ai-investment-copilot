@@ -114,12 +114,68 @@ export const nav = {
   allDecisions: "כל ההחלטות",
 };
 
+// --- App shell (src/components/shell/*) — Frontend V1, unit 1 ---
+// The chrome of every screen is Hebrew, Decision Review and Learning
+// included (AGENTS.md "Backend Intelligence V1 — Frozen"): only the
+// AI-generated content of those two stays English. Navigation speaks the
+// investor's language, not the backend's: groups follow how the product
+// is used, and each destination reuses its page's own title where one
+// exists so the two never drift.
+export const shell = {
+  productName: "AI Investment Copilot",
+  productDescription: "עוזר השקעות אישי שלומד איך אתה מחליט — לא מה לקנות.",
+  skipToContent: "דלג לתוכן",
+  openMenu: "פתח תפריט",
+  closeMenu: "סגור תפריט",
+  mainNavigation: "ניווט ראשי",
+  groupDecisions: "מחזור ההחלטה",
+  groupProfile: "הפרופיל שלך",
+  groupData: "הנתונים שלך",
+  navHome: "סקירה",
+  navLearning: "תובנות למידה",
+  signedInAs: "מחובר בתור",
+  signOut: "התנתקות",
+  signingOut: "מתנתק...",
+  loadingUser: "טוען...",
+  // shared state copy for the primitives in src/components/ui
+  loading: "טוען...",
+  loadFailedTitle: "לא הצלחנו לטעון את הנתונים",
+  loadFailedHint: "בדוק את החיבור ונסה שוב. שום דבר לא נכתב או השתנה.",
+  retry: "נסה שוב",
+  emptyDefaultTitle: "אין כאן עדיין כלום",
+};
+
+// --- Login (src/app/login/page.tsx) ---
+export const loginPage = {
+  emailLabel: "אימייל",
+  passwordLabel: "סיסמה",
+  signIn: "כניסה",
+  signingIn: "נכנס...",
+  failedTitle: "הכניסה לא הצליחה",
+  failedHint: "בדוק את האימייל והסיסמה ונסה שוב.",
+};
+
+// Evidence Strength tiers as PRODUCT STATES, not errors. The tier is
+// computed in code (src/lib/dna/evidence-strength.ts) and never changed
+// here — this is only how each tier is explained to the investor. The
+// short badge text stays evidenceStrengthLabel above; this map adds the
+// one-line explanation the badge can show beside it. Wording follows the
+// real rule: fewer than three independent supporting cases is
+// "insufficient"; from three on, the share of contradicting cases sets
+// weak / moderate / strong.
+export const evidenceTierHint: Record<string, string> = {
+  insufficient_evidence: "עדיין אין מספיק מקרים עצמאיים כדי לקרוא לזה דפוס. זה מצב תקין — לא שגיאה.",
+  weak: "יש מספיק מקרים, אבל חלק ניכר מהם סותר את הטענה.",
+  moderate: "דפוס שחוזר על עצמו ברוב המקרים העצמאיים.",
+  strong: "דפוס יציב: חמישה מקרים עצמאיים לפחות, ולכל היותר מיעוט קטן של סתירות.",
+};
+
 // --- Dashboard (src/app/page.tsx) ---
 // Nav link labels are deliberately NOT duplicated here — each links to a
 // page that already owns its own title string (dnaPage.title,
-// strategyPage.title, etc.); the Dashboard reuses those directly. Only
-// "Learning Insights" stays a literal English label below, since that
-// page itself is still English (deferred with Decision Review).
+// strategyPage.title, etc.); the Dashboard reuses those directly. The
+// shell (src/components/shell/nav-config.ts) now owns the navigation and
+// the sign-out control; the Dashboard keeps only what is its own.
 
 export const dashboardPage = {
   signedInAs: "מחובר בתור",

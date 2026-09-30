@@ -90,8 +90,6 @@ export default function CaseDetailPage() {
 
   return (
     <main
-      dir="rtl"
-      lang="he"
       className={`${sansBody.className} mx-auto flex max-w-2xl flex-col gap-8 px-4 py-12 text-journal-ink`}
     >
       <BackLink href="/cases" label={casesListPage.title} />
