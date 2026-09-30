@@ -474,6 +474,19 @@ weak edges (לא נמדד).
 **למה לא תוקן:** נוגע בספירה הדטרמיניסטית הקפואה (`src/lib/evidence/resolve-independence.ts`) ובגרסאות שכבר
 נשמרו; דורש הכרעת Owner ויחידה נפרדת. **לא חוסם את Frontend V1.** לא נבדק אם קיים מקרה כזה בנתונים האמיתיים.
 
+### Investment Case — תיק שהוחלט עדיין ניתן לכתיבה בצד השרת (נמצא 2026-09-30)
+**נמצא** בחקירת Frontend V1 יחידה 3 (תיק מחקר). `cases.fetchMarketIntelligence`, `cases.generatePersonalFit`
+ו-`cases.generateSynthesis` (`src/server/routers/cases.ts`) לא בודקים `status === "researching"` — רק בעלות.
+קריאה ישירה אליהם על תיק שכבר הוחלט דורסת את השדות החיים של השורה (`updateInvestmentCase`), בניגוד ל-
+`docs/data-model.md` §10 ("InvestmentCase Mutable רק while researching"). `decisions.create` כן בודק.
+
+**מה כן מוגן:** העותק הקפוא (`investment_case_snapshot_json` ב-Snapshot) לא מושפע; ה-Snapshot, ה-Review
+וה-Prior Record קוראים רק אותו. הנזק האפשרי: עמוד התיק עצמו מציג תוכן חי שנוצר אחרי ההחלטה.
+
+**מה נעשה ביחידה 3:** ה-UI מסתיר את פעולות הרענון/היצירה בתיק שהוחלט ומפנה לרשומת ההחלטה. **לא** תוקן
+ב-backend (Backend Intelligence V1 קפוא). מועמד ל-hardening: אותו guard של `decisions.create` בשלושת
+ה-procedures, עם טסט. דורש יחידה נפרדת.
+
 ## נבנה
 - **Frontend V1, יחידה 1 — Design system + App shell + RTL foundation** (2026-09-30): `dir="rtl"`/`lang="he"` פעם
   אחת ב-`src/app/layout.tsx`, והעמודים לא עוטפים את עצמם יותר; shell משותף (`src/components/shell/`: סרגל צד בקצה
