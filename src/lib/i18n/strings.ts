@@ -170,19 +170,109 @@ export const evidenceTierHint: Record<string, string> = {
   strong: "דפוס יציב: חמישה מקרים עצמאיים לפחות, ולכל היותר מיעוט קטן של סתירות.",
 };
 
-// --- Dashboard (src/app/page.tsx) ---
-// Nav link labels are deliberately NOT duplicated here — each links to a
-// page that already owns its own title string (dnaPage.title,
-// strategyPage.title, etc.); the Dashboard reuses those directly. The
-// shell (src/components/shell/nav-config.ts) now owns the navigation and
-// the sign-out control; the Dashboard keeps only what is its own.
+// --- Home (src/app/page.tsx, src/components/home/*) — Frontend V1, unit 2 ---
+// The investor's decision cockpit. Every line here describes a fact the
+// backend already derived (monitoring, next actions, open conditions,
+// evidence reach); none of it judges a decision, predicts a price or ranks
+// anything. Reason, fact and destination wording for attention and next
+// actions is reused from decisionAttention / nextActions below, not
+// duplicated.
 
-export const dashboardPage = {
-  signedInAs: "מחובר בתור",
-  loading: "טוען...",
-  description:
-    "עוזר השקעות אישי מבוסס AI שלומד איך אתה חושב כמשקיע — לא ממליץ מה לקנות. זיכרון מובנה של תהליך ההחלטות שלך, עם ראיות ומעקב אחורה לכל מסקנה.",
-  signOut: "התנתקות",
+export const homePage = {
+  title: "סקירה",
+  newIdea: "רעיון חדש",
+  // A — orientation
+  historyThroughPrefix: "ההיסטוריה מעודכנת עד",
+  historyAgePrefix: "לפני",
+  historyAgeSuffix: "ימים",
+  historyToday: "עודכנה היום",
+  noHistory: "עדיין אין היסטוריית עסקאות",
+  portfolioStatusPrefix: "מצב התיק:",
+  portfolioStatus: {
+    ok: "תקין",
+    warnings: "יש אזהרות חישוב",
+    unavailable: "לא זמין",
+  } as Record<string, string>,
+  countAttention: "לתשומת לב",
+  countSteps: "צעדים מוצעים",
+  countConditions: "תנאים פתוחים",
+  // B — attention
+  attentionTitle: "דורש את תשומת לבך",
+  attentionHint: "החלטות שמשהו השתנה סביבן מאז שבדקת אותן לאחרונה. אלה עובדות, לא המלצה.",
+  attentionEmpty: "אין החלטה שדורשת תשומת לב עכשיו.",
+  moreFactsPrefix: "ועוד",
+  // a next action shown inside its decision's attention row: the decision is
+  // already named by the row, so the fact drops it
+  joinedFact: {
+    RESOLVE_EXECUTION_CANDIDATES: "עסקאות מועמדות לביצוע שלא סווגו",
+    REVIEW_UNREVIEWED_DECISION: "טרם עבר Review",
+    SET_REVIEW_HORIZON: "לא נקבע תאריך Review",
+    RESOLVE_OPEN_REENTRY_CONDITION: "הגיע מועד הבדיקה של תנאי שקילה-מחדש",
+  } as Record<string, string>,
+  // C — next steps
+  stepsTitle: "הצעד הבא",
+  stepsEmpty: "אין כרגע צעד מוצע.",
+  // D — monitoring
+  monitoringTitle: "החלטות במעקב",
+  monitoringHint: "כל ההחלטות שרשמת, ומה מצב המעקב על כל אחת.",
+  monitoringEmpty: "עדיין אין החלטות. החלטה נרשמת מתוך תיק מחקר.",
+  columns: {
+    decision: "החלטה",
+    date: "תאריך",
+    state: "מצב",
+    reviewBy: "תאריך Review",
+    reviews: "Reviews",
+    pending: "תחזיות ממתינות",
+    held: "מוחזק כעת",
+  },
+  state: {
+    attention: "דורשת תשומת לב",
+    monitoring: "במעקב",
+    settled: "הושלמה",
+  } as Record<string, string>,
+  horizon: {
+    not_set: "לא נקבע",
+    upcoming: "עתידי",
+    due: "הגיע",
+    satisfied: "הושלם",
+  } as Record<string, string>,
+  undatedSuffix: "ללא תאריך",
+  heldYes: "כן",
+  heldNo: "לא",
+  heldUnknown: "לא זמין",
+  // E — conditions
+  conditionsTitle: "תנאים שהצבת לעצמך",
+  conditionsHint: "רק אתה קובע אם תנאי התקיים. המערכת לא בודקת אותו מול השוק.",
+  conditionsEmpty: "אין תנאים פתוחים.",
+  conditionsShow: "הצג את התנאים",
+  // F — research
+  researchTitle: "מחקר פתוח",
+  researchHint: "תיקים שאתה חוקר, ורעיונות שעוד לא הפכו לתיק. רעיון מתחיל ממך, לא מהמערכת.",
+  researchEmpty: "אין תיק מחקר פתוח ואין רעיון ממתין.",
+  stalled: "לא התקדם זמן רב",
+  openCase: "פתח את התיק",
+  ideasWaitingPrefix: "רעיונות שעוד לא הפכו לתיק:",
+  openIdeas: "לרעיונות",
+  // G — investment memory
+  memoryTitle: "זיכרון ההשקעות שלך",
+  memoryHint: "כמה מהטענות על דפוס ההשקעה שלך כבר נשענות על מספיק מקרים עצמאיים.",
+  memoryEmpty: "עדיין אין השערות DNA או עקרונות Strategy. הם נוצרים מתשובות הראיון ומההחלטות שלך.",
+  dnaLabel: "DNA",
+  strategyLabel: "Strategy",
+  claimsUnit: "טענות",
+  allBelowThreshold: "כולן עדיין מתחת לסף הראיות. זה מצב תקין, לא שגיאה.",
+  aboveThresholdMiddle: "מעל הסף,",
+  belowThresholdSuffix: "מתחת לסף",
+  statementsLabel: "הצהרות שלך",
+  uncitedMiddle: "עוד לא צוטטו ב-",
+  journalLabel: "יומן",
+  coverageMiddle: "מתוך",
+  coverageSuffix: "פוזיציות עם נימוק",
+  openDna: "DNA",
+  openStrategy: "Strategy",
+  openJournal: "יומן",
+  openInterview: "לראיון הפתיחה",
+  memoryFootnote: "טענה משמשת את המערכת בניתוחים רק כשיש לה מספיק מקרים עצמאיים. עד אז היא מוצגת לך, אבל שום ניתוח לא נשען עליה.",
 };
 
 // --- Decisions: list (src/app/decisions/page.tsx) ---
@@ -248,7 +338,7 @@ export const evidenceReach = {
   unresolvedSuffix: "החלטות מצוטטות עם עסקאות מועמדות שלא סווגו — לא נספרות לאף צד עד לסיווג.",
 };
 
-// --- Evidence Reach V1 (src/components/next-actions.tsx) — the deterministic
+// --- Evidence Reach V1 (src/components/home/steps-region.tsx) — the deterministic
 // next-action list beside Monitoring. FACT -> REASON -> DESTINATION. ---
 
 export const nextActions = {

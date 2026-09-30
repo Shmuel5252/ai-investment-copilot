@@ -39,6 +39,9 @@ export default function StyleguidePage() {
           }
           actions={
             <>
+              <ButtonLink href="/styleguide/home" variant="quiet">
+                תצוגת סקירה לדוגמה
+              </ButtonLink>
               <Button variant="secondary">פעולה משנית</Button>
               <Button variant="primary">פעולה ראשית</Button>
             </>
