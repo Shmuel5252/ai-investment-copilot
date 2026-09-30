@@ -90,19 +90,6 @@ export const evidenceStanceLabel: Record<string, string> = {
   contradicting: "סותר",
 };
 
-// principleTypeEnum
-export const principleTypeLabel: Record<string, string> = {
-  declared: "מוצהר",
-  observed: "נצפה",
-  validated: "מאומת",
-};
-
-export const principleTypeHint: Record<string, string> = {
-  declared: "אמרת את זה בעצמך בראיון.",
-  observed: "דפוס שהמערכת שמה לב אליו — עדיין נבדק.",
-  validated: "גדר סיכון בסיסית קבועה, לא נלמדה ממך.",
-};
-
 // costBasisConfidenceEnum
 export const costBasisConfidenceLabel: Record<string, string> = {
   known: "ידוע במדויק",
@@ -341,24 +328,6 @@ export const decisionAttention = {
   withoutHorizonSuffix: "החלטות במעקב ללא תאריך Review",
   // Decision Follow-Through V1 — the action a card with execution facts offers.
   markExecution: "סמן ביצוע",
-};
-
-// --- Evidence Reach V1 (src/components/evidence-reach.tsx) — per-claim
-// transparency. "The AI does not currently use this" is a threshold fact,
-// never a verdict that the claim is false; the distance line is shown only
-// when the threshold table makes it exactly true, and it counts INDEPENDENT
-// cases — another answer about an episode already counted adds nothing. ---
-
-export const evidenceReach = {
-  sourcesPrefix: "מקורות:",
-  interviewAnswers: "תשובות ראיון",
-  decisionStatements: "הצהרות מזמן החלטה",
-  usedByAi: "ה-AI משתמש בזה כרגע בניתוחים.",
-  notUsedByAi: "ה-AI לא משתמש בזה כרגע — לא כי זה שגוי, אלא כי הראיות מתחת לסף.",
-  distancePrefix: "נדרשים עוד",
-  distanceMiddle: "מקרים עצמאיים תומכים כדי לעבור לרמה",
-  distanceNote: "ראיה נוספת על אותו אירוע/אותה החלטה אינה מקרה נוסף.",
-  unresolvedSuffix: "החלטות מצוטטות עם עסקאות מועמדות שלא סווגו — לא נספרות לאף צד עד לסיווג.",
 };
 
 // --- Evidence Reach V1 (src/components/home/steps-region.tsx) — the deterministic
@@ -996,38 +965,87 @@ export const decisionStatementKindLabel: Record<string, string> = {
   exit_conditions: "תנאי היציאה",
 };
 
-// --- Baseline Strategy (src/app/strategy/page.tsx) ---
+// --- Strategy (src/components/strategy, Frontend V1 unit 6B). The
+// investor's operating document: principles they adopted, fixed system
+// guardrails, and system observations still being tested — never merged.
+// Chrome only: statements, rationales, summaries and edited wording stay as
+// stored. ---
 
 export const strategyPage = {
   title: "אסטרטגיית בסיס",
   description:
-    "שלושה סוגי עקרונות, שנשארים נפרדים באופן ברור: מה שאמרת לנו ישירות (מוצהר), דפוסים שהמערכת עדיין בודקת (נצפה), וגדרות סיכון בסיסיות קבועות (מאומת). שום דבר כאן לא מוצג כוודאי יותר מהמקור שלו.",
-  currentVersionLabel: "גרסת אסטרטגיה נוכחית: v",
-  declaredTitle: "עקרונות מוצהרים",
-  findDeclaredButton: "מצא כללים מוצהרים מהראיון",
-  readingAnswersButton: "קורא תשובות ראיון...",
-  noExplicitRule: "לא נמצא כלל מפורש בתשובות הראיון שלך עדיין — זו תוצאה נורמלית, לא שגיאה.",
-  confirmedLabel: "אושר.",
-  confirmButton: "אשר — כן, זה הכלל שלי",
-  observedTitle: "עקרונות נצפים",
-  generateObservedButton: "צור עקרונות נצפים",
-  analyzingButton: "מנתח תשובות ראיון...",
-  createdLabel: "עקרונות נוצרו",
-  droppedPrefix: "(",
-  droppedSuffix: "הוצעו אך נפסלו בשל ראיות לא תקפות)",
-  noneYet: "אין עדיין.",
-  supportingLabel: "תומכות",
-  contradictingLabel: "סותרות",
-  viewEvidence: "הצג ראיות",
-  hideEvidence: "הסתר ראיות",
-  noEvidenceRecorded: "לא נרשמו ראיות.",
-  approveTitle: "אשר אסטרטגיית בסיס",
-  approveDescription:
-    "מאגד כל עיקרון למעלה (כפי שהוא עכשיו) לגרסת אסטרטגיה חדשה וממוספרת — שום דבר כאן לא נכתב מחדש בשקט אחר כך, רק מוחלף בגרסה מאושרת חדשה.",
-  changeSummaryPlaceholder: "לדוגמה: אסטרטגיית בסיס ראשונית",
-  approveButton: "אשר כגרסת אסטרטגיה חדשה",
+    "העקרונות שמהם אתה יוצא כשאתה מחליט. חלקם אימצת בעצמך, חלקם גדרות קבועות של המערכת, וחלקם תצפיות של המערכת שעדיין נבדקות. גרסה מאושרת של האסטרטגיה נשמרת עם כל החלטה שנרשמת אחריה.",
+  // approved version
+  approvedTitle: "הגרסה המאושרת",
+  approvedVersionPrefix: "גרסה",
+  approvedOnPrefix: "אושרה ב-",
+  approvedSummaryLabel: "סיכום השינוי, כפי שכתבת:",
+  approvedFrozenNote: "החלטות שנרשמות מעכשיו שומרות את הגרסה הזו כפי שהיא. שינוי מאוחר בעיקרון לא משנה אותה ולא את ההחלטות שכבר נרשמו.",
+  historyNote: "גרסאות קודמות נשמרות, וכל החלטה שומרת את הגרסה שהייתה בתוקף כשנרשמה. כרגע אין באתר תצוגה של גרסאות קודמות.",
+  driftMiddle: "עקרונות נוצרו או עודכנו אחרי אישור הגרסה הזו, ולכן הגרסה הנוכחית שלהם אינה כלולה בה. תוכן הגרסה המאושרת עצמו אינו מוצג כאן.",
+  driftMarker: "נוצר או עודכן אחרי אישור הגרסה; הגרסה הנוכחית שלו אינה כלולה בה",
+  noApprovedTitle: "עוד אין גרסה מאושרת",
+  noApprovedHint: "רישום החלטה דורש גרסת אסטרטגיה מאושרת, כי כל החלטה שומרת את הגרסה שבתוקף. אפשר לאשר גרסה ראשונה מהעקרונות שלמטה.",
+  // approve
+  approveTitle: "אישור גרסה חדשה",
+  approveHint:
+    "האישור יוצר גרסה חדשה, ממוספרת ומתוארכת, מכל העקרונות כפי שהם עכשיו. הגרסאות הקודמות נשארות כפי שהן, והחלטות שכבר נרשמו לא משתנות. החלטות שיירשמו אחרי האישור ישמרו את הגרסה החדשה. כל אישור יוצר גרסה נוספת.",
+  summaryLabel: "סיכום השינוי",
+  summaryHelp: "במילים שלך. נשמר כפי שנכתב.",
+  approveButton: "אשר כגרסה חדשה",
   approvingButton: "מאשר...",
-  approvedAsLabel: "אושר כ-v",
+  approvedAsPrefix: "אושרה גרסה",
+  // sections
+  livePrinciplesTitle: "העקרונות כפי שהם עכשיו",
+  livePrinciplesHint: "הגרסה הנוכחית של כל עיקרון, בסדר שבו נוספו.",
+  declaredTitle: "עקרונות מוצהרים",
+  declaredHint: "עקרונות שאישרת בעצמך כשלך.",
+  declaredEmpty: "עוד אין עקרונות מוצהרים. אפשר להציע כאלה מתוך הראיון, למטה.",
+  validatedTitle: "עקרונות מאומתים",
+  validatedHint: "גדר קבועה של המערכת, לא נלמדה ממך.",
+  validatedEmpty: "הגדרות הקבועות של המערכת עוד לא נטענו.",
+  observedTitle: "עקרונות נצפים",
+  observedHint: "תצפית של המערכת שעדיין נבדקת, לא עיקרון שבחרת. כמו טענות DNA, היא נשענת על מקרים עצמאיים ונמדדת ב-Evidence Strength.",
+  observedEmpty: "עוד אין עקרונות נצפים.",
+  rationaleLabel: "הנימוק שנשמר:",
+  declaredOrigin: "אישרת את הניסוח הזה כעיקרון שלך",
+  validatedOrigin: "גדר קבועה של המערכת",
+  // declared flow
+  proposeTitle: "הצעת עקרונות מוצהרים מהראיון",
+  proposeHint:
+    "ה-AI קורא את תשובות הראיון שלך ומציע ניסוחים של כללים שאמרת במפורש. שום הצעה לא הופכת לחלק מהאסטרטגיה עד שתאשר אותה. אפשר לערוך את הניסוח לפני האישור.",
+  proposeButton: "הצע עקרונות מהראיון",
+  proposingButton: "קורא את תשובות הראיון...",
+  proposeNone: "לא נמצא כלל מפורש בתשובות הראיון שלך. זו תוצאה תקינה.",
+  candidatesTitle: "הצעות לאישור",
+  candidateLabel: "ניסוח העיקרון",
+  candidateHelp: "ה-AI הציע את הניסוח הזה. הוא יישמר כפי שיופיע כאן כשתאשר.",
+  candidateRationaleLabel: "הנימוק שה-AI הציע:",
+  confirmButton: "אשר כעיקרון שלי",
+  confirmingButton: "מאשר...",
+  confirmed: "אושר ונוסף לעקרונות המוצהרים.",
+  duplicateNote: "עיקרון מוצהר בניסוח זהה כבר קיים, ולכן אין צורך לאשר אותו שוב.",
+  // observed generation
+  generateTitle: "עדכון עקרונות נצפים",
+  generateHint:
+    "ה-AI מציע תצפיות מתוך תשובות הראיון שלך ומהטקסטים שכתבת בזמן ההחלטות. כל ציטוט נבדק מול הטקסט שלך, והקוד סופר מקרים עצמאיים וקובע את Evidence Strength. תצפית שנוצרת כאן אינה עיקרון שאימצת.",
+  generateButton: "הרץ עדכון",
+  generatingButton: "מנתח את ההצהרות שלך...",
+  resultCreated: "נוצרו",
+  resultVersioned: "עודכנו בגרסה חדשה",
+  resultUnchanged: "נשארו ללא שינוי",
+  resultDropped: "הצעות נפסלו",
+  resultNothingNew: "לא נמצא שום דבר חדש בהרצה הזו.",
+};
+
+// principle_created_by — who or what produced a principle version.
+export const principleCreatedByLabel: Record<string, string> = {
+  user_declared: "אושר על ידך",
+  ai_observed: "הוצע על ידי ה-AI מתוך ההצהרות שלך",
+  system_default: "גדר קבועה של המערכת",
+  system_grounding_revalidation: "בדיקה חוזרת של הציטוטים מול הטקסט שלך",
+  system_confidence_recalculation: "חישוב מחדש של Evidence Strength",
+  system_independence_recalculation: "חישוב מחדש של המקרים העצמאיים",
 };
 
 // --- Ideas notebook (src/components/ideas, Frontend V1 unit 5). An idea is a
