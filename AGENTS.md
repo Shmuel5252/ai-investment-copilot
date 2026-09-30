@@ -16,6 +16,10 @@ Operating manual קבוע לכל session עתידי. אם משהו כאן לא �
   באגים) ונדחו במכוון לדיון משותף לפני בנייה — לא תיקון-אחד-אחד. בדוק
   שם לפני שמציעים פיצ'ר "קטן" חדש שלא התבקש.
 - `docs/` — כל doc עתידי נוסף (למשל ADRs) שייך לכאן, לא לשורש.
+- `scratch/` ו-`pgdata/` — מקומיים, ב-`.gitignore`, לעולם לא ב-commit.
+  `pgdata/` הוא ה-DB האמיתי; `scratch/experiment-archive/scs-v2/` הוא
+  ארכיון המחקר של SCS V2 (קריאה בלבד, מכיל טקסט אמיתי של המשקיע).
+  **`git clean -fdx` מוחק את שניהם** — לא להריץ בלי גיבוי מאומת.
 
 ### Docs Sync Rule (מחייב)
 `investment_ai_product_concept_he_v2.md`, `docs/architecture.md`,
@@ -67,6 +71,27 @@ Scanner, חיבור ברוקר, agents כתהליכים נפרדים, כל push/
 נתוני שוק, news/sentiment aggregation אוטומטי, דרישת היסטוריה מלאה,
 אופציות/נגזרים/קריפטו, Strategy שמשתנה לבד, multi-tenant, מובייל.
 
+## Backend Intelligence V1 — Frozen (2026-09-30)
+
+ה-backend קפוא: checkpoint `1051d8e2`, מיגרציה אחרונה `0018` (19 מיגרציות,
+0000–0018), אין מיגרציה `0019`. **התוכנית הפעילה: Frontend V1 /
+Productization** — redesign עמוד-אחר-עמוד מעל ה-routers והמסכים הקיימים,
+כשהמסכים הקיימים ממשיכים לעבוד לאורך כל הדרך.
+
+- **אסור לפתוח מחדש את ה-backend לנוחות ה-frontend.** עבודת frontend לא
+  משנה ארכיטקטורה, AI contracts, grounding semantics, confidence
+  semantics, סכמה או מיגרציות, לא בונה מחדש workflow קיים ולא מחליפה
+  router עובד. היוצא מן הכלל היחיד: פגם אמיתי שחוסם את ה-frontend — נקודת
+  עצירה ו-review נפרד, לא תיקון שקט.
+- **שפה ב-Frontend V1:** ה-chrome של כל המסכים (shell, ניווט, תוויות,
+  הסברים) בעברית/RTL, כולל Decision Review ו-Learning — גובר על ה-Scope
+  שב"שפת תוכן" לגבי ה-chrome בלבד. התוכן שה-AI מייצר ב-Review/Learning
+  נשאר באנגלית; החוזים שלהם לא נפתחים לשם תרגום.
+- **Structured Claim Semantics V2 (SCS V2) — נדחה, לא נבנה.** דחייה מטעמי
+  ערך מוצרי, לא הוכחה שרישוי סמנטי אוטומטי בטוח. נפתח מחדש רק כש-claim
+  רלוונטי נושא-ראיות מגיע ל-S ≥ 3, או בהחלטת Owner מפורשת. ר'
+  `docs/backlog.md`.
+
 ## Architecture Snapshot
 
 Next.js (App Router, TS) + tRPC + Drizzle ORM + PostgreSQL (Neon) +
@@ -76,10 +101,15 @@ Data) + Vercel (deploy) + session-cookie auth (single-user). מודל היסטו
 `docs/architecture.md` §5). `Portfolio`/`Position` תמיד מחושבים
 (`computePositions()`), אף פעם לא מאוחסנים.
 
+**מצב תפעולי בפועל (2026-09-30) מול התכנון המקורי:** Neon ו-Vercel למעלה
+הם התשתית שתוכננה במקור, לא המצב הנוכחי. בפועל ה-DB האמיתי הוא PostgreSQL
+16 מקומי ב-Docker (`docker-compose.yml`, הנתונים ב-`pgdata/`), האפליקציה
+לא deployed, ואין תצורת hosting או CI. בחירת hosting עתידית לא הוכרעה.
+
 ### Required Accounts / .env
 ```
 ANTHROPIC_API_KEY=       # קריאות AI
-DATABASE_URL=            # Neon Postgres connection string
+DATABASE_URL=            # Postgres connection string (כיום: Docker מקומי)
 FMP_API_KEY=             # Financial Modeling Prep
 SESSION_SECRET=          # חתימת cookie session
 ```
