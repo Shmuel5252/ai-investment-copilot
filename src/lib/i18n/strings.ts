@@ -802,44 +802,71 @@ export const tellMeWhy = {
   cancelButton: "ביטול",
 };
 
-// --- Episode Journal (src/app/journal/page.tsx) ---
+// --- Episode Journal (src/app/journal/page.tsx, Frontend V1 unit 7A) ---
+// A position lifecycle and the investor's own rationale for entering it.
+// Before a rationale exists only entry-time facts appear; later facts sit
+// in a closed, labelled region. An answer is a possible source, never
+// "evidence" by the mere fact of existing.
 
 export const journalPage = {
   title: "יומן פוזיציות",
   description:
-    "כל פוזיציה שפתחת (וסגרת) בהיסטוריה שלך — כדי לתעד, בקצב שלך, למה החלטת מה שהחלטת. הרציונל נשמר במילים שלך בלבד ומזין את השערות ה-DNA ואת האסטרטגיה בפעם הבאה שתיצור אותן; המערכת לא מריצה את זה לבד.",
-  loading: "טוען...",
-  empty: "עדיין אין פוזיציות ביומן — ייבא היסטוריית מסחר קודם.",
-  coveragePrefix: "תועדו",
+    "כל פוזיציה מההיסטוריה שלך, לצד מה שכתבת על הסיבה שנכנסת אליה. היומן נגזר מהעסקאות שייבאת ואינו נשמר בנפרד; הנימוקים נשמרים במילים שלך.",
+  coveragePrefix: "כתבת נימוק ל-",
   coverageMiddle: "מתוך",
-  coverageSuffix: "פוזיציות",
-  unansweredHeading: "ממתינות לרציונל",
-  answeredHeading: "מתועדות",
-  allDocumented: "כל הפוזיציות מתועדות.",
+  coverageSuffix: "פוזיציות.",
+  unansweredTitle: "ממתינים לנימוק",
+  unansweredHint: "מהכניסה האחרונה לראשונה. מוצג רק מה שהיה ידוע ביום הכניסה; מה שקרה אחר כך יופיע אחרי שתכתוב.",
+  answeredTitle: "עם נימוק",
+  answeredHint: "מהכניסה האחרונה לראשונה. הנימוק שלך קודם; מה שקרה אחר כך נמצא בנפרד.",
+  noneWaiting: "לכל הפוזיציות ביומן יש נימוק.",
+  noneAnswered: "עדיין לא נכתב נימוק לאף פוזיציה.",
+  emptyTitle: "אין עדיין פוזיציות לשחזר",
+  emptyHint: "היומן נבנה מהיסטוריית המסחר שלך. אחרי ייבוא העסקאות יופיעו כאן הפוזיציות שפתחת.",
+  emptyAction: "לייבוא היסטוריית מסחר",
+  positionOrdinal: "פוזיציה",
+  entryPrefix: "כניסה",
+  firstTradePrefix: "עסקה ראשונה בהיסטוריה המיובאת",
+  sharesAt: "מניות במחיר",
+  notAnchorable:
+    "אי אפשר לכתוב נימוק לפוזיציה הזו: אין בה קנייה בהיסטוריה המיובאת, כנראה כי נפתחה לפני חלון הייבוא.",
+  writeButton: "כתוב למה נכנסת",
+  openingButton: "פותח...",
+  hindsightNote: "לפני הכתיבה מוצגות רק עובדות מיום הכניסה. מה שקרה אחר כך יוצג רק אחרי שהנימוק יישמר.",
+  questionLabel: "השאלה",
+  questionProvenance: "שאלה קבועה שהמערכת בונה מעובדות הכניסה בלבד. היא לא נכתבה על ידי AI ואינה ראיה.",
+  answerLabel: "התשובה שלך",
+  saveNote:
+    "התשובה תישמר כפי שכתבת אותה, עם התאריך של היום, כהצהרה היסטורית שלך. התשובה עשויה לשמש בהמשך כמקור כאשר המערכת בוחנת דפוסים ועקרונות.",
+  saveButton: "שמור את הנימוק",
+  savingButton: "שומר...",
+  closeButton: "סגור בלי לשמור",
+  saveFailedTitle: "השמירה לא אושרה. הטקסט שלך נשאר כאן, והיומן רוענן כדי להראות מה נשמר בפועל.",
+  writtenOnPrefix: "כתבת ב-",
+  inReplyTo: "בתשובה לשאלה:",
+  answerProvenance: "המילים שלך, כפי שנשמרו. הן עשויות לשמש בהמשך כמקור כאשר המערכת בוחנת דפוסים ועקרונות.",
+  severalAnswers: "לפוזיציה הזו יש כמה תשובות נוכחיות, מהישנה לחדשה. עדכון מחליף את האחרונה בלבד.",
+  updateButton: "עדכן את הנימוק",
+  updateNote:
+    "העדכון נשמר כתשובה חדשה; התשובה הקודמת נשארת ברשומה ואינה משמשת עוד כתשובה הנוכחית. אי אפשר לעיין כאן בתשובות קודמות, והעדכון אינו משנה ראיות או ניתוחים קודמים של DNA ו-Strategy.",
+  updateHindsight: "בזמן העדכון מה שקרה אחר כך מוסתר.",
+  updateUnchanged: "הטקסט זהה לתשובה הנוכחית.",
+  updateSaveButton: "שמור כתשובה חדשה",
+  laterSummary: "מה קרה אחר כך",
+  laterNote: "עובדות שנגזרו מהעסקאות אחרי הכניסה. הן לא היו ידועות כשנכנסת ואינן חלק מהנימוק.",
+  statusLabel: "מצב הפוזיציה",
   statusOpen: "פתוחה",
   statusClosed: "סגורה",
-  episodeLabel: "פוזיציה",
-  entryLabel: "כניסה",
-  firstTransactionLabel: "עסקה ראשונה בחלון",
-  sharesAtLabel: "מניות במחיר",
-  buysLabel: "קניות",
-  sellsLabel: "מכירות",
-  notAnchorable:
-    "לא ניתן לתעד רציונל לפוזיציה הזו: אין קנייה בהיסטוריה שלה (כנראה נפתחה לפני חלון הייבוא).",
-  hindsightNote:
-    "לפני הכתיבה מוצגות רק עובדות מזמן הכניסה. מה שקרה אחר כך יוצג רק אחרי שהרציונל יישמר — כדי לא לצבוע את הזיכרון.",
-  rationaleLabel: "הרציונל שלך",
-  writtenOnLabel: "נכתב ב",
-  showRationale: "הצג רציונל",
-  hideRationale: "הסתר רציונל",
-  laterFactsHeading: "מה קרה אחר כך — עובדות מאוחרות, לא חלק מהרציונל",
+  tradesLabel: "עסקאות בפוזיציה",
+  buysSuffix: "קניות",
+  sellsSuffix: "מכירות",
   exitLabel: "יציאה",
   holdingDaysLabel: "ימי החזקה",
-  sellLabel: "מכירה",
-  realizedLabel: "תשואה ממומשת",
-  insufficientHoldingsNote: "מכירה שעלתה על ההחזקה הידועה — ייתכן ש-Opening State חסר; המספר לא אמין",
-  stillOpenNote: "הפוזיציה עדיין פתוחה — אין עדיין תוצאה ממומשת.",
-  noSellTrace: "לא נרשמו מכירות עם תוצאה ממומשת לפוזיציה הזו.",
+  sellsTitle: "תשואה ממומשת בכל מכירה",
+  sellOnPrefix: "מכירה ב-",
+  insufficientHoldingsNote: "המכירה עלתה על ההחזקה הידועה, כנראה כי חסר מצב פתיחה; המספר לא אמין",
+  stillOpenNote: "הפוזיציה עדיין פתוחה, ולכן אין לה יציאה.",
+  noSellTrace: "לא נרשמו מכירות עם תשואה ממומשת לפוזיציה הזו.",
 };
 
 // --- Onboarding Interview (src/app/interview/page.tsx) ---
