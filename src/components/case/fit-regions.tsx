@@ -8,7 +8,8 @@ import { KeyValues, Table, THead, TBody, Tr, Th, Td } from "@/components/ui/tabl
 import { EmptyState, HelpText } from "@/components/ui/states";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
 import { caseDetailPage as t, evidenceStrengthLabel } from "@/lib/i18n/strings";
-import { ActionError, Provenance, pct, usd } from "./parts";
+import { Provenance } from "@/components/ui/quote";
+import { ActionError, pct, usd } from "./parts";
 import type { CaseAction, PersonalFitEvidenceRefs, ProfileItem } from "./types";
 
 // D and E: two different kinds of fit, side by side and never combined.

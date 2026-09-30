@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { trpc } from "@/trpc/react";
-import { useSubmitGuard } from "@/lib/use-submit-guard";
-import { Num } from "@/components/num";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
+import { Notice } from "@/components/ui/status";
+import { HelpText } from "@/components/ui/states";
 import { reentryCondition as t } from "@/lib/i18n/strings";
 
 // Decision Follow-Through V1 — the re-entry condition lifecycle on the
@@ -13,69 +13,52 @@ import { reentryCondition as t } from "@/lib/i18n/strings";
 // product's next step: a new Case for the same ticker with this condition as
 // its explicit origin. Forecasts get no controls — they are resolved in a
 // Decision Review.
-interface PredictionRow {
-  id: string;
-  kind: "forecast" | "reentry_condition" | null;
-  status: string;
-  resolutionNote: string | null;
-  resolvedAt: string | Date | null;
+// Frontend V1 unit 4: presentation only. The page owns the two mutations
+// (predictions.resolveReentryCondition, cases.createFromCondition) with the
+// same inputs as before; the resolved state itself is shown by the
+// predictions region, so this renders only the controls.
+export type ConditionStatus = "confirmed" | "refuted" | "inconclusive";
+
+export interface ConditionActions {
+  resolve: { run: (predictionId: string, status: ConditionStatus, note: string) => void; pending: boolean; error: string | null };
+  openCase: { run: (predictionId: string) => void; pending: boolean; error: string | null };
 }
 
-type Status = "confirmed" | "refuted" | "inconclusive";
-
-export function ReentryConditionControls({ prediction, decisionId }: { prediction: PredictionRow; decisionId: string }) {
-  const router = useRouter();
-  const guard = useSubmitGuard();
-  const utils = trpc.useUtils();
-  const [status, setStatus] = useState<Status | null>(null);
+export function ReentryConditionControls({
+  prediction,
+  actions,
+  reconsiderationCaseId,
+}: {
+  prediction: { id: string; kind: string | null; status: string };
+  actions: ConditionActions;
+  /** The case already opened from this condition, if any (cases.list, originPredictionId). */
+  reconsiderationCaseId: string | null;
+}) {
+  const [status, setStatus] = useState<ConditionStatus | null>(null);
   const [note, setNote] = useState("");
-  const resolve = trpc.predictions.resolveReentryCondition.useMutation({
-    onSuccess: () => {
-      utils.decisions.get.invalidate({ decisionId });
-      utils.reviews.pendingPredictions.invalidate({ decisionId });
-      utils.predictions.openReentryConditions.invalidate();
-    },
-  });
-  const openCase = trpc.cases.createFromCondition.useMutation({
-    onSuccess: (c) => router.push(`/cases/${c.id}`),
-  });
 
   if (prediction.kind !== "reentry_condition") return null;
 
-  if (prediction.status !== "pending") {
-    return (
-      <div className="mt-2 flex flex-col gap-1 text-xs">
-        <p className="text-journal-muted">
-          {t.yourCallPrefix} {prediction.status === "confirmed" ? t.fired : prediction.status === "refuted" ? t.notFired : t.undetermined}
-        </p>
-        {prediction.resolutionNote && (
-          <p className="text-journal-ink">
-            {t.resolvedNotePrefix} {prediction.resolutionNote}
-          </p>
-        )}
-        {prediction.resolvedAt && (
-          <p className="text-journal-muted">
-            {t.resolvedAtPrefix}-<Num>{new Date(prediction.resolvedAt).toLocaleDateString("he-IL")}</Num>
-          </p>
-        )}
-        {prediction.status === "confirmed" && (
-          <button
-            onClick={() => guard(() => openCase.mutateAsync({ predictionId: prediction.id }), `open-case-${prediction.id}`)}
-            disabled={openCase.isPending}
-            className="mt-1 w-fit rounded border border-journal-rule px-2 py-1 text-xs text-journal-ink hover:bg-journal-bg disabled:opacity-50"
-          >
-            {openCase.isPending ? t.reconsiderOpening : t.reconsiderButton}
-          </button>
-        )}
-        {openCase.isError && <p className="text-red-600">{openCase.error.message}</p>}
+  if (prediction.status === "confirmed") {
+    return reconsiderationCaseId ? (
+      <ButtonLink href={`/cases/${reconsiderationCaseId}`} size="sm" variant="secondary" className="w-fit">
+        {t.openReconsiderationCase}
+      </ButtonLink>
+    ) : (
+      <div className="flex flex-col items-start gap-2">
+        <Button size="sm" variant="secondary" onClick={() => actions.openCase.run(prediction.id)} loading={actions.openCase.pending} loadingLabel={t.reconsiderOpening}>
+          {t.reconsiderButton}
+        </Button>
+        {actions.openCase.error && <ErrorLine message={actions.openCase.error} />}
       </div>
     );
   }
+  if (prediction.status !== "pending") return null;
 
   return (
-    <div className="mt-2 flex flex-col gap-2 rounded border border-journal-rule bg-journal-bg p-2 text-xs">
-      <p className="text-journal-muted">{t.resolvePrompt}</p>
-      <div className="flex flex-wrap gap-2">
+    <div className="flex flex-col gap-2 rounded-md bg-surface-2 p-3">
+      <HelpText>{t.resolvePrompt}</HelpText>
+      <div role="radiogroup" aria-label={t.resolvePrompt} className="flex flex-wrap gap-2">
         {(
           [
             ["confirmed", t.fired],
@@ -83,34 +66,36 @@ export function ReentryConditionControls({ prediction, decisionId }: { predictio
             ["inconclusive", t.undetermined],
           ] as const
         ).map(([value, label]) => (
-          <button
-            key={value}
-            onClick={() => setStatus(value)}
-            className={`rounded border px-2 py-1 ${status === value ? "border-journal-ink bg-journal-ink text-journal-surface" : "border-journal-rule"}`}
-          >
+          <Button key={value} size="sm" variant={status === value ? "primary" : "secondary"} aria-pressed={status === value} onClick={() => setStatus(value)}>
             {label}
-          </button>
+          </Button>
         ))}
       </div>
-      <input
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder={t.notePlaceholder}
-        className="rounded border border-journal-rule bg-journal-surface p-1"
-      />
-      <button
-        onClick={() =>
-          guard(
-            () => resolve.mutateAsync({ predictionId: prediction.id, status: status!, note: note.trim() }),
-            `resolve-${prediction.id}`
-          )
-        }
-        disabled={status === null || note.trim() === "" || resolve.isPending}
-        className="w-fit rounded border border-journal-rule px-2 py-1 text-journal-ink hover:bg-journal-surface disabled:opacity-50"
+      <Field label={t.notePlaceholder}>
+        {({ id, describedBy }) => <Input id={id} aria-describedby={describedBy} value={note} onChange={(e) => setNote(e.target.value)} />}
+      </Field>
+      <Button
+        size="sm"
+        variant="secondary"
+        className="w-fit"
+        onClick={() => actions.resolve.run(prediction.id, status!, note.trim())}
+        disabled={status === null || note.trim() === ""}
+        loading={actions.resolve.pending}
+        loadingLabel={t.submittingButton}
       >
-        {resolve.isPending ? t.submittingButton : t.submitButton}
-      </button>
-      {resolve.isError && <p className="text-red-600">{resolve.error.message}</p>}
+        {t.submitButton}
+      </Button>
+      {actions.resolve.error && <ErrorLine message={actions.resolve.error} />}
     </div>
+  );
+}
+
+function ErrorLine({ message }: { message: string }) {
+  return (
+    <Notice tone="negative">
+      <bdi dir="ltr" className="text-xs">
+        {message}
+      </bdi>
+    </Notice>
   );
 }

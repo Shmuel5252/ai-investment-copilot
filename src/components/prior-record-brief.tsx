@@ -49,13 +49,13 @@ export function PriorRecordBriefView({ brief, frozen = false }: { brief: PriorRe
         <p className="text-ink">
           {brief.position.status === "held" ? (
             <>
-              {t.heldPrefix}{" "}
+              {frozen ? t.heldAtDecisionPrefix : t.heldPrefix}{" "}
               <Num>
                 {qty(brief.position.quantity)} @ {brief.position.costBasisPerShare !== null ? "$" + brief.position.costBasisPerShare.toFixed(2) : "?"}
               </Num>
             </>
           ) : brief.position.status === "not_held" ? (
-            t.notHeld
+            frozen ? t.notHeldAtDecision : t.notHeld
           ) : (
             <span className="text-muted">{t.positionUnavailable}</span>
           )}
