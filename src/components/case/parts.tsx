@@ -1,20 +1,6 @@
-import { Notice } from "@/components/ui/status";
-import { caseDetailPage as t } from "@/lib/i18n/strings";
-
-// Small pieces the Case regions share. Quote and Provenance moved to
-// src/components/ui/quote.tsx in Frontend V1 unit 4.
-
-// A failed mutation: the human line first, the server's own message after it.
-export function ActionError({ message, title = t.actionFailed }: { message: string | null; title?: string }) {
-  if (!message) return null;
-  return (
-    <Notice tone="negative" title={title}>
-      <bdi dir="ltr" className="text-xs">
-        {message}
-      </bdi>
-    </Notice>
-  );
-}
+// Small formatting helpers the Case regions share. Quote and Provenance
+// moved to src/components/ui/quote.tsx (unit 4), ActionError to
+// src/components/ui/action-error.tsx (unit 5).
 
 export const day = (d: string | Date) => new Date(d).toLocaleDateString("he-IL");
 export const dateTime = (d: string | Date) => new Date(d).toLocaleString("he-IL");

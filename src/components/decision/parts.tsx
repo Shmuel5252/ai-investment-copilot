@@ -1,4 +1,3 @@
-import { Notice } from "@/components/ui/status";
 import { cx } from "@/components/ui/cx";
 
 // Small pieces the Decision regions share. Feature-local: a global Disclosure
@@ -27,18 +26,6 @@ export function Disclosure({
       </summary>
       <div className="mt-2 flex flex-col gap-3">{children}</div>
     </details>
-  );
-}
-
-// A failed write: the human line first, the server's own message after it.
-export function ActionError({ title, message }: { title: string; message: string | null }) {
-  if (!message) return null;
-  return (
-    <Notice tone="negative" title={title}>
-      <bdi dir="ltr" className="text-xs">
-        {message}
-      </bdi>
-    </Notice>
   );
 }
 

@@ -14,7 +14,8 @@ import { Provenance, Quote } from "@/components/ui/quote";
 import { PriorRecordBriefView } from "@/components/prior-record-brief";
 import type { PriorRecordBrief } from "@/lib/prior-record/prior-record";
 import { citedFieldLabel, decisionPage as t, decisionTypeLabel, decisionsListPage, priorRecord as tPrior } from "@/lib/i18n/strings";
-import { ActionError, Disclosure, dateTime, day, isBackdated, signedPct, usd } from "./parts";
+import { ActionError } from "@/components/ui/action-error";
+import { Disclosure, dateTime, day, isBackdated, signedPct, usd } from "./parts";
 import type { DecisionAction, DecisionRow, FrozenCaseCopy, FrozenPortfolioState, MarketContextRow, SnapshotRow } from "./types";
 
 // A — the header: what was decided, when it was decided and when it was

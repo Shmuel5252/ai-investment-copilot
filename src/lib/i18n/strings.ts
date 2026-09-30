@@ -159,6 +159,7 @@ export const shell = {
   loading: "טוען...",
   loadFailedTitle: "לא הצלחנו לטעון את הנתונים",
   loadFailedHint: "בדוק את החיבור ונסה שוב. שום דבר לא נכתב או השתנה.",
+  actionFailed: "הפעולה נכשלה. שום דבר לא נשמר.",
   retry: "נסה שוב",
   emptyDefaultTitle: "אין כאן עדיין כלום",
 };
@@ -945,18 +946,42 @@ export const strategyPage = {
   approvedAsLabel: "אושר כ-v",
 };
 
-// --- Ideas (src/app/ideas/page.tsx) ---
+// --- Ideas notebook (src/components/ideas, Frontend V1 unit 5). An idea is a
+// dated note in the investor's own words; the page never ranks, scores or
+// enriches it. The notes themselves never pass through here. ---
 
 export const ideasPage = {
   title: "רעיונות",
-  description: "הערה קצרה על טיקר שאתה סקרן לגביו — קדם אותו לתיק מחקר מלא כשתרצה לחקור אותו ברצינות.",
-  tickerPlaceholder: "טיקר, למשל AAPL",
-  notePlaceholder: "מה גרם לך לחשוב על זה?",
-  addButton: "הוסף רעיון",
+  description: "הערה קצרה עם תאריך, במילים שלך, על מה שמשך את תשומת לבך בטיקר מסוים. רעיון עוד אינו מחקר ואינו המלצה.",
+  // capture
+  captureTitle: "רעיון חדש",
+  tickerLabel: "טיקר",
+  tickerHelp: "כפי שמופיע בבורסה",
+  noteLabel: "מה משך את תשומת לבך?",
+  noteHelp: "נשמר מילה במילה. כרגע אין באתר עריכה או מחיקה של רעיונות.",
+  saveButton: "שמור רעיון",
   savingButton: "שומר...",
-  viewCase: "צפה בתיק המחקר",
-  promoteButton: "קדם לתיק מחקר",
-  noIdeasYet: "אין עדיין רעיונות.",
+  // lists
+  unresearchedTitle: "עוד לא נחקרו",
+  researchedTitle: "הפכו לתיקי מחקר",
+  orderHint: "לפי מועד הכתיבה, החדש ראשון.",
+  writtenOnPrefix: "נכתב ב-",
+  allResearched: "כל הרעיונות שכתבת כבר הפכו לתיקי מחקר.",
+  noneResearched: "עוד לא נפתח תיק מחקר מאף רעיון.",
+  // promotion
+  promoteButton: "פתח תיק מחקר מהרעיון",
+  promotingButton: "פותח...",
+  promoteHelp: "ייפתח תיק מחקר לאותו טיקר, המקושר לרעיון הזה. הערת הרעיון תישאר כפי שנכתבה, ותוכל לשמש את המחקר ואת קריאת ה-AI.",
+  existingCaseFact: "יש כבר תיק מחקר לטיקר הזה",
+  openExistingCase: "פתח אותו",
+  // promoted
+  becameCasePrefix: "הפך לתיק מחקר ב-",
+  becameCase: "נפתח ממנו תיק מחקר",
+  openCase: "פתח את התיק",
+  // empty
+  emptyTitle: "עוד אין רעיונות",
+  emptyHint:
+    "רעיון הוא הערה קצרה עם תאריך, במילים שלך, על מה שמשך את תשומת לבך. הוא לא ניתוח ולא המלצה. כשתרצה לבדוק אותו ברצינות, תוכל לפתוח ממנו תיק מחקר.",
 };
 
 // --- Investment Cases: list (src/app/cases/page.tsx) ---
@@ -1038,7 +1063,6 @@ export const caseDetailPage = {
   loadingCase: "טוען את התיק...",
   caseNotFound: "התיק לא נמצא",
   caseNotFoundHint: "ייתכן שהקישור שגוי, או שהתיק שייך לחשבון אחר.",
-  actionFailed: "הפעולה נכשלה. שום דבר לא נשמר.",
   // A. header
   openedPrefix: "נפתח",
   updatedPrefix: "עודכן לאחרונה",

@@ -11,7 +11,8 @@ import { Quote } from "@/components/ui/quote";
 import { ExecutionView, type Candidate, type ExecutionData } from "@/components/execution-facts";
 import type { Loadable } from "@/components/home/types";
 import { addedByLabel, decisionPage as t } from "@/lib/i18n/strings";
-import { ActionError, dateTime, day } from "./parts";
+import { ActionError } from "@/components/ui/action-error";
+import { dateTime, day } from "./parts";
 import type { DecisionAction, LaterContextRow, TodayData } from "./types";
 
 // E — TODAY: a line of live monitoring facts (decisions.attention), never a

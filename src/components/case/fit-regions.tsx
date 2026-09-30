@@ -9,7 +9,8 @@ import { EmptyState, HelpText } from "@/components/ui/states";
 import type { PortfolioFit } from "@/lib/portfolio/portfolio-fit";
 import { caseDetailPage as t, evidenceStrengthLabel } from "@/lib/i18n/strings";
 import { Provenance } from "@/components/ui/quote";
-import { ActionError, pct, usd } from "./parts";
+import { ActionError } from "@/components/ui/action-error";
+import { pct, usd } from "./parts";
 import type { CaseAction, PersonalFitEvidenceRefs, ProfileItem } from "./types";
 
 // D and E: two different kinds of fit, side by side and never combined.

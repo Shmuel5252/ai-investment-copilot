@@ -487,6 +487,21 @@ weak edges (לא נמדד).
 ב-backend (Backend Intelligence V1 קפוא). מועמד ל-hardening: אותו guard של `decisions.create` בשלושת
 ה-procedures, עם טסט. דורש יחידה נפרדת.
 
+### Ideas — `ideas.promote` אינו idempotent ואינו טרנזקציוני (נמצא 2026-09-30)
+**נמצא** בחקירת Frontend V1 יחידה 5 (מחברת רעיונות). `ideas.promote` (`src/server/routers/ideas.ts`) בודק
+בעלות בלבד: יוצר Case עם `idea_id` ואז מעדכן את `promoted_to_case_id` של הרעיון, בשתי כתיבות נפרדות בלי
+טרנזקציה. אין בדיקה שהרעיון כבר קודם, ואין אילוץ ייחודיות על `investment_cases.idea_id`.
+
+**השלכה:** קריאה חוזרת (retry, שתי לשוניות) או שתי קריאות במקביל יוצרות Case נוסף לאותו רעיון, והרעיון
+מצביע רק על האחרון; כשל בין שתי הכתיבות משאיר Case עם `idea_id` ורעיון בלי קישור. בנתונים האמיתיים
+(2026-09-30): 0 קישורים שבורים, 0 רעיונות עם יותר מ-Case אחד.
+
+**מה נעשה ביחידה 5:** ה-UI מציג את הפעולה רק לרעיון שלא קודם, חוסם לחיצה כפולה לכל רעיון
+(`useSubmitGuard`) ומשבית בזמן ההמתנה. **לא** תוקן ב-backend (Backend Intelligence V1 קפוא).
+מועמד ל-hardening: להחזיר את ה-Case הקיים כשהרעיון כבר קודם, לעטוף את יצירת ה-Case ועדכון הרעיון
+בטרנזקציה אחת, והגנת ייחודיות מתאימה — באותו דפוס של `cases.createFromCondition` (אינדקס ייחודי חלקי +
+fallback על unique violation). דורש יחידה נפרדת.
+
 ## נבנה
 - **Frontend V1, יחידה 1 — Design system + App shell + RTL foundation** (2026-09-30): `dir="rtl"`/`lang="he"` פעם
   אחת ב-`src/app/layout.tsx`, והעמודים לא עוטפים את עצמם יותר; shell משותף (`src/components/shell/`: סרגל צד בקצה

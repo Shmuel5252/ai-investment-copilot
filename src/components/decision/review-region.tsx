@@ -19,7 +19,8 @@ import {
   reviewQualityLabel,
   thesisAccuracyLabel,
 } from "@/lib/i18n/strings";
-import { ActionError, Disclosure, dateTime, day, labelOf, signedPct, usd } from "./parts";
+import { ActionError } from "@/components/ui/action-error";
+import { Disclosure, dateTime, day, labelOf, signedPct, usd } from "./parts";
 import type { DecisionAction, PendingPrediction, Resolution, ReviewOutcome, ReviewRow } from "./types";
 
 // H — the retrospective. Every stored Review keeps three separate things

@@ -8,7 +8,8 @@ import { Status, Notice } from "@/components/ui/status";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { HelpText } from "@/components/ui/states";
 import { caseDetailPage as t, decisionTypeLabel } from "@/lib/i18n/strings";
-import { ActionError, day } from "./parts";
+import { ActionError } from "@/components/ui/action-error";
+import { day } from "./parts";
 import type { InventoryKey, Readiness, RuleState } from "./derive-readiness";
 import type { CaseAction, ExistingDecision, RecordInput } from "./types";
 

@@ -13,7 +13,8 @@ import { EmptyState } from "@/components/ui/states";
 import { RegionBody } from "@/components/home/region";
 import type { Loadable } from "@/components/home/types";
 import { casesListPage as t, caseStatusLabel } from "@/lib/i18n/strings";
-import { ActionError, day } from "./parts";
+import { ActionError } from "@/components/ui/action-error";
+import { day } from "./parts";
 import type { CaseAction, CaseListRow } from "./types";
 
 // /cases — the companion list of the research file (Frontend V1, unit 3).

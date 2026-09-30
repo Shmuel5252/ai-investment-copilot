@@ -9,7 +9,8 @@ import { caseDetailPage as t, decisionTypeLabel } from "@/lib/i18n/strings";
 import { RegionBody } from "@/components/home/region";
 import type { Loadable } from "@/components/home/types";
 import { Provenance, Quote } from "@/components/ui/quote";
-import { ActionError, dateTime, day, usd } from "./parts";
+import { ActionError } from "@/components/ui/action-error";
+import { dateTime, day, usd } from "./parts";
 import type { CaseAction, CaseData, IdeaData, OriginData } from "./types";
 
 // B, C and G: the idea in the investor's words, the fetched market facts,
