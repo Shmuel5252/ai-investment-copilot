@@ -66,7 +66,7 @@ async function seedAnswers(forInvestorId: string, n: number) {
   const ids: string[] = [];
   for (let i = 0; i < n; i++) {
     const a = await insertInterviewAnswer(db, {
-      interviewSessionId: session.id,
+      questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id,
       transactionId: null,
       questionText: `Q${i}`,
       answerText: `Answer ${i}`,

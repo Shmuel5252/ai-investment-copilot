@@ -24,6 +24,8 @@ export interface TellMeWhySession {
   /** The episode's entry BUY, as resolved by the server. */
   transactionId: string;
   questionText: string;
+  /** Opaque: the hash of the entry facts at start, sent back with the answer so the server can refuse changed facts. */
+  anchorContextHash: string;
 }
 
 export interface RationaleActions {
@@ -88,7 +90,12 @@ export function RationaleWriter({
         await actions.save({ session, answerText: text, supersedesAnswerId: current?.id });
         setOpen(false);
       } catch (e) {
+        // The text stays. The session is dropped: reopening asks the server
+        // again, so the investor sees current facts before trying to save;
+        // nothing is retried silently.
         setError({ kind: "save", message: messageOf(e) });
+        setSession(null);
+        setOpen(false);
       } finally {
         setPending(null);
       }
@@ -102,6 +109,7 @@ export function RationaleWriter({
           {isUpdate ? t.updateButton : t.writeButton}
         </Button>
         {error?.kind === "start" && <ActionError message={error.message} />}
+        {error?.kind === "save" && <ActionError title={t.saveFailedTitle} message={error.message} />}
       </div>
     );
   }
@@ -126,7 +134,6 @@ export function RationaleWriter({
           {t.closeButton}
         </Button>
       </div>
-      {error?.kind === "save" && <ActionError title={t.saveFailedTitle} message={error.message} />}
     </Card>
   );
 }

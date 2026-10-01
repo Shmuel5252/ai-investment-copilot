@@ -89,7 +89,7 @@ beforeAll(async () => {
     spcxBuy: await mkTxn(investorId, "SPCX", "buy", "2026-06-26", "3"),
   };
   const session = await insertInterviewSession(db, { investorId, origin: "user_initiated" });
-  const ans = async (txn: string, text: string) => (await insertInterviewAnswer(db, { interviewSessionId: session.id, transactionId: txn, questionText: "Q", answerText: text })).id;
+  const ans = async (txn: string, text: string) => (await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id, transactionId: txn, questionText: "Q", answerText: text })).id;
   const answers = {
     mpBuy: await ans(txns.mpBuy, "נכנסתי ל-MP בגלל הסיפור"),
     mpSell2: await ans(txns.mpSell2, "מכרתי את היתרה כדי לפנות כסף לקנייה של MRVL"),
@@ -269,8 +269,8 @@ describe("20/21. the directional guard at the database level", () => {
     const buy = await mkTxn(investorB, "BBB", "buy", "2026-05-12", "5");
     const session = await insertInterviewSession(db, { investorId: investorB, origin: "user_initiated" });
     // No ticker is named, so isolation is the only corroboration.
-    const a = (await insertInterviewAnswer(db, { interviewSessionId: session.id, transactionId: sell, questionText: "Q", answerText: "sold it" })).id;
-    const b = (await insertInterviewAnswer(db, { interviewSessionId: session.id, transactionId: buy, questionText: "Q", answerText: "bought it" })).id;
+    const a = (await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id, transactionId: sell, questionText: "Q", answerText: "sold it" })).id;
+    const b = (await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id, transactionId: buy, questionText: "Q", answerText: "bought it" })).id;
     hB = (await mkDnaIdentity(investorB, "claim", 2, 0, "insufficient_evidence", [{ answerId: a, stance: "supporting", supported: true }, { answerId: b, stance: "supporting", supported: true }])).id;
   });
 
@@ -308,8 +308,8 @@ describe("concurrency", () => {
     const sell = await mkTxn(investorC, "AAA", "sell", "2026-05-10", "5");
     const buy = await mkTxn(investorC, "BBB", "buy", "2026-05-12", "5");
     const session = await insertInterviewSession(db, { investorId: investorC, origin: "user_initiated" });
-    const a = (await insertInterviewAnswer(db, { interviewSessionId: session.id, transactionId: sell, questionText: "Q", answerText: "x" })).id;
-    const b = (await insertInterviewAnswer(db, { interviewSessionId: session.id, transactionId: buy, questionText: "Q", answerText: "y" })).id;
+    const a = (await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id, transactionId: sell, questionText: "Q", answerText: "x" })).id;
+    const b = (await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id, transactionId: buy, questionText: "Q", answerText: "y" })).id;
     const h = await mkDnaIdentity(investorC, "claim", 2, 0, "insufficient_evidence", [{ answerId: a, stance: "supporting", supported: true }, { answerId: b, stance: "supporting", supported: true }]);
     const resolver = await loadIndependenceResolver(db, investorC);
 

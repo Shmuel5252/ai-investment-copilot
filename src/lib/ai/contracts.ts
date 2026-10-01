@@ -31,4 +31,8 @@ export const AI_CONTRACTS = {
   evidenceGrounding: "evidence-grounding-v3-2-statements",
   hypothesisIdentity: "hypothesis-identity-v1",
   learningPropose: "learning-propose-v1",
+  // Unit 7C-B: the guided interview question over point-in-time exposed facts
+  // only (src/lib/ai/interview.ts). Kept equal to PIT_QUESTION_CONTRACT, which
+  // the persisted anchor_context.generator names.
+  interviewQuestion: "interview_question_pit_v1",
 } as const;

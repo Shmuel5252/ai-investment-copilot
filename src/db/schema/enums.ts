@@ -245,6 +245,29 @@ export const interviewSessionOriginEnum = pgEnum("interview_session_origin", [
   "user_initiated",
 ]);
 
+// Guided Interview PIT contract (Unit 7C-B) — what a stored question is,
+// persisted explicitly, never inferred from dates or session origin at read
+// time. The two *_legacy values are backfilled for rows written before the
+// contract (migration 0019) and carry no anchor_context; every other value
+// is written by the current code with an immutable anchor_context snapshot.
+//   guided_legacy       — AI question from the pre-PIT guided interview; its
+//                         wording may contain hindsight and is withheld from
+//                         every downstream AI context;
+//   tell_me_why_legacy  — code-built Tell-me-why question from before the
+//                         contract (no outcome facts by construction);
+//   guided_pit_ai       — AI question over the point-in-time facts, accepted
+//                         by the deterministic validator;
+//   guided_pit_fallback — the deterministic per-role question used when the
+//                         AI wording was rejected or malformed;
+//   tell_me_why_pit     — code-built Tell-me-why question, entry snapshot kept.
+export const interviewQuestionProvenanceEnum = pgEnum("interview_question_provenance", [
+  "guided_legacy",
+  "tell_me_why_legacy",
+  "guided_pit_ai",
+  "guided_pit_fallback",
+  "tell_me_why_pit",
+]);
+
 export const ideaSourceEnum = pgEnum("idea_source", ["user_manual"]);
 
 // Same-day transaction ordering (docs — Investment Episode Independence

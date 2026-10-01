@@ -57,9 +57,13 @@ describe("C. startTellMeWhy — the widened contract", () => {
     expect(r.requestedTransactionId).toBe(ids.mpBuy);
     expect(r.episodeKey).toBe("MP#1");
     expect(r.episodeStatus).toBe("closed");
-    expect(r.questionText).toContain("MP#1");
-    expect(r.questionText).toContain("05/08/2026");
-    expect(r.questionText).not.toMatch(/%|רווח|הפסד|תשואה|60|72/); // the MP sells made +25% / +50%: never in the prompt
+    // Unit 7C-B: the question is wording only; the entry facts come separately
+    // as the facts line of the entry's point-in-time snapshot.
+    expect(r.questionText).toContain("MP");
+    expect(r.questionText).not.toMatch(/\d/);
+    expect(r.factsLine).toContain("05/08/2026");
+    expect(r.factsLine).toContain("10 מניות MP");
+    expect(`${r.questionText} ${r.factsLine}`).not.toMatch(/%|רווח|הפסד|תשואה|60|72/); // the MP sells made +25% / +50%: never in the prompt
     const session = await db.query.interviewSessions.findFirst({ where: (s, { eq }) => eq(s.id, r.sessionId) });
     expect(session).toMatchObject({ investorId, origin: "user_initiated", status: "in_progress" });
   });
@@ -71,11 +75,15 @@ describe("C. startTellMeWhy — the widened contract", () => {
     expect(r.episodeKey).toBe("MP#1");
   });
 
-  it("an open position asks about entry and management, not exit", async () => {
-    const r = await caller(investorId).startTellMeWhy({ transactionId: ids.mrvlBuy! });
-    expect(r.episodeStatus).toBe("open");
-    expect(r.questionText).toMatch(/מנהל/);
-    expect(r.questionText).not.toMatch(/לצאת|לממש/);
+  it("Unit 7C-B: open or closed, the question asks about the entry only — never management, selling or exit", async () => {
+    const open = await caller(investorId).startTellMeWhy({ transactionId: ids.mrvlBuy! });
+    const closed = await caller(investorId).startTellMeWhy({ transactionId: ids.mpBuy! });
+    expect(open.episodeStatus).toBe("open");
+    expect(closed.episodeStatus).toBe("closed");
+    for (const r of [open, closed]) {
+      expect(r.questionText).toMatch(/כניסה|להיכנס/);
+      expect(r.questionText).not.toMatch(/מנהל|התנהלת|לצאת|לממש|מכרת|מכירה/);
+    }
   });
 
   it("refuses a foreign investor's transaction and a nonexistent one (NOT_FOUND — nothing leaks about existence)", async () => {
@@ -132,6 +140,7 @@ describe("D/B/E. the journal, hindsight protection, append-only answers, superse
       transactionId: start.transactionId,
       questionText: start.questionText,
       answerText: "נכנסתי ל-MP בגלל הסיפור של critical minerals, ומימשתי בשני שלבים.",
+      anchorContextHash: start.anchorContextHash,
     });
     await caller(investorId).complete({ sessionId: start.sessionId });
     firstAnswerId = saved.id;
@@ -159,6 +168,7 @@ describe("D/B/E. the journal, hindsight protection, append-only answers, superse
       questionText: start.questionText,
       answerText: "עדכון: בדיעבד הסיבה המרכזית הייתה הרוטציה ל-MRVL.",
       supersedesAnswerId: firstAnswerId,
+      anchorContextHash: start.anchorContextHash,
     });
     await caller(investorId).complete({ sessionId: start.sessionId });
     expect(updated.id).not.toBe(firstAnswerId);
@@ -174,21 +184,23 @@ describe("D/B/E. the journal, hindsight protection, append-only answers, superse
     expect(mp.rationale.answers.map((a) => a.id)).toEqual([updated.id]);
 
     // a chain, never a fork
-    const again = await caller(investorId).answer({ sessionId: start.sessionId, transactionId: start.transactionId, questionText: "q", answerText: "x", supersedesAnswerId: firstAnswerId }).catch((e) => e);
+    // a valid question and hash, so the refusal is the chain rule itself
+    const again = await caller(investorId).answer({ sessionId: start.sessionId, transactionId: start.transactionId, questionText: start.questionText, answerText: "x", supersedesAnswerId: firstAnswerId, anchorContextHash: start.anchorContextHash }).catch((e) => e);
     expect((again as TRPCError).code).toBe("BAD_REQUEST");
+    expect((again as TRPCError).message).toMatch(/already been updated once/);
   });
 
   it("concurrent updates of the SAME answer cannot fork the chain: exactly one succeeds, exactly one successor row exists", async () => {
     // A fresh, never-superseded answer on MRVL#1 (its own session, so the
     // MP chain above is untouched).
     const base = await caller(investorId).startTellMeWhy({ transactionId: ids.mrvlBuy! });
-    const original = await caller(investorId).answer({ sessionId: base.sessionId, transactionId: base.transactionId, questionText: base.questionText, answerText: "first MRVL rationale" });
+    const original = await caller(investorId).answer({ sessionId: base.sessionId, transactionId: base.transactionId, questionText: base.questionText, answerText: "first MRVL rationale", anchorContextHash: base.anchorContextHash });
 
     // Six racing updates, each from its own started session, released together.
     const starts = await Promise.all(Array.from({ length: 6 }, () => caller(investorId).startTellMeWhy({ transactionId: ids.mrvlBuy! })));
     const results = await Promise.allSettled(
       starts.map((s, i) =>
-        caller(investorId).answer({ sessionId: s.sessionId, transactionId: s.transactionId, questionText: s.questionText, answerText: `racing update ${i}`, supersedesAnswerId: original.id })
+        caller(investorId).answer({ sessionId: s.sessionId, transactionId: s.transactionId, questionText: s.questionText, answerText: `racing update ${i}`, supersedesAnswerId: original.id, anchorContextHash: s.anchorContextHash })
       )
     );
     const fulfilled = results.filter((r) => r.status === "fulfilled");
@@ -214,7 +226,8 @@ describe("D/B/E. the journal, hindsight protection, append-only answers, superse
     const r = await foreign.answersForSession({ sessionId: start.sessionId }).catch((e) => e);
     expect((r as TRPCError).code).toBe("NOT_FOUND");
     const foreignStart = await foreign.startTellMeWhy({ transactionId: ids.foreignBuy! });
-    const s = await foreign.answer({ sessionId: foreignStart.sessionId, transactionId: foreignStart.transactionId, questionText: "q", answerText: "x", supersedesAnswerId: firstAnswerId }).catch((e) => e);
+    // a VALID question for the foreign investor's own session, so the refusal is the foreign supersede itself
+    const s = await foreign.answer({ sessionId: foreignStart.sessionId, transactionId: foreignStart.transactionId, questionText: foreignStart.questionText, answerText: "x", supersedesAnswerId: firstAnswerId, anchorContextHash: foreignStart.anchorContextHash }).catch((e) => e);
     expect((s as TRPCError).code).toBe("NOT_FOUND");
     // ...and an answer can never be anchored to a transaction the investor does not own, or one that does not exist
     const mine = caller(investorId);
@@ -239,9 +252,9 @@ describe("D/B/E. the journal, hindsight protection, append-only answers, superse
 
     // An older-style answer anchored to a different transaction of the SAME episode (the MP precedent).
     const session = await insertInterviewSession(db, { investorId, origin: "user_initiated" });
-    const sellAnswer = await insertInterviewAnswer(db, { interviewSessionId: session.id, transactionId: ids.mpSell2!, questionText: "q", answerText: "second answer, same episode" });
+    const sellAnswer = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id, transactionId: ids.mpSell2!, questionText: "q", answerText: "second answer, same episode" });
     const mrvlStart = await caller(investorId).startTellMeWhy({ transactionId: ids.mrvlBuy! });
-    const mrvlAnswer = await caller(investorId).answer({ sessionId: mrvlStart.sessionId, transactionId: mrvlStart.transactionId, questionText: mrvlStart.questionText, answerText: "MRVL: separate decision" });
+    const mrvlAnswer = await caller(investorId).answer({ sessionId: mrvlStart.sessionId, transactionId: mrvlStart.transactionId, questionText: mrvlStart.questionText, answerText: "MRVL: separate decision", anchorContextHash: mrvlStart.anchorContextHash });
 
     const resolver = await loadIndependenceResolver(db, investorId);
     const sameEpisode = resolver.resolve([
@@ -259,7 +272,11 @@ describe("D/B/E. the journal, hindsight protection, append-only answers, superse
     expect(twoEpisodes.supportingUpper).toBe(2);
 
     const journal = await caller(investorId).journal();
-    expect(journal.coverage).toEqual({ covered: 2, total: 2 }); // two answers on MP#1 are still one covered episode
-    expect(journal.episodes.find((e) => e.key === "MP#1")!.rationale.answers).toHaveLength(2);
+    expect(journal.coverage).toEqual({ covered: 2, total: 2 });
+    // Unit 7C-B: only the entry answer is the episode's rationale; the answer
+    // anchored to the sell is an action answer, shown once the entry is answered.
+    const mp = journal.episodes.find((e) => e.key === "MP#1")!;
+    expect(mp.rationale.answers.map((a) => a.id)).toEqual([mpAnswer.id]);
+    expect(mp.actionAnswers!.map((a) => a.id)).toEqual([sellAnswer.id]);
   });
 });

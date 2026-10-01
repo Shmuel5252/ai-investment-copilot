@@ -13,7 +13,7 @@ import type { PriorRecordBrief, PriorRecordDecision, PriorRecordEpisode } from "
 import { validateReviewDimensions } from "@/lib/review/validate-review-dimensions";
 import { formatInput, type ReviewInput } from "@/lib/ai/review";
 import { anthropic } from "@/lib/ai/client";
-import { generateInterviewQuestion } from "@/lib/ai/interview";
+import { generatePitQuestion } from "@/lib/ai/interview";
 
 function decision(o: Partial<PriorRecordDecision> & { decisionId: string; decisionDate: string }): PriorRecordDecision {
   return {
@@ -68,7 +68,7 @@ function richBrief(): PriorRecordBrief {
     { id: "p4", claimText: "falls 15-20% from the entry price of ~$500", kind: null, status: "inconclusive", checkableByDate: null, resolvedAt: "2026-08-25T00:00:00.000Z", resolutionNote: "known extraction error" },
   ] });
   return {
-    version: 1,
+    version: 2,
     ticker: "SNDK",
     generatedAt: "2026-09-24T10:00:00.000Z",
     asOf: "2026-09-24T10:00:00.000Z",
@@ -78,8 +78,8 @@ function richBrief(): PriorRecordBrief {
     decisions: [d1, d2],
     episodes: [
       episode({ key: "SNDK#2", firstDate: "2026-08-24T00:00:00.000Z", status: "open", exitDate: null, holdingDays: null, sellCount: 0, sells: [], rationale: [
-        { answerId: "a2", questionText: "Why now?", answerText: "Waited for the pullback", answeredAt: "2026-09-01T00:00:00.000Z" },
-        { answerId: "a1", questionText: "Why this size?", answerText: "Small starter", answeredAt: "2026-08-30T00:00:00.000Z" },
+        { answerId: "a2", questionProvenance: "tell_me_why_pit", questionContext: "Why now?", answerText: "Waited for the pullback", answeredAt: "2026-09-01T00:00:00.000Z" },
+        { answerId: "a1", questionProvenance: "guided_pit_ai", questionContext: "Why this size?", answerText: "Small starter", answeredAt: "2026-08-30T00:00:00.000Z" },
       ] }),
       episode({ key: "SNDK#1", firstDate: "2026-05-05T00:00:00.000Z" }),
     ],
@@ -101,12 +101,12 @@ describe("projectPriorRecordForAi — structural exclusions", () => {
     expect([...allKeys(ctx)].sort()).toEqual([
       "accounting", "addedAt", "answerText", "answeredAt", "asOf", "buyCount", "claimText", "contractVersion", "decisionDate", "decisionId",
       "decisionType", "decisions", "episodes", "exitConditionsText", "exitDate", "firstDate", "historyThrough", "holdingDays", "key", "kind",
-      "laterContexts", "omitted", "pendingClaims", "pendingReentryConditions", "questionText", "rationale", "reasoningText", "resolvedClaimCount",
+      "laterContexts", "omitted", "pendingClaims", "pendingReentryConditions", "questionContext", "rationale", "reasoningText", "resolvedClaimCount",
       "reviewCount", "risksConsideredText", "sellCount", "sizeDollars", "sourceVersion", "status", "text", "ticker",
     ]);
     expect(ctx.decisions[0]!.pendingClaims.every((c) => Object.keys(c).sort().join() === "claimText,kind")).toBe(true);
     expect(ctx.episodes.every((e) => e.status === "open" || e.status === "closed")).toBe(true);
-    expect(ctx).toMatchObject({ contractVersion: 1, sourceVersion: 1 });
+    expect(ctx).toMatchObject({ contractVersion: 2, sourceVersion: 2 });
   });
 
   it("no price, cost basis, realized result, resolved outcome, Review verdict or position reaches the AI text", () => {
@@ -168,11 +168,42 @@ describe("missing information is never 'clean history'", () => {
   });
 });
 
+describe("Unit 7C-B: question provenance in the brief", () => {
+  // A v1 brief frozen before question provenance existed: its raw question may
+  // be a legacy AI question with hindsight, so it never reaches the AI.
+  const v1 = () => {
+    const b = richBrief() as unknown as Record<string, unknown> & { episodes: { rationale: Record<string, unknown>[] }[] };
+    b.version = 1;
+    for (const e of b.episodes) e.rationale = e.rationale.map((r) => ({ answerId: r.answerId, questionText: "LEGACY: what made you sell after that 42% run?", answerText: r.answerText, answeredAt: r.answeredAt }));
+    return b;
+  };
+
+  it("a v1 brief is still read, every question withheld, every answer kept verbatim", () => {
+    const ctx = projectPriorRecordForAi(v1());
+    expect(ctx.sourceVersion).toBe(1);
+    expect(ctx.episodes[0]!.rationale.map((r) => r.questionContext)).toEqual([null, null]);
+    const text = formatPriorRecordContext(ctx);
+    expect(text).not.toContain("LEGACY");
+    expect(text).not.toContain("42%");
+    expect(text).toContain("QUESTION CONTEXT: withheld (recorded before question provenance existed).");
+    expect(text).toContain('INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — answer recorded 2026-08-30: "Small starter"');
+  });
+
+  it("a v2 brief labels the question as system context, apart from the investor's answer", () => {
+    const text = formatPriorRecordContext(projectPriorRecordForAi(richBrief()));
+    expect(text).toContain("QUESTION CONTEXT (system-written, not the investor's words): Why now?");
+    expect(text).toContain('INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — answer recorded 2026-09-01: "Waited for the pullback"');
+    for (const line of text.split("\n").filter((l) => l.includes("INVESTOR-AUTHORED"))) expect(line).not.toMatch(/Why now\?|Why this size\?/);
+  });
+});
+
 describe("fail closed on an unsupported or malformed source", () => {
   it.each([
     ["null", null],
     ["a string", "brief"],
-    ["another version", { ...richBrief(), version: 2 }],
+    ["another version", { ...richBrief(), version: 3 }],
+    ["a v2 rationale without its question context", { ...richBrief(), episodes: [episode({ key: "K#1", firstDate: "2026-01-01", rationale: [{ answerId: "a", questionProvenance: null, answerText: "t", answeredAt: "2026-01-02" } as never] })] }],
+    ["a v1 rationale without its question text", { ...richBrief(), version: 1, episodes: [episode({ key: "K#1", firstDate: "2026-01-01", rationale: [{ answerId: "a", answerText: "t", answeredAt: "2026-01-02" } as never] })] }],
     ["no version", { ...richBrief(), version: undefined }],
     ["decisions not a list", { ...richBrief(), decisions: {} }],
     ["a decision without text fields", { ...richBrief(), decisions: [{ decisionId: "x", decisionType: "BUY", decisionDate: "2026-01-01" }] }],
@@ -236,7 +267,6 @@ describe("test AI safety — no real AI call can escape", () => {
     await expect(anthropic.messages.create({ model: "m", max_tokens: 1, messages: [] } as never)).rejects.toThrow(/Real AI call blocked in tests/);
   });
   it("an unmocked production AI function fails instead of calling out", async () => {
-    const candidate = { transaction: { ticker: "X", transactionType: "buy", quantity: 1, price: 10, amount: -10, transactionDate: new Date("2026-01-02T00:00:00Z") }, category: "largest_buy" };
-    await expect(generateInterviewQuestion(candidate as never)).rejects.toThrow(/Real AI call blocked in tests/);
+    await expect(generatePitQuestion("קנייה של 1 מניות X ב-02/01/2026.")).rejects.toThrow(/Real AI call blocked in tests/);
   });
 });

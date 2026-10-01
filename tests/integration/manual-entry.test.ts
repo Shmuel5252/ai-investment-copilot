@@ -164,7 +164,7 @@ describe("\"Tell me why\" — provenance and the DNA/Strategy reader function", 
       "סגרתי את היתרה ברווח ב-28/8, ושחררתי את ההון להזדמנויות אחרות.";
 
     await insertInterviewAnswer(db, {
-      interviewSessionId: session.id,
+      questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id,
       transactionId: txn!.id,
       questionText,
       answerText: fullStory,
@@ -175,7 +175,7 @@ describe("\"Tell me why\" — provenance and the DNA/Strategy reader function", 
     // user_initiated exists in isolation.
     const guidedSession = await insertInterviewSession(db, { investorId, origin: "guided_interview" });
     await insertInterviewAnswer(db, {
-      interviewSessionId: guidedSession.id,
+      questionProvenance: "tell_me_why_legacy", interviewSessionId: guidedSession.id,
       transactionId: txn!.id,
       questionText: "What made you buy MP?",
       answerText: "Some guided-interview answer.",

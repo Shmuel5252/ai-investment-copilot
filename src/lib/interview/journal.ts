@@ -1,4 +1,4 @@
-import type { EpisodeEntryFacts, EpisodeJournal, EpisodeLaterFacts, EpisodeRationale, JournalEpisode } from "@/lib/portfolio/episodes";
+import type { EpisodeAnswerInput, EpisodeEntryFacts, EpisodeJournal, EpisodeLaterFacts, EpisodeRationale, JournalEpisode } from "@/lib/portfolio/episodes";
 
 // Episode Journal V1 — the HINDSIGHT-SAFE projection the API hands to the
 // UI (approved product decision 4). A rationale must be the investor's
@@ -26,6 +26,13 @@ export interface JournalEpisodeView {
   rationale: EpisodeRationale;
   /** Present only once a rationale exists — never before. */
   later: EpisodeLaterFacts | null;
+  /**
+   * Unit 7C-B: effective answers anchored to the episode's later actions
+   * (guided questions about an add-on or a sell). Withheld, like `later`,
+   * until an entry rationale exists: an answer about a sell reveals that the
+   * sell happened, and may speak of how it went.
+   */
+  actionAnswers: EpisodeAnswerInput[] | null;
 }
 
 export interface JournalView {
@@ -46,6 +53,7 @@ export function toHindsightSafeView(episode: JournalEpisode): JournalEpisodeView
     anchorable: episode.entry !== null,
     rationale: episode.rationale,
     later: episode.rationale.status === "answered" ? episode.later : null,
+    actionAnswers: episode.rationale.status === "answered" ? episode.actionAnswers : null,
   };
 }
 

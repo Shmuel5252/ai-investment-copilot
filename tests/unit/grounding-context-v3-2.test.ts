@@ -307,13 +307,13 @@ describe("context is never evidence, a case, a count or an identity", () => {
 
 describe("where the question comes from", () => {
   it("buildStatementContextById reads the persisted question of each answer, skips a blank one, and has no entry for anything else", () => {
-    const map = buildStatementContextById([{ id: "a1", questionText: Q.WHY_SELL }, { id: "a2", questionText: "   " }, { id: "a3", questionText: Q.IGNORE }]);
+    const map = buildStatementContextById([{ id: "a1", questionProvenance: "tell_me_why_legacy", questionText: Q.WHY_SELL }, { id: "a2", questionProvenance: "tell_me_why_legacy", questionText: "   " }, { id: "a3", questionProvenance: "tell_me_why_legacy", questionText: Q.IGNORE }]);
     expect([...map]).toEqual([["a1", Q.WHY_SELL], ["a3", Q.IGNORE]]);
   });
 
   it("the proposers still see the question beside the answer, and a decision statement has a record heading, not a question", () => {
     const statements = buildInvestorStatements(
-      [{ id: "a1", questionText: Q.WHY_SELL, answerText: ANSWER.VALUATION }],
+      [{ id: "a1", questionProvenance: "tell_me_why_legacy", questionText: Q.WHY_SELL, answerText: ANSWER.VALUATION }],
       [{ statementId: DSID, decisionId: DECISION, kind: "reasoning", ticker: "X", decisionType: "BUY", decisionDate: new Date("2026-01-01T00:00:00Z"), createdAt: new Date("2026-01-01T00:00:00Z"), text: "decision text" }]
     );
     const shown = formatInvestorStatements(statements);

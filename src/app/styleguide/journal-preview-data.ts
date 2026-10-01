@@ -1,6 +1,7 @@
 import { loaded, type Loadable } from "@/components/home/types";
 import type { JournalData, JournalEpisodeRow } from "@/components/journal/journal-view";
 import type { TellMeWhySession } from "@/components/journal/rationale-writer";
+import { buildTellMeWhyQuestion } from "@/lib/interview/tell-me-why-question";
 
 // SYNTHETIC data for the /styleguide Journal preview and the Journal render
 // tests. Invented tickers, wording, ids and dates; nothing here comes from
@@ -99,7 +100,9 @@ const ANSWERED: JournalEpisodeRow[] = [
 export const JOURNAL_PREVIEW_SESSION: TellMeWhySession = {
   sessionId: "session-preview",
   transactionId: "buy-preview",
-  questionText: "טקסט דוגמה: פוזיציה MNOP#1, כניסה ב-11/06/2026 (קנייה של 200 מניות במחיר $8.05). ספר לי על ההשקעה שלך ב-MNOP: למה נכנסת?",
+  // the server's entry-only wording (Unit 7C-B); the hash is a synthetic placeholder
+  questionText: buildTellMeWhyQuestion("MNOP"),
+  anchorContextHash: "a".repeat(64),
 };
 
 // The question the preview's writer opens with: the one for the row it was
@@ -109,13 +112,13 @@ const PREVIEW_SESSIONS: Record<string, TellMeWhySession> = {
   "buy-w1": {
     sessionId: "session-preview-w1",
     transactionId: "buy-w1",
-    questionText:
-      "טקסט דוגמה: פוזיציה WXYZ#1, כניסה ב-02/04/2026 (קנייה של 30 מניות במחיר $74.20). ספר לי על ההשקעה שלך ב-WXYZ: למה נכנסת, איך התנהלת במהלך הפוזיציה, ולמה החלטת לממש חלק ממנה או לצאת ממנה?",
+    questionText: buildTellMeWhyQuestion("WXYZ"),
+    anchorContextHash: "b".repeat(64),
   },
 };
 
 export function journalPreviewSession(transactionId: string): TellMeWhySession {
-  return PREVIEW_SESSIONS[transactionId] ?? { sessionId: `session-${transactionId}`, transactionId, questionText: "טקסט דוגמה: השאלה הקבועה על הכניסה לפוזיציה הזו." };
+  return PREVIEW_SESSIONS[transactionId] ?? { sessionId: `session-${transactionId}`, transactionId, questionText: buildTellMeWhyQuestion("ABCD"), anchorContextHash: "c".repeat(64) };
 }
 
 export function journalPreviewData(state: JournalPreviewState): Loadable<JournalData> {

@@ -127,6 +127,7 @@ describe("contract ids", () => {
       evidenceGrounding: "evidence-grounding-v3-2-statements",
       hypothesisIdentity: "hypothesis-identity-v1",
       learningPropose: "learning-propose-v1",
+      interviewQuestion: "interview_question_pit_v1",
     });
     expect(STANCE_SEMANTICS_VERSION).toBe("grounding-semantics-v3-2");
   });

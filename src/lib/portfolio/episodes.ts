@@ -22,7 +22,9 @@ import { QUANTITY_EPSILON, type PortfolioState } from "./positions";
 //     holdings) has no deterministic anchor and is NOT guessed at: `entry`
 //     is null and the router refuses to start "Tell me why" for it.
 //   - rationale COVERAGE: an episode is covered when at least one EFFECTIVE
-//     (non-superseded) InterviewAnswer anchors to any of its transactions.
+//     (non-superseded) InterviewAnswer anchors to its ENTRY BUY (Unit 7C-B;
+//     before it, an answer on any of its transactions counted). Answers on
+//     its other transactions are kept apart as `actionAnswers`.
 //     Several answers about one episode are one covered episode; a
 //     superseded answer never counts (the caller passes
 //     getAllAnswersForInvestor's output, which already drops superseded
@@ -51,6 +53,17 @@ export interface EpisodeAnswerInput {
   questionText: string;
   answerText: string;
   createdAt: Date;
+  /**
+   * Unit 7C-B: passed through untouched from getAllAnswersForInvestor so an
+   * AI consumer of the journal (the Prior Record brief) can apply the shared
+   * question policy (aiQuestionContext). Optional: a caller without them is
+   * treated fail-closed there, as an unknown, withheld question.
+   */
+  questionProvenance?: string | null;
+  anchorContext?: unknown;
+  anchorTicker?: string | null;
+  anchorSide?: string | null;
+  anchorDate?: Date | string | null;
 }
 
 export interface EpisodeTransactionFact {
@@ -90,7 +103,12 @@ export interface EpisodeLaterFacts {
 
 export interface EpisodeRationale {
   status: "answered" | "unanswered";
-  /** Effective answers anchored to this episode, oldest first. */
+  /**
+   * Effective ENTRY answers: anchored to this episode's entry BUY, oldest
+   * first (Unit 7C-B). An answer anchored to a later action of the episode
+   * (a guided question about an add-on or a sell) is an action answer, not
+   * the entry rationale, and never makes the episode "answered".
+   */
   answers: EpisodeAnswerInput[];
   latestAnswerId: string | null;
 }
@@ -111,6 +129,8 @@ export interface JournalEpisode {
   entry: EpisodeEntryFacts | null;
   later: EpisodeLaterFacts;
   rationale: EpisodeRationale;
+  /** Effective answers anchored to any other transaction of the episode, oldest first. */
+  actionAnswers: EpisodeAnswerInput[];
 }
 
 export interface EpisodeJournal {
@@ -219,9 +239,12 @@ export function deriveEpisodeJournal(
     const holdingDays =
       exitDate && entry ? Math.round((exitDate.getTime() - entry.date.getTime()) / MS_PER_DAY) : null;
 
-    const answers = txns
+    const all = txns
       .flatMap((t) => answersByTransaction.get(t.id) ?? [])
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : 1));
+    // Entry rationale coverage is satisfied only at the entry BUY (Unit 7C-B).
+    const answers = entry ? all.filter((a) => a.transactionId === entry.transactionId) : [];
+    const actionAnswers = all.filter((a) => !answers.includes(a));
 
     episodes.push({
       key,
@@ -239,6 +262,7 @@ export function deriveEpisodeJournal(
         answers,
         latestAnswerId: answers.length > 0 ? answers[answers.length - 1]!.id : null,
       },
+      actionAnswers,
     });
   }
 

@@ -82,7 +82,7 @@ async function seedWorld(): Promise<World> {
   const txnOf: Record<AnswerKey, string> = { eff: t.eff, rej: t.rej, neu: t.neu, mp: t.mp, mrvl: t.mrvl };
   const answerId = {} as Record<AnswerKey, string>;
   for (const k of Object.keys(answerText) as AnswerKey[]) {
-    answerId[k] = (await insertInterviewAnswer(db, { interviewSessionId: session.id, transactionId: txnOf[k], questionText: "Q", answerText: answerText[k] })).id;
+    answerId[k] = (await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id, transactionId: txnOf[k], questionText: "Q", answerText: answerText[k] })).id;
   }
   return { investorId, answerId, answerText };
 }
@@ -553,7 +553,7 @@ describe.each([dnaDomain, strategyDomain])("$name: raw vs effective evidence at 
         const latest = versionsBefore[versionsBefore.length - 1]!;
         if (action === "append") {
           const t = await mkTxn(db, w.investorId, `CH${trial}${step}`, "buy", `2026-0${1 + (step % 6)}-1${step}`, "3");
-          const answer = (await insertInterviewAnswer(db, { interviewSessionId: (await db.select().from(schema.interviewSessions).where(eqCol(schema.interviewSessions.investorId, w.investorId)))[0]!.id, transactionId: t, questionText: "Q", answerText: `chain answer ${step}` })).id;
+          const answer = (await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: (await db.select().from(schema.interviewSessions).where(eqCol(schema.interviewSessions.investorId, w.investorId)))[0]!.id, transactionId: t, questionText: "Q", answerText: `chain answer ${step}` })).id;
           await d.appendCountedAgainst(w, s.identityId, latest.id, answer);
         } else if (action === "confidence") await d.recalcConfidence(s.identityId);
         else await d.recalcIndependence(w, s.identityId);

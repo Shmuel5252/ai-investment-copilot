@@ -83,8 +83,8 @@ async function seed(label: string) {
   const t1 = await mkTxn(db, investorId, "AAA", "buy", "2026-02-01", "10");
   const t2 = await mkTxn(db, investorId, "BBB", "buy", "2026-04-01", "10");
   const s = await insertInterviewSession(db, { investorId, origin: "user_initiated" });
-  const hold = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: t1, questionText: Q_HOLD, answerText: A_HOLD });
-  const sell = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: t2, questionText: Q_SELL, answerText: A_SELL });
+  const hold = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: t1, questionText: Q_HOLD, answerText: A_HOLD });
+  const sell = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: t2, questionText: Q_SELL, answerText: A_SELL });
   const [c] = await db.insert(schema.investmentCases).values({ investorId, ticker: "DDD", status: "decided" }).returning();
   const d = await insertDecision(db, { investorId, investmentCaseId: c!.id, ticker: "DDD", decisionType: "BUY", decisionDate: new Date("2026-08-01T00:00:00Z") });
   const th = await insertThesis(db, { thesisText: "t" });
@@ -136,10 +136,10 @@ afterAll(async () => {
 describe("migration 0018 on the scratch DB", () => {
   it("is the 19th migration and adds exactly one table and one enum", async () => {
     const ledger = (await db.execute(sql`select count(*)::int as n, max(created_at) as latest from drizzle.__drizzle_migrations`))[0] as { n: number; latest: string };
-    expect(ledger.n).toBe(19);
     const journal = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "src/db/migrations/meta/_journal.json"), "utf8")) as { entries: { idx: number; tag: string; when: number }[] };
-    expect(journal.entries).toHaveLength(19);
-    expect(journal.entries.at(-1)).toMatchObject({ idx: 18, tag: "0018_grounding_judgments" });
+    // Unit 7C-B added 0019 after it; 0018 stays the 19th, and the ledger holds every journal entry.
+    expect(journal.entries[18]).toMatchObject({ idx: 18, tag: "0018_grounding_judgments" });
+    expect(ledger.n).toBe(journal.entries.length);
     expect(String(ledger.latest)).toBe(String(journal.entries.at(-1)!.when));
     const tables = (await db.execute(sql`select table_name from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by table_name`)).map((r) => r.table_name);
     expect(tables).toHaveLength(35);

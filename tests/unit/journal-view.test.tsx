@@ -108,14 +108,19 @@ describe("the tell-me-why writer", () => {
     await act(async () => finish());
   });
 
-  it("keeps the typed text and shows the failure when saving fails", async () => {
-    renderJournal("main", actions({ save: vi.fn(async () => Promise.reject(new Error("Server said no"))) }));
-    fireEvent.click(within(rowOf("unanswered", "MNOP")).getByRole("button", { name: t.writeButton }));
-    const box = (await screen.findByLabelText(new RegExp(t.answerLabel))) as HTMLTextAreaElement;
-    fireEvent.change(box, { target: { value: "keep me" } });
-    fireEvent.click(screen.getByRole("button", { name: t.saveButton }));
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Server said no"));
-    expect(screen.getByRole("alert").textContent).toContain(t.saveFailedTitle);
+  it("on a failed save: shows the failure, keeps the typed text, and asks the server again (current facts) only when reopened", async () => {
+    const { a } = renderJournal("main", actions({ save: vi.fn(async () => Promise.reject(new Error("The history behind this question changed"))) }));
+    const row = () => rowOf("unanswered", "MNOP");
+    fireEvent.click(within(row()).getByRole("button", { name: t.writeButton }));
+    fireEvent.change(await within(row()).findByLabelText(new RegExp(t.answerLabel)), { target: { value: "keep me" } });
+    fireEvent.click(within(row()).getByRole("button", { name: t.saveButton }));
+    await waitFor(() => expect(within(row()).getByRole("alert").textContent).toContain("The history behind this question changed"));
+    expect(within(row()).getByRole("alert").textContent).toContain(t.saveFailedTitle);
+    expect(a.save).toHaveBeenCalledTimes(1); // nothing retried silently
+    expect(a.start).toHaveBeenCalledTimes(1);
+    fireEvent.click(within(row()).getByRole("button", { name: t.writeButton }));
+    const box = (await within(row()).findByLabelText(new RegExp(t.answerLabel))) as HTMLTextAreaElement;
+    expect(a.start).toHaveBeenCalledTimes(2); // a fresh start: the facts and hash are current again
     expect(box.value).toBe("keep me");
   });
 

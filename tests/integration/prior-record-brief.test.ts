@@ -90,7 +90,7 @@ describe("cases.priorRecord", () => {
     await mkTrade(investorId, "MUX", "sell", "2", "100", "2026-06-01");
     await mkTrade(investorId, "MUX", "buy", "1", "90", "2026-09-01");
     const [session] = await db.insert(schema.interviewSessions).values({ investorId }).returning();
-    await db.insert(schema.interviewAnswers).values({ interviewSessionId: session!.id, transactionId: buy, questionText: "why?", answerText: "cheap in the cycle" });
+    await db.insert(schema.interviewAnswers).values({ questionProvenance: "tell_me_why_legacy", interviewSessionId: session!.id, transactionId: buy, questionText: "why?", answerText: "cheap in the cycle" });
     // noise: another ticker, and another investor with the same ticker
     await mkPriorDecision(investorId, "OTHERX", { date: "2026-08-02T10:00:00Z" });
     await mkPriorDecision(foreignId, "MUX", { date: "2026-08-03T10:00:00Z", reentry: "foreign condition" });
@@ -166,7 +166,7 @@ describe("decisions.create freezes the brief into the new snapshot", () => {
     await db.update(schema.predictions).set({ status: "confirmed", resolvedAt: new Date(), resolutionNote: "resolved later" }).where(eq(schema.predictions.thesisId, firstThesis));
     const frzBuy = (await db.select().from(schema.transactions).where(and(eq(schema.transactions.ticker, "FRZX"), eq(schema.transactions.investorId, investorId))))[0]!.id;
     const [sess] = await db.insert(schema.interviewSessions).values({ investorId }).returning();
-    await db.insert(schema.interviewAnswers).values({ interviewSessionId: sess!.id, transactionId: frzBuy, questionText: "q", answerText: "rationale recorded later" });
+    await db.insert(schema.interviewAnswers).values({ questionProvenance: "tell_me_why_legacy", interviewSessionId: sess!.id, transactionId: frzBuy, questionText: "q", answerText: "rationale recorded later" });
     const frozen2Final = (await db.query.decisionSnapshots.findFirst({ where: (s, { eq }) => eq(s.decisionId, r2.decision.id) }))!.priorRecordJson;
     expect(JSON.stringify(frozen2Final)).toBe(JSON.stringify(frozen2));
     const liveAfter = await cases(investorId).priorRecord({ caseId: third.id });
@@ -200,8 +200,8 @@ describe("point in time through the REAL decisions.create (backdated decision)",
     await db.insert(schema.corporateActions).values({ investorId, ticker: "PITX", kind: "stock_split", effectiveDate: at("2026-09-09"), ratioNumerator: 3, ratioDenominator: 1, source: "user_declared", evidence: "fixture" });
     const [sess] = await db.insert(schema.interviewSessions).values({ investorId }).returning();
     await db.insert(schema.interviewAnswers).values([
-      { interviewSessionId: sess!.id, transactionId: b1, questionText: "q", answerText: "early rationale", createdAt: at("2026-04-01T00:00:00Z") },
-      { interviewSessionId: sess!.id, transactionId: b1, questionText: "q", answerText: "hindsight rationale", createdAt: at("2026-09-20T00:00:00Z") },
+      { questionProvenance: "tell_me_why_legacy", interviewSessionId: sess!.id, transactionId: b1, questionText: "q", answerText: "early rationale", createdAt: at("2026-04-01T00:00:00Z") },
+      { questionProvenance: "tell_me_why_legacy", interviewSessionId: sess!.id, transactionId: b1, questionText: "q", answerText: "hindsight rationale", createdAt: at("2026-09-20T00:00:00Z") },
     ]);
     const [pc] = await db.insert(schema.investmentCases).values({ investorId, ticker: "PITX", status: "decided" }).returning();
     const prior = await insertDecision(db, { investorId, investmentCaseId: pc!.id, ticker: "PITX", decisionType: "PASS", decisionDate: at("2026-08-01T10:00:00Z"), createdAt: at("2026-08-01T10:00:01Z") });

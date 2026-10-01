@@ -22,7 +22,11 @@
 // omitted counts are stated. Ordering never depends on input order.
 import { PRIOR_RECORD_VERSION, type PriorRecordBrief } from "./prior-record";
 
-export const PRIOR_RECORD_AI_CONTEXT_VERSION = 1 as const;
+// v2 (Unit 7C-B): a rationale carries the system-written question CONTEXT,
+// labelled as such and kept apart from the investor's verbatim answer. A v1
+// brief (frozen before question provenance existed) is still read, with
+// every question withheld.
+export const PRIOR_RECORD_AI_CONTEXT_VERSION = 2 as const;
 export const MAX_AI_DECISIONS = 5;
 export const MAX_AI_EPISODES = 5;
 
@@ -51,12 +55,14 @@ export interface PriorRecordAiEpisode {
   holdingDays: number | null;
   buyCount: number;
   sellCount: number;
-  rationale: { questionText: string; answerText: string; answeredAt: string }[];
+  /** questionContext: system-written context from a v2 brief; null = withheld (v1 brief). */
+  rationale: { questionContext: string | null; answerText: string; answeredAt: string }[];
 }
 
 export interface PriorRecordDecisionContextV1 {
   contractVersion: typeof PRIOR_RECORD_AI_CONTEXT_VERSION;
-  sourceVersion: typeof PRIOR_RECORD_VERSION;
+  /** The brief version that was projected: 1 (frozen before Unit 7C-B) or the current one. */
+  sourceVersion: 1 | typeof PRIOR_RECORD_VERSION;
   ticker: string;
   asOf: string;
   historyThrough: string | null;
@@ -102,7 +108,7 @@ function assertBrief(raw: unknown): asserts raw is PriorRecordBrief {
   };
   if (typeof raw !== "object" || raw === null) fail("not an object");
   const b = raw as Record<string, unknown>;
-  if (b.version !== PRIOR_RECORD_VERSION) fail(`unsupported source version ${JSON.stringify(b.version)}`);
+  if (b.version !== 1 && b.version !== PRIOR_RECORD_VERSION) fail(`unsupported source version ${JSON.stringify(b.version)}`);
   if (!isStr(b.ticker) || !isStr(b.asOf) || !isStrOrNull(b.historyThrough)) fail("malformed header");
   if (b.accounting !== "ok" && b.accounting !== "unavailable") fail("malformed accounting");
   if (!Array.isArray(b.decisions) || !Array.isArray(b.episodes)) fail("malformed lists");
@@ -123,7 +129,9 @@ function assertBrief(raw: unknown): asserts raw is PriorRecordBrief {
     if (!isStr(e.key) || (e.status !== "open" && e.status !== "closed") || !isStr(e.firstDate) || !isStrOrNull(e.exitDate)) fail("malformed episode");
     if (!isNumOrNull(e.holdingDays) || !isNum(e.buyCount) || !isNum(e.sellCount) || !Array.isArray(e.rationale)) fail("malformed episode");
     for (const r of e.rationale as Record<string, unknown>[]) {
-      if (typeof r !== "object" || r === null || !isStr(r.questionText) || !isStr(r.answerText) || !isStr(r.answeredAt)) fail("malformed rationale");
+      if (typeof r !== "object" || r === null || !isStr(r.answerText) || !isStr(r.answeredAt)) fail("malformed rationale");
+      // v1 stored the raw question; v2 the policy's context and its provenance.
+      if (b.version === 1 ? !isStr(r.questionText) : !isStr(r.questionContext) || !isStrOrNull(r.questionProvenance)) fail("malformed rationale");
     }
   }
 }
@@ -160,9 +168,11 @@ export function projectPriorRecordForAi(brief: unknown): PriorRecordDecisionCont
     holdingDays: e.holdingDays,
     buyCount: e.buyCount,
     sellCount: e.sellCount,
+    // A v1 brief froze the raw stored question, which may be a legacy AI
+    // question with hindsight: it is withheld, never shown to the AI.
     rationale: e.rationale
-      .map((r) => ({ questionText: r.questionText, answerText: r.answerText, answeredAt: r.answeredAt }))
-      .sort((a, b) => cmp(a.answeredAt, b.answeredAt) || cmp(a.questionText, b.questionText) || cmp(a.answerText, b.answerText)),
+      .map((r) => ({ questionContext: brief.version === PRIOR_RECORD_VERSION ? r.questionContext : null, answerText: r.answerText, answeredAt: r.answeredAt }))
+      .sort((a, b) => cmp(a.answeredAt, b.answeredAt) || cmp(a.questionContext ?? "", b.questionContext ?? "") || cmp(a.answerText, b.answerText)),
   }));
 
   const pendingReentryConditions = decisions.flatMap((d) =>
@@ -173,7 +183,7 @@ export function projectPriorRecordForAi(brief: unknown): PriorRecordDecisionCont
 
   return {
     contractVersion: PRIOR_RECORD_AI_CONTEXT_VERSION,
-    sourceVersion: PRIOR_RECORD_VERSION,
+    sourceVersion: brief.version,
     ticker: brief.ticker,
     asOf: brief.asOf,
     historyThrough: brief.historyThrough,
@@ -233,7 +243,12 @@ export function formatPriorRecordContext(ctx: PriorRecordDecisionContextV1 | nul
     const span = e.status === "open" ? `open since ${day(e.firstDate)}` : `closed; ${day(e.firstDate)} → ${e.exitDate ? day(e.exitDate) : "unknown"}${e.holdingDays !== null ? ` (${e.holdingDays} days)` : ""}`;
     lines.push(`[Episode ${e.key}] EXECUTION FACT: ${span}; ${e.buyCount} buy(s), ${e.sellCount} sell(s)`);
     for (const r of e.rationale) {
-      lines.push(`  INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — rationale recorded ${day(r.answeredAt)}: Q: ${r.questionText} A: "${r.answerText}"`);
+      lines.push(
+        r.questionContext === null
+          ? "  QUESTION CONTEXT: withheld (recorded before question provenance existed)."
+          : `  QUESTION CONTEXT (system-written, not the investor's words): ${r.questionContext.replace(/\s*\n\s*/g, " ")}`
+      );
+      lines.push(`  INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — answer recorded ${day(r.answeredAt)}: "${r.answerText}"`);
     }
   }
   if (ctx.omitted.episodes > 0) lines.push(`(${ctx.omitted.episodes} older holding period(s) omitted — at most ${MAX_AI_EPISODES} are shown)`);

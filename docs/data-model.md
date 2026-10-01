@@ -903,13 +903,27 @@ episode מכוסה כשלפחות תשובה **אפקטיבית** אחת (פלט
 מכוסה אחד. הכול מחושב בכל קריאה, לא נשמר.
 
 **InterviewAnswer** — `id, interview_session_id, transaction_id?,
-question_text(AI עבור guided_interview, דטרמיניסטי-בקוד עבור
-user_initiated), answer_text(משתמש), supersedes_answer_id?, created_at`.
+question_text(ניסוח השאלה בלבד), answer_text(משתמש, verbatim),
+supersedes_answer_id?, created_at, question_provenance, anchor_context?`.
+**Guided Interview PIT contract (Unit 7C-B, מיגרציה 0019):**
+`question_provenance` (enum, NOT NULL, נכתב מפורשות בכל insert):
+`guided_legacy` / `tell_me_why_legacy` (backfill לפי origin של ה-session
+לשורות שלפני החוזה), `guided_pit_ai`, `guided_pit_fallback`,
+`tell_me_why_pit`. `anchor_context` (JSONB, immutable): snapshot גרסה 1 של
+הקשר נקודת-הזמן — `anchor` (פעולה, תפקיד, מחיר קנייה בלבד), `before` (מצב
+מיד לפני), `boundary`, `factsLine`, `generator` — מחושב בשרת בזמן התשובה,
+לעולם לא מהלקוח. CHECK: `anchor_context IS NULL` ⇔ provenance legacy.
+ה-snapshot הוא רשומת audit; גבול המידע של השאלה הוא `ExposedFacts`
+(`src/lib/interview/anchor-context.ts`) בלבד. צרכני AI קוראים את השאלה רק
+דרך `aiQuestionContext()`: `guided_legacy` מוסתרת.
 Append-only. `transaction_id` נשאר עמודה יחידה (לא junction/מערך) גם
 אחרי Manual Historical Entry — `answer_text` הוא טקסט חופשי לא-מוגבל,
 יכול לתאר lifecycle שלם שחוצה כמה transactions (למשל BUY+SELL+SELL)
 תחת anchor transaction יחיד, בלי אכיפה מבנית שהתוכן מוגבל אליו. **ב-Episode
 Journal ה-anchor הוא תמיד קניית הכניסה של ה-episode** (ר' Episode למעלה).
+**כיסוי (Unit 7C-B):** episode מכוסה רק בתשובה אפקטיבית על קניית הכניסה;
+תשובות על עסקאות אחרות שלו הן `actionAnswers` (מוסתרות בתצוגת ה-Journal
+עד שיש רציונל כניסה, כמו העובדות המאוחרות).
 **`supersedes_answer_id` — חוזה (מיושם ב-`interview.answer`, 2026-09-22):**
 עדכון רציונל = שורה חדשה שמצביעה על הקודמת; הקודמת חייבת להיות של אותו
 משקיע ועדיין ללא יורש (שרשרת, לא fork) — נבדק **תחת נעילת שורה** (`SELECT …
@@ -928,7 +942,9 @@ FOR UPDATE` על התשובה הקודמת, בטרנזקציה אחת עם ה-in
   `DecisionSnapshot`, `DecisionReview`, `ReviewDimension`, `Thesis`,
   `LaterContext`, `Evidence`, `DNAHypothesisVersion`,
   `StrategyPrincipleVersion`, `StrategyVersion`, `LearningInsightVersion`,
-  `InterviewAnswer`, `DNAEvidenceGroundingCheck`, `StrategyEvidenceGroundingCheck`,
+  `InterviewAnswer` (כולל `anchor_context`; היוצא מן הכלל היחיד בהיסטוריה הוא
+  ה-backfill החד-פעמי של `question_provenance` במיגרציה 0019, שלא נוגע
+  בטקסט), `DNAEvidenceGroundingCheck`, `StrategyEvidenceGroundingCheck`,
   `GroundingJudgment`,
   `TransactionLinkFact`, `TransactionLinkFactMember`, `CorporateAction`,
   `DecisionExecutionFact`.

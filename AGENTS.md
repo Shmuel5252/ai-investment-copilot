@@ -74,7 +74,11 @@ Scanner, חיבור ברוקר, agents כתהליכים נפרדים, כל push/
 ## Backend Intelligence V1 — Frozen (2026-09-30)
 
 ה-backend קפוא: checkpoint `1051d8e2`, מיגרציה אחרונה `0018` (19 מיגרציות,
-0000–0018), אין מיגרציה `0019`. **התוכנית הפעילה: Frontend V1 /
+0000–0018). **פתיחה מאושרת אחת: Unit 7C-B (Guided Interview PIT contract,
+הכרעת Owner):** מיגרציה `0019` (`question_provenance` + `anchor_context` על
+`interview_answers`), בחירה מבנית, חוזה AI `interview_question_pit_v1`,
+מדיניות `aiQuestionContext` ו-Prior Record v2 — ר' `docs/architecture.md`
+§2.2. מעבר לה ה-backend נשאר קפוא. **התוכנית הפעילה: Frontend V1 /
 Productization** — redesign עמוד-אחר-עמוד מעל ה-routers והמסכים הקיימים,
 כשהמסכים הקיימים ממשיכים לעבוד לאורך כל הדרך.
 
@@ -168,7 +172,9 @@ SESSION_SECRET=          # חתימת cookie session
   מניע נדרש לתמיכה ולא לסתירה; התפקיד נקבע מניסוח ה-claim, עמום ⇒ נדרש).
   ה-proposers מציעים טענה התנהגותית אחת ל-claim (`CLAIM_ATOMICITY_RULES`, אותו
   קובץ). שאלת הראיון מגיעה לשער כ-`contextText` בסעיף `CONTEXT — NOT EVIDENCE`
-  — הקשר בלבד, לעולם לא ראיה, ולעולם לא להצהרת החלטה. `without` / `rather than`
+  — הקשר בלבד, לעולם לא ראיה, ולעולם לא להצהרת החלטה. **Unit 7C-B:** כל צרכן
+  AI מקבל את השאלה רק דרך `aiQuestionContext()` (`src/lib/ai/investor-statements.ts`):
+  שאלת `guided_legacy` מוסתרת ומוחלפת ב-referent ניטרלי; תשובת המשקיע תמיד verbatim. `without` / `rather than`
   אינם רכיב נפרד אוטומטית: תכונה עצמאית נדרשת לתמיכה, ניסוח-מחדש של ההתנהגות
   לא נספר פעמיים, עמום ⇒ נדרש. **OD-R9 — `grounding_judgments` (מיגרציה 0018)
   הוא יומן ביקורת בלבד:** שורה לכל שיפוט grounding תקף בריצה מורשית (גם

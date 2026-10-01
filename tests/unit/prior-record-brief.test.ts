@@ -12,7 +12,7 @@ let seq = 0;
 const trade = (ticker: string, type: "buy" | "sell", qty: number, price: number, date: string, id = `t${++seq}`): TransactionInput & { id: string } => ({
   id, ticker, transactionType: type, quantity: qty, price, amount: type === "buy" ? -qty * price : qty * price, transactionDate: at(date),
 });
-const answer = (transactionId: string, text: string, createdAt: string): EpisodeAnswerInput => ({ id: `a-${transactionId}`, transactionId, questionText: "why?", answerText: text, createdAt: at(createdAt) });
+const answer = (transactionId: string, text: string, createdAt: string): EpisodeAnswerInput => ({ id: `a-${transactionId}`, transactionId, questionText: "why?", answerText: text, createdAt: at(createdAt), questionProvenance: "tell_me_why_legacy" });
 
 function journalInput(trades: (TransactionInput & { id: string })[], answers: EpisodeAnswerInput[] = []) {
   const portfolio = computePositions(trades, []);
@@ -55,7 +55,7 @@ function brief(over: Partial<DerivePriorRecordInput> & { trades?: (TransactionIn
 describe("empty and isolation", () => {
   it("no decisions and no trades → an honest empty brief, not_held, zero counts", () => {
     const b = brief();
-    expect(b).toMatchObject({ version: 1, ticker: "MU", accounting: "ok", position: { status: "not_held" }, decisions: [], episodes: [] });
+    expect(b).toMatchObject({ version: 2, ticker: "MU", accounting: "ok", position: { status: "not_held" }, decisions: [], episodes: [] });
     expect(b.summary).toEqual({ decisionCount: 0, reviewedDecisionCount: 0, episodeCount: 0, openEpisodeCount: 0, rationaleAnswerCount: 0, pendingPredictionCount: 0, pendingReentryConditions: [] });
     expect(b.historyThrough).toBe("2026-09-21T00:00:00.000Z");
   });
@@ -78,7 +78,7 @@ describe("episodes", () => {
     const closed = b.episodes[1]!;
     expect(closed).toMatchObject({ firstDate: "2026-01-05T00:00:00.000Z", exitDate: "2026-02-05T00:00:00.000Z", holdingDays: 31, buyCount: 1, sellCount: 1, entry: { quantity: 1, price: 100 } });
     expect(closed.sells).toEqual([{ date: "2026-02-05T00:00:00.000Z", realizedPnlPercent: 20, holdingPeriodDays: 31, trusted: true }]);
-    expect(closed.rationale).toEqual([{ answerId: "a-b1", questionText: "why?", answerText: "memory cycle bottoming", answeredAt: "2026-08-30T10:00:00.000Z" }]);
+    expect(closed.rationale).toEqual([{ answerId: "a-b1", questionProvenance: "tell_me_why_legacy", questionContext: "why?", answerText: "memory cycle bottoming", answeredAt: "2026-08-30T10:00:00.000Z" }]);
     expect(b.episodes[0]!.rationale).toEqual([]);
     expect(b.position).toEqual({ status: "held", quantity: 2, costBasisPerShare: 90 });
     expect(b.summary).toMatchObject({ episodeCount: 2, openEpisodeCount: 1, rationaleAnswerCount: 1 });

@@ -11,12 +11,14 @@ import { interviewPage as t, nav } from "@/lib/i18n/strings";
 const serifHeader = Frank_Ruhl_Libre({ subsets: ["latin", "hebrew"], weight: ["400", "700"], display: "swap" });
 const sansBody = Assistant({ subsets: ["latin", "hebrew"], weight: ["400", "500", "600", "700"], display: "swap" });
 
+// Unit 7C-B: the interview.start shape (minimal adaptation only; the page's
+// redesign is Unit 7C-F). factsLine holds point-in-time facts only, and the
+// answer must echo anchorContextHash so the server can verify the snapshot.
 interface Question {
-  transactionId: string;
-  ticker: string | null;
-  category: string;
-  facts: string;
+  anchor: { transactionId: string; ticker: string };
+  factsLine: string;
   questionText: string;
+  anchorContextHash: string;
 }
 
 export default function InterviewPage() {
@@ -55,9 +57,10 @@ export default function InterviewPage() {
       if (!skip && answerDraft.trim() !== "") {
         await answer.mutateAsync({
           sessionId: session.sessionId,
-          transactionId: currentQuestion.transactionId,
+          transactionId: currentQuestion.anchor.transactionId,
           questionText: currentQuestion.questionText,
           answerText: answerDraft.trim(),
+          anchorContextHash: currentQuestion.anchorContextHash,
         });
         setAnsweredCount((c) => c + 1);
       }
@@ -98,7 +101,7 @@ export default function InterviewPage() {
         <div className="flex flex-col gap-4">
           <p className="text-xs text-journal-muted">
             {t.questionLabel} <Num>{index + 1}</Num> {t.ofLabel} <Num>{session.questions.length}</Num>
-            {currentQuestion.ticker ? ` — ${currentQuestion.ticker}` : ""}
+            {` — ${currentQuestion.anchor.ticker}`}
           </p>
           {/* questionText/facts come from a live AI call, not static UI
               copy — left as generated (typically English), same rule as
@@ -106,7 +109,7 @@ export default function InterviewPage() {
           <p className="text-lg font-medium">{currentQuestion.questionText}</p>
           <details className="text-xs text-journal-muted">
             <summary>{t.whyAskedThis}</summary>
-            <p className="mt-1">{currentQuestion.facts}</p>
+            <p className="mt-1">{currentQuestion.factsLine}</p>
           </details>
           <textarea
             className="min-h-32 rounded border border-journal-rule bg-journal-surface p-2 text-sm"

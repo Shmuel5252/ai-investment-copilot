@@ -1,6 +1,6 @@
 import { eq, type InferInsertModel } from "drizzle-orm";
 import type { db as Db } from "@/db/client";
-import { interviewSessions, interviewAnswers } from "@/db/schema";
+import { interviewSessions, interviewAnswers, transactions } from "@/db/schema";
 
 export type NewInterviewSession = InferInsertModel<typeof interviewSessions>;
 export type NewInterviewAnswer = InferInsertModel<typeof interviewAnswers>;
@@ -97,9 +97,20 @@ export async function getAllAnswersForInvestor(db: typeof Db, investorId: string
       // return shape; the extra field is available to any future
       // consumer that wants it without changing either of those.
       origin: interviewSessions.origin,
+      // Unit 7C-B: what the stored question is, and the immutable snapshot it
+      // was built from (null for legacy rows). Every AI consumer reads the
+      // question only through aiQuestionContext() (src/lib/ai/investor-statements.ts),
+      // which withholds guided_legacy wording; the anchored transaction's own
+      // stored side/ticker/date give it a neutral referent instead.
+      questionProvenance: interviewAnswers.questionProvenance,
+      anchorContext: interviewAnswers.anchorContext,
+      anchorTicker: transactions.ticker,
+      anchorSide: transactions.transactionType,
+      anchorDate: transactions.transactionDate,
     })
     .from(interviewAnswers)
     .innerJoin(interviewSessions, eq(interviewAnswers.interviewSessionId, interviewSessions.id))
+    .leftJoin(transactions, eq(interviewAnswers.transactionId, transactions.id))
     .where(eq(interviewSessions.investorId, investorId))
     .orderBy(interviewAnswers.createdAt);
 

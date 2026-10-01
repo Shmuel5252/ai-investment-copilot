@@ -541,7 +541,7 @@ describe("provenance and AI inputs", () => {
 
   it("statements handed to the AI are source-labelled, verbatim, with Statement IDs only for answers and decision statements", () => {
     const statements = buildInvestorStatements(
-      [{ id: U1, questionText: "Why?", answerText: "because <b>" }],
+      [{ id: U1, questionProvenance: "tell_me_why_legacy", questionText: "Why?", answerText: "because <b>" }],
       [{ statementId: `decision:${U2}:risks`, decisionId: U2, kind: "risks", ticker: "LLY", decisionType: "BUY", decisionDate: d("2026-08-19"), createdAt: d("2026-08-19"), text: "risk text" }]
     );
     expect(statements).toEqual([

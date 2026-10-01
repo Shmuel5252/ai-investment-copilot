@@ -8,7 +8,7 @@ import {
   type EpisodeTransactionInput,
 } from "@/lib/portfolio/episodes";
 import { resolveTellMeWhyAnchor, toHindsightSafeJournal, toHindsightSafeView } from "@/lib/interview/journal";
-import { buildTellMeWhyQuestion, describeEpisodeEntry, formatQuestionDate } from "@/lib/interview/tell-me-why-question";
+import { buildTellMeWhyQuestion } from "@/lib/interview/tell-me-why-question";
 import { rng } from "../helpers/independence";
 
 // Episode Journal V1 — DB-free coverage of the derivation, the coverage
@@ -148,16 +148,28 @@ describe("B. rationale coverage", () => {
     expect(mp.rationale).toMatchObject({ status: "answered", latestAnswerId: "a1" });
   });
 
-  it("several answers on the SAME episode (anchored to different transactions of it) are ONE covered episode, latest last", () => {
+  it("Unit 7C-B: only an answer on the ENTRY BUY covers the episode; an answer on a later action is an action answer", () => {
     const { journal } = journalOf(HISTORY, [answer("a1", "mp-buy", "2026-09-01T00:00:00Z"), answer("a2", "mp-s2", "2026-09-02T00:00:00Z")]);
     expect(journal.coverage).toEqual({ covered: 1, total: 4 });
     const mp = journal.episodes.find((e) => e.key === "MP#1")!;
-    expect(mp.rationale.answers.map((a) => a.id)).toEqual(["a1", "a2"]);
-    expect(mp.rationale.latestAnswerId).toBe("a2");
+    expect(mp.rationale.answers.map((a) => a.id)).toEqual(["a1"]);
+    expect(mp.rationale.latestAnswerId).toBe("a1");
+    expect(mp.actionAnswers.map((a) => a.id)).toEqual(["a2"]);
+  });
+
+  it("Unit 7C-B: a guided answer on a sell alone does NOT satisfy entry-rationale coverage", () => {
+    const { journal } = journalOf(HISTORY, [answer("a1", "mp-s1")]);
+    expect(journal.coverage).toEqual({ covered: 0, total: 4 });
+    const mp = journal.episodes.find((e) => e.key === "MP#1")!;
+    expect(mp.rationale.status).toBe("unanswered");
+    expect(mp.actionAnswers.map((a) => a.id)).toEqual(["a1"]);
+    // the hindsight-safe projection withholds action answers like later facts
+    expect(toHindsightSafeView(mp).actionAnswers).toBeNull();
+    expect(toHindsightSafeView(mp).later).toBeNull();
   });
 
   it("different episodes count separately, including two lifecycles of one ticker", () => {
-    const { journal } = journalOf(HISTORY, [answer("a1", "x-s1"), answer("a2", "x-b2")]);
+    const { journal } = journalOf(HISTORY, [answer("a1", "x-b1"), answer("a2", "x-b2")]);
     expect(journal.coverage).toEqual({ covered: 2, total: 4 });
     expect(journal.episodes.find((e) => e.key === "X#1")!.rationale.latestAnswerId).toBe("a1");
     expect(journal.episodes.find((e) => e.key === "X#2")!.rationale.latestAnswerId).toBe("a2");
@@ -206,32 +218,21 @@ describe("D. hindsight protection — the projection and the question", () => {
     expect(x1.later!.sells[0]!.realizedPnlPercent).toBeCloseTo(-10, 6);
   });
 
-  it("the question identifies the decision (ticker, episode, entry date, quantity, price) and nothing outcome-loaded", () => {
+  it("Unit 7C-B: the question is the wording only (ticker, no facts, nothing outcome-loaded); the facts live in the snapshot", () => {
     const mp = journal.episodes.find((e) => e.key === "MP#1")!;
-    const q = buildTellMeWhyQuestion({ ticker: mp.ticker, episodeNumber: mp.episodeNumber, status: mp.status, entry: mp.entry });
-    expect(q).toContain("MP#1");
-    expect(q).toContain("05/08/2026");
-    expect(q).toContain("10 מניות");
-    expect(q).toContain("$48.00");
-    expect(q).not.toMatch(/%|רווח|הפסד|תשואה|עלה|ירד|מוקדם|מאוחר|\+25|\+50|60|72/);
+    const q = buildTellMeWhyQuestion(mp.ticker);
+    expect(q).toContain("MP");
+    expect(q).not.toMatch(/MP#1|05\/08\/2026|\$48|\d/);
+    expect(q).not.toMatch(/%|רווח|הפסד|תשואה|עלה|ירד|מוקדם|מאוחר/);
   });
 
-  it("open vs closed phrasing: an open episode is not asked why it exited", () => {
-    const mrvl = journal.episodes.find((e) => e.key === "MRVL#1")!;
-    const q = buildTellMeWhyQuestion({ ticker: "MRVL", episodeNumber: 1, status: "open", entry: mrvl.entry });
-    expect(q).toContain("MRVL#1");
-    expect(q).not.toMatch(/לצאת|לממש/);
-    expect(q).toMatch(/מנהל/);
-    expect(buildTellMeWhyQuestion({ ticker: "MP", episodeNumber: 1, status: "closed", entry: null })).toMatch(/לצאת|לממש/);
-  });
-
-  it("the question builder has no input for outcome: entry facts only, and a missing entry yields the bare question", () => {
-    expect(describeEpisodeEntry({ ticker: "MP", entry: null })).toBeNull();
-    expect(buildTellMeWhyQuestion({ ticker: "MP", status: "closed", entry: null })).toBe(buildTellMeWhyQuestion("MP"));
-    expect(describeEpisodeEntry({ ticker: "MP", episodeNumber: 2, entry: { date: new Date("2026-08-05T00:00:00Z"), quantity: null, price: null } })).toBe(
-      "פוזיציה MP#2 — כניסה ב-05/08/2026."
-    );
-    expect(formatQuestionDate(new Date("2026-01-09T23:30:00Z"))).toBe("09/01/2026");
+  it("Unit 7C-B: entry rationale only — open or closed, the question asks about entering and never about managing, selling or exiting", () => {
+    for (const e of journal.episodes) {
+      const q = buildTellMeWhyQuestion(e.ticker);
+      expect(q).toContain(e.ticker);
+      expect(q).toMatch(/כניסה|להיכנס/);
+      expect(q).not.toMatch(/לצאת|יצאת|יציאה|לממש|מימוש|מכרת|מכירה|למכור|מנהל|התנהלת|ניהול|מאז|אחר כך|בהמשך|שינית/);
+    }
   });
 
   it("the legacy string form is unchanged (post-manual-entry button on /import)", () => {
@@ -289,7 +290,9 @@ describe("F. property suite — random histories through the real computePositio
         }
         expect(e.buyCount + e.sellCount).toBe(e.transactions.length);
         const answeredIds = new Set(answers.map((a) => a.transactionId));
-        expect(e.rationale.status).toBe(e.transactions.some((t) => answeredIds.has(t.id)) ? "answered" : "unanswered");
+        // Unit 7C-B: covered iff an answer anchors to the entry BUY itself.
+        expect(e.rationale.status).toBe(e.entry !== null && answeredIds.has(e.entry.transactionId) ? "answered" : "unanswered");
+        expect(e.rationale.answers.length + e.actionAnswers.length).toBe(answers.filter((a) => e.transactions.some((t) => t.id === a.transactionId)).length);
         for (const s of e.later.sells) expect(e.transactions.some((t) => t.id === s.transactionId)).toBe(true);
         if (e.status === "open") expect(portfolio.positions.some((p) => p.ticker === e.ticker)).toBe(true);
       }

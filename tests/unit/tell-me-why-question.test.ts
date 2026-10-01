@@ -32,12 +32,10 @@ describe("buildTellMeWhyQuestion", () => {
     expect(aapl).toContain("AAPL");
   });
 
-  it("invites the full lifecycle (entry, holding, exit), not just \"why did you buy\"", () => {
+  it("Unit 7C-B: asks for the ENTRY rationale only — never about managing, selling or exiting the position", () => {
     const question = buildTellMeWhyQuestion("MP");
-    // Loose content check on the real Hebrew template — not asserting
-    // exact wording here (that's the toBe() determinism test above),
-    // just that the template covers more than entry alone.
-    expect(question).toMatch(/נכנסת/);
-    expect(question).toMatch(/לצאת|לממש/);
+    expect(question).toMatch(/כניסה|להיכנס/);
+    expect(question).not.toMatch(/לצאת|יצאת|יציאה|לממש|מימוש|מכרת|מכירה|למכור|מנהל|התנהלת|ניהול|החזקה|מאז|אחר כך|בהמשך|שינית/);
+    expect(question).not.toMatch(/\d|%/);
   });
 });

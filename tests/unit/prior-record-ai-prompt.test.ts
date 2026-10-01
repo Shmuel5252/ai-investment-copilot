@@ -32,7 +32,7 @@ const LATER = "Update: it went up 30% after this PASS — I was too cautious.";
 const RATIONALE = "Sold at $80 after it went up 30%.";
 
 const brief: PriorRecordBrief = {
-  version: 1, ticker: "NUMX", generatedAt: "2026-09-24T00:00:00.000Z", asOf: "2026-09-24T00:00:00.000Z", historyThrough: "2026-09-20T00:00:00.000Z", accounting: "ok",
+  version: 2, ticker: "NUMX", generatedAt: "2026-09-24T00:00:00.000Z", asOf: "2026-09-24T00:00:00.000Z", historyThrough: "2026-09-20T00:00:00.000Z", accounting: "ok",
   position: { status: "held", quantity: 3.25, costBasisPerShare: 1492.62 },
   decisions: [{
     decisionId: "d1", decisionType: "PASS", decisionDate: "2026-08-20T09:00:00.000Z", reviewByDate: null, priceAtDecision: "1598.37", sizeDollars: null,
@@ -45,7 +45,7 @@ const brief: PriorRecordBrief = {
     key: "NUMX#1", status: "closed", firstDate: "2026-03-01T00:00:00.000Z", exitDate: "2026-04-01T00:00:00.000Z", holdingDays: 31, buyCount: 1, sellCount: 1,
     entry: { date: "2026-03-01T00:00:00.000Z", quantity: 2, price: 61.54 },
     sells: [{ date: "2026-04-01T00:00:00.000Z", realizedPnlPercent: 30.01, holdingPeriodDays: 31, trusted: true }],
-    rationale: [{ answerId: "a1", questionText: "Why did you sell?", answerText: RATIONALE, answeredAt: "2026-04-05T00:00:00.000Z" }],
+    rationale: [{ answerId: "a1", questionProvenance: "tell_me_why_pit", questionContext: "Why did you sell?", answerText: RATIONALE, answeredAt: "2026-04-05T00:00:00.000Z" }],
   }],
   summary: { decisionCount: 1, reviewedDecisionCount: 1, episodeCount: 1, openEpisodeCount: 0, rationaleAnswerCount: 1, pendingPredictionCount: 0, pendingReentryConditions: [] },
 };
@@ -75,7 +75,9 @@ describe("investor-authored prose with prices/outcomes", () => {
   it("is visibly labeled as investor-authored historical text, under the exact invariant", () => {
     expect(text).toContain(`INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — reasoning: "${REASONING}"`);
     expect(text).toContain(`LATER CONTEXT — INVESTOR-AUTHORED HISTORICAL TEXT (verbatim), added on 2026-09-02 — authoritative over the older text and any AI extraction above: "${LATER}"`);
-    expect(text).toContain(`INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — rationale recorded 2026-04-05: Q: Why did you sell? A: "${RATIONALE}"`);
+    expect(text).toContain("QUESTION CONTEXT (system-written, not the investor's words): Why did you sell?");
+    expect(text).toContain(`INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — answer recorded 2026-04-05: "${RATIONALE}"`);
+    expect(text).not.toMatch(/INVESTOR-AUTHORED[^\n]*Why did you sell/);
     expect(text).toContain("No structured historical price, performance or outcome fields are supplied here");
     expect(text).toContain("INVESTOR-AUTHORED HISTORICAL TEXT is quoted verbatim and may itself mention such information");
     expect(text).not.toMatch(/contains no prices/i);

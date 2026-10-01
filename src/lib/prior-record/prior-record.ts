@@ -37,8 +37,16 @@
 //   - positions, episodes, realized results and splits come from the same
 //     canonical accounting run on exactly those rows as of asOf.
 import type { JournalEpisode } from "@/lib/portfolio/episodes";
+import { aiQuestionContext } from "@/lib/ai/investor-statements";
 
-export const PRIOR_RECORD_VERSION = 1 as const;
+// v2 (Unit 7C-B): each rationale carries the question's provenance and the
+// question CONTEXT produced by the shared policy (aiQuestionContext) instead
+// of the raw stored question, so a legacy guided question that may contain
+// hindsight is never frozen into a new brief. Answers anchored to any
+// transaction of the episode are included, as in v1 (entry and later-action
+// answers alike). v1 briefs already frozen in decision snapshots stay as
+// they are; the AI projection reads them fail-closed (ai-context.ts).
+export const PRIOR_RECORD_VERSION = 2 as const;
 
 export interface PriorRecordDecisionInput {
   id: string;
@@ -123,7 +131,15 @@ export interface PriorRecordEpisode {
   entry: { date: string; quantity: number | null; price: number | null } | null;
   /** One per sell; realizedPnlPercent is null when the sell was not backed by known holdings (untrusted). */
   sells: { date: string; realizedPnlPercent: number | null; holdingPeriodDays: number | null; trusted: boolean }[];
-  rationale: { answerId: string; questionText: string; answerText: string; answeredAt: string }[];
+  rationale: {
+    answerId: string;
+    /** interview_answers.question_provenance; null only when the source row did not carry it. */
+    questionProvenance: string | null;
+    /** System-written question context (aiQuestionContext), never the investor's words. */
+    questionContext: string;
+    answerText: string;
+    answeredAt: string;
+  }[];
 }
 
 export interface PriorRecordBrief {
@@ -245,7 +261,16 @@ export function derivePriorRecordBrief(input: DerivePriorRecordInput): PriorReco
               holdingPeriodDays: s.sufficientHoldings ? s.holdingPeriodDays : null,
               trusted: s.sufficientHoldings,
             })),
-            rationale: e.rationale.answers.filter((a) => known(a.createdAt)).map((a) => ({ answerId: a.id, questionText: a.questionText, answerText: a.answerText, answeredAt: a.createdAt.toISOString() })),
+            rationale: [...e.rationale.answers, ...e.actionAnswers]
+              .filter((a) => known(a.createdAt))
+              .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : 1))
+              .map((a) => ({
+                answerId: a.id,
+                questionProvenance: a.questionProvenance ?? null,
+                questionContext: aiQuestionContext(a),
+                answerText: a.answerText,
+                answeredAt: a.createdAt.toISOString(),
+              })),
           }))
           .sort((a, b) => (a.firstDate < b.firstDate ? 1 : a.firstDate > b.firstDate ? -1 : b.key.localeCompare(a.key)))
       : [];

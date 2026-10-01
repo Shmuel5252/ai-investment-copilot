@@ -95,8 +95,8 @@ async function seedWorld(label: string): Promise<World> {
   const t1 = await mkTxn(db, investorId, "NVDA", "buy", "2026-03-01", "10");
   const t2 = await mkTxn(db, investorId, "AMD", "buy", "2026-05-01", "10");
   const s = await insertInterviewSession(db, { investorId, origin: "user_initiated" });
-  const a1 = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: t1, questionText: "Q", answerText: "NVDA ANSWER I bought on conviction" });
-  const a2 = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: t2, questionText: "Q", answerText: "AMD ANSWER I bought after a dip" });
+  const a1 = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: t1, questionText: "Q", answerText: "NVDA ANSWER I bought on conviction" });
+  const a2 = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: t2, questionText: "Q", answerText: "AMD ANSWER I bought after a dip" });
   const d1 = await mkDecision(investorId, strategyVersionId, "LLY", "BUY", "2026-08-19", { reasoning: "LLY REASONING drug pipeline", risks: "LLY RISKS pricing", exit: "LLY EXIT if pipeline fails" });
   const d2 = await mkDecision(investorId, strategyVersionId, "SNDK", "PASS", "2026-08-20", { reasoning: "SNDK REASONING wait for pullback", risks: "  ", exit: null });
   return { investorId, strategyVersionId, answers: [{ id: a1.id, txn: t1 }, { id: a2.id, txn: t2 }], decisions: [d1, d2] };
@@ -273,7 +273,7 @@ describe("decision-time statements as evidence (OD-1) through the real generate 
     const avgoAfter = await mkTxn(db, w.investorId, "AVGO", "buy", "2026-09-10", "5");
     const d = await mkDecision(w.investorId, w.strategyVersionId, "AVGO", "BUY", "2026-09-08", { reasoning: "AVGO REASONING" });
     const s = await insertInterviewSession(db, { investorId: w.investorId, origin: "user_initiated" });
-    const aAfter = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: avgoAfter, questionText: "Q", answerText: "AVGO ANSWER about the later buy" });
+    const aAfter = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: avgoAfter, questionText: "Q", answerText: "AVGO ANSWER about the later buy" });
 
     const resolutionOf = async () => (await loadIndependenceContext(db, w.investorId)).decisions!.find((x) => x.id === d.id)!.caseResolution;
     expect(await resolutionOf()).toEqual({ kind: "unresolved", candidateTransactionIds: [avgoAfter] }); // the 09-02 buy is before the decision: not a candidate
@@ -311,8 +311,8 @@ describe("decision-time statements as evidence (OD-1) through the real generate 
     const buy2 = await mkTxn(db, w.investorId, "NVDA2", "buy", "2026-09-05", "5");
     const d = await mkDecision(w.investorId, w.strategyVersionId, "NVDA2", "BUY", "2026-09-01", { reasoning: "NVDA2 REASONING" });
     const s = await insertInterviewSession(db, { investorId: w.investorId, origin: "user_initiated" });
-    const a1 = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: buy1, questionText: "Q", answerText: "first NVDA2 entry" });
-    const a2 = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: buy2, questionText: "Q", answerText: "second NVDA2 entry" });
+    const a1 = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: buy1, questionText: "Q", answerText: "first NVDA2 entry" });
+    const a2 = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: buy2, questionText: "Q", answerText: "second NVDA2 entry" });
     const episodes = (await loadIndependenceContext(db, w.investorId)).episodeKeyByTransactionId;
     expect(episodes.get(buy1)).not.toBe(episodes.get(buy2));
 

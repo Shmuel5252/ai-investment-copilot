@@ -41,21 +41,21 @@ beforeAll(async () => {
 
   const session = await insertInterviewSession(db, { investorId, origin: "guided_interview" });
   const a = await insertInterviewAnswer(db, {
-    interviewSessionId: session.id,
+    questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id,
     transactionId: null,
     questionText: "Q1",
     answerText: "Answer A",
   });
   answerAId = a.id;
   const b = await insertInterviewAnswer(db, {
-    interviewSessionId: session.id,
+    questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id,
     transactionId: null,
     questionText: "Q2",
     answerText: "Answer B",
   });
   answerBId = b.id;
   const c = await insertInterviewAnswer(db, {
-    interviewSessionId: session.id,
+    questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id,
     transactionId: null,
     questionText: "Q3",
     answerText: "Answer C",

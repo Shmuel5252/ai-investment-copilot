@@ -109,7 +109,7 @@ const FIT: PortfolioFit = {
 };
 
 export const PRIOR_RECORD_PREVIEW: PriorRecordBrief = {
-  version: 1,
+  version: 2,
   ticker: "ABCD",
   generatedAt: "2026-09-30T09:00:00.000Z",
   asOf: "2026-09-30T09:00:00.000Z",
@@ -146,7 +146,7 @@ export const PRIOR_RECORD_PREVIEW: PriorRecordBrief = {
       sellCount: 0,
       entry: { date: "2026-07-15T00:00:00.000Z", quantity: 6, price: 160.1 },
       sells: [],
-      rationale: [{ answerId: "an-1", questionText: "למה קנית?", answerText: "טקסט דוגמה: הנימוק שתיעדת לתקופת ההחזקה.", answeredAt: "2026-07-20T00:00:00.000Z" }],
+      rationale: [{ answerId: "an-1", questionProvenance: "tell_me_why_pit", questionContext: "טקסט דוגמה: הקשר השאלה.", answerText: "טקסט דוגמה: הנימוק שתיעדת לתקופת ההחזקה.", answeredAt: "2026-07-20T00:00:00.000Z" }],
     },
   ],
   summary: {

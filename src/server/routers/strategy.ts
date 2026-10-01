@@ -33,7 +33,7 @@ import {
 import { isUniqueViolation, StaleIdentityVersionError } from "@/db/errors";
 import { loadIndependenceResolver } from "@/lib/evidence/load-independence-resolver";
 import { listDecisionStatementsForInvestor } from "@/db/repositories/decision-statements";
-import { buildInvestorStatements, buildStatementContextById } from "@/lib/ai/investor-statements";
+import { aiQuestionContext, buildInvestorStatements, buildStatementContextById } from "@/lib/ai/investor-statements";
 import { AI_CONTRACTS } from "@/lib/ai/contracts";
 import { CLAUDE_MODEL } from "@/lib/ai/client";
 import { buildProvenance } from "@/lib/evidence/provenance";
@@ -60,7 +60,9 @@ export const strategyRouter = router({
     }
 
     const proposed = await extractDeclaredPrinciples(
-      answers.map((a) => ({ id: a.id, questionText: a.questionText, answerText: a.answerText }))
+      // The question goes through the one shared policy (Unit 7C-B): a legacy
+      // guided question is withheld; the answer is always verbatim.
+      answers.map((a) => ({ id: a.id, questionText: aiQuestionContext(a), answerText: a.answerText }))
     );
     const validAnswerIds = new Set(answers.map((a) => a.id));
     const validated = validateProposedDeclaredPrinciples(proposed, validAnswerIds);

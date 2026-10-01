@@ -112,8 +112,8 @@ describe("decisions.create — the AI gets the projection of exactly the brief t
     await db.insert(schema.corporateActions).values({ investorId, ticker: "AIPX", kind: "stock_split", effectiveDate: at("2026-09-09"), ratioNumerator: 3, ratioDenominator: 1, source: "user_declared", evidence: "fixture" });
     const [sess] = await db.insert(schema.interviewSessions).values({ investorId }).returning();
     await db.insert(schema.interviewAnswers).values([
-      { interviewSessionId: sess!.id, transactionId: b1, questionText: "q", answerText: "early rationale", createdAt: at("2026-04-05T00:00:00Z") },
-      { interviewSessionId: sess!.id, transactionId: b1, questionText: "q", answerText: "hindsight rationale", createdAt: at("2026-09-20T00:00:00Z") },
+      { questionProvenance: "tell_me_why_legacy", interviewSessionId: sess!.id, transactionId: b1, questionText: "q", answerText: "early rationale", createdAt: at("2026-04-05T00:00:00Z") },
+      { questionProvenance: "tell_me_why_legacy", interviewSessionId: sess!.id, transactionId: b1, questionText: "q", answerText: "hindsight rationale", createdAt: at("2026-09-20T00:00:00Z") },
     ]);
     const prior = await mkPriorDecision(investorId, "AIPX", { date: "2026-08-01T10:00:00Z", createdAt: "2026-08-01T10:00:01Z", reasoning: "prior reasoning", reentry: "reconsider below 45" });
     await db.update(schema.predictions).set({ status: "refuted", resolvedAt: at("2026-09-12T00:00:00Z"), resolutionNote: "resolved after T" }).where(eq(schema.predictions.id, prior.predictionId!));
@@ -164,7 +164,7 @@ describe("reviews.generate — only the frozen copy, never a recomputed brief", 
     await db.insert(schema.decisionReviews).values({ decisionId: prior.decisionId, narrativeSummaryText: "n", decisionQualityOverall: "strong", thesisAccuracy: "confirmed", outcomeJson: {} });
     await db.update(schema.predictions).set({ status: "confirmed", resolvedAt: new Date(), resolutionNote: "LATE resolution" }).where(eq(schema.predictions.id, prior.predictionId!));
     const [sess] = await db.insert(schema.interviewSessions).values({ investorId }).returning();
-    await db.insert(schema.interviewAnswers).values({ interviewSessionId: sess!.id, transactionId: t, questionText: "q", answerText: "LATE rationale" });
+    await db.insert(schema.interviewAnswers).values({ questionProvenance: "tell_me_why_legacy", interviewSessionId: sess!.id, transactionId: t, questionText: "q", answerText: "LATE rationale" });
 
     cap.loaderCalls = 0;
     const out = await reviews(investorId).generate({ decisionId: r.decision.id, idempotencyKey: randomUUID(), predictionResolutions: [] });

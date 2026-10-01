@@ -396,7 +396,7 @@ describe("ownership, freshness and downstream non-regression", () => {
     // Rationale anchored to the manual MP buy still resolves to that one episode; the resolver groups by the same map.
     const session = await insertInterviewSession(db, { investorId, origin: "user_initiated" });
     const mpBuyId = txns.find((t) => t.ticker === "MP" && t.transactionType === "buy")!.id;
-    const answer = await insertInterviewAnswer(db, { interviewSessionId: session.id, transactionId: mpBuyId, questionText: "q", answerText: "MP rationale" });
+    const answer = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: session.id, transactionId: mpBuyId, questionText: "q", answerText: "MP rationale" });
     const resolver = await loadIndependenceResolver(db, investorId);
     const resolved = resolver.resolve([{ interviewAnswerId: answer.id, stance: "supporting" }]);
     expect(resolved.groups).toHaveLength(1);

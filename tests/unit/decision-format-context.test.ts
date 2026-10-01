@@ -93,8 +93,8 @@ const fixture: DecisionContextInput = {
     },
   ],
   priorRecord: {
-    contractVersion: 1,
-    sourceVersion: 1,
+    contractVersion: 2,
+    sourceVersion: 2,
     ticker: "ACME",
     asOf: "2026-09-08T07:10:00.000Z",
     historyThrough: "2026-09-05T00:00:00.000Z",
@@ -120,7 +120,7 @@ const fixture: DecisionContextInput = {
     episodes: [
       {
         key: "ACME#1", status: "closed", firstDate: "2026-01-05T00:00:00.000Z", exitDate: "2026-03-01T00:00:00.000Z", holdingDays: 55, buyCount: 2, sellCount: 1,
-        rationale: [{ questionText: "Why did you sell?", answerText: "Needed the cash.", answeredAt: "2026-04-01T00:00:00.000Z" }],
+        rationale: [{ questionContext: "Why did you sell?", answerText: "Needed the cash.", answeredAt: "2026-04-01T00:00:00.000Z" }],
       },
     ],
     pendingReentryConditions: [{ decisionId: "d1", decisionType: "PASS", decisionDate: "2026-06-01T10:00:00.000Z", claimText: "A pullback of 15% or more." }],
@@ -179,7 +179,8 @@ Prior decisions on this ticker:
 
 Holding periods on this ticker (execution facts):
 [Episode ACME#1] EXECUTION FACT: closed; 2026-01-05 → 2026-03-01 (55 days); 2 buy(s), 1 sell(s)
-  INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — rationale recorded 2026-04-01: Q: Why did you sell? A: "Needed the cash."
+  QUESTION CONTEXT (system-written, not the investor's words): Why did you sell?
+  INVESTOR-AUTHORED HISTORICAL TEXT (verbatim) — answer recorded 2026-04-01: "Needed the cash."
 (2 older holding period(s) omitted — at most 5 are shown)
 
 Pending re-entry conditions — the investor's own earlier checks, AI-extracted from their exit conditions, still unresolved at the cutoff (not automatically satisfied or failed):

@@ -67,9 +67,9 @@ async function seed(label: string) {
   const t2 = await mkTxn(db, investorId, "BBB", "buy", "2026-04-01", "10");
   const t3 = await mkTxn(db, investorId, "CCC", "buy", "2026-06-01", "10");
   const s = await insertInterviewSession(db, { investorId, origin: "user_initiated" });
-  const sell = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: t1, questionText: Q_SELL, answerText: A_SELL });
-  const buy = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: t2, questionText: Q_BUY, answerText: A_BUY });
-  const hold = await insertInterviewAnswer(db, { interviewSessionId: s.id, transactionId: t3, questionText: Q_HOLD, answerText: A_HOLD });
+  const sell = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: t1, questionText: Q_SELL, answerText: A_SELL });
+  const buy = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: t2, questionText: Q_BUY, answerText: A_BUY });
+  const hold = await insertInterviewAnswer(db, { questionProvenance: "tell_me_why_legacy", interviewSessionId: s.id, transactionId: t3, questionText: Q_HOLD, answerText: A_HOLD });
   const [c] = await db.insert(schema.investmentCases).values({ investorId, ticker: "DDD", status: "decided" }).returning();
   const d = await insertDecision(db, { investorId, investmentCaseId: c!.id, ticker: "DDD", decisionType: "BUY", decisionDate: new Date("2026-08-01T00:00:00Z") });
   const th = await insertThesis(db, { thesisText: "t" });

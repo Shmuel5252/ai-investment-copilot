@@ -21,7 +21,7 @@ export default function JournalPage() {
   const actions: RationaleActions = {
     start: async (transactionId) => {
       const r = await start.mutateAsync({ transactionId });
-      return { sessionId: r.sessionId, transactionId: r.transactionId, questionText: r.questionText };
+      return { sessionId: r.sessionId, transactionId: r.transactionId, questionText: r.questionText, anchorContextHash: r.anchorContextHash };
     },
     save: async ({ session, answerText, supersedesAnswerId }) => {
       try {
@@ -31,6 +31,7 @@ export default function JournalPage() {
           questionText: session.questionText,
           answerText,
           supersedesAnswerId,
+          anchorContextHash: session.anchorContextHash,
         });
       } catch (e) {
         // A failed answer may still have been written (a lost response), so

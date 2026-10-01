@@ -858,8 +858,11 @@ export const manualEntryPage = {
 
 export const tellMeWhy = {
   buttonLabel: "אני רוצה לספר למה ביצעתי את העסקה הזו",
-  questionTemplate:
-    "ספר לי על ההשקעה שלך ב-{ticker} — למה נכנסת, איך התנהלת במהלך הפוזיציה, ולמה החלטת לממש חלק ממנה או לצאת ממנה?",
+  // Unit 7C-B: Tell me why is ENTRY rationale only. The one template asks
+  // about the decision to enter and nothing after it (no management, selling
+  // or exit). Rows stored under the earlier wordings keep their own
+  // question_text (tell_me_why_legacy); nothing here rewrites them.
+  entryQuestionTemplate: "ספר לי על הכניסה שלך ל-{ticker}: מה הוביל אותך להחליט להיכנס להשקעה הזו באותו זמן?",
   answerPlaceholder:
     "התשובה שלך — הסיפור המלא, כולל אם רלוונטי: למה נכנסת, מה קרה במהלך ההחזקה, ולמה יצאת (בבת אחת או בכמה שלבים)...",
   saveButton: "שמור",
@@ -868,8 +871,6 @@ export const tellMeWhy = {
   // Episode Journal V1 — the same deterministic builder, with episode
   // context. Only ENTRY-time facts may appear in these templates
   // (hindsight protection): never P&L, exit, or later prices.
-  questionTemplateOpen:
-    "ספר לי על ההשקעה שלך ב-{ticker} — למה נכנסת, ואיך אתה מנהל את הפוזיציה מאז?",
   contextTemplate: "פוזיציה {episode} — כניסה ב-{date} {amount}.",
   entryAmountTemplate: "(קנייה של {quantity} מניות במחיר ${price})",
   updateButton: "עדכן את הרציונל",
@@ -916,7 +917,7 @@ export const journalPage = {
   saveButton: "שמור את הנימוק",
   savingButton: "שומר...",
   closeButton: "סגור בלי לשמור",
-  saveFailedTitle: "השמירה לא אושרה. הטקסט שלך נשאר כאן, והיומן רוענן כדי להראות מה נשמר בפועל.",
+  saveFailedTitle: "השמירה לא אושרה. הטקסט שלך נשאר כאן; פתח את השאלה מחדש כדי לקבל את העובדות העדכניות לפני שתשמור.",
   writtenOnPrefix: "כתבת ב-",
   inReplyTo: "בתשובה לשאלה:",
   answerProvenance: "המילים שלך, כפי שנשמרו. הן עשויות לשמש בהמשך כמקור כאשר המערכת בוחנת דפוסים ועקרונות.",

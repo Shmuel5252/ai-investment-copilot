@@ -48,7 +48,7 @@ vi.mock("@/trpc/react", () => {
       useUtils: () => utils,
       interview: {
         journal: { useQuery: () => ({ data, isLoading: false, isError: false }) },
-        startTellMeWhy: { useMutation: mutation("start", (i) => ({ sessionId: "11111111-1111-4111-8111-111111111111", transactionId: i.transactionId, questionText: "fixed question" })) },
+        startTellMeWhy: { useMutation: mutation("start", (i) => ({ sessionId: "11111111-1111-4111-8111-111111111111", transactionId: i.transactionId, questionText: "fixed question", anchorContextHash: "h".repeat(64) })) },
         answer: { useMutation: mutation("answer", () => ({ id: "new-answer" })) },
         complete: { useMutation: mutation("complete", () => ({ ok: true })) },
       },
@@ -80,7 +80,7 @@ describe("/journal page", () => {
     await waitFor(() => expect(log).toContain("invalidate coverage"));
     expect(log).toEqual([
       'start {"transactionId":"buy-a"}',
-      'answer {"sessionId":"11111111-1111-4111-8111-111111111111","transactionId":"buy-a","questionText":"fixed question","answerText":"my words"}',
+      `answer {"sessionId":"11111111-1111-4111-8111-111111111111","transactionId":"buy-a","questionText":"fixed question","answerText":"my words","anchorContextHash":"${"h".repeat(64)}"}`,
       'complete {"sessionId":"11111111-1111-4111-8111-111111111111"}',
       "invalidate journal",
       "invalidate coverage",
