@@ -36,7 +36,8 @@ export default function LoginPage() {
         className="flex flex-col gap-4 rounded-lg border border-rule bg-surface p-5 shadow-panel"
         onSubmit={(e) => {
           e.preventDefault();
-          guard(() => login.mutateAsync({ email, password }));
+          // the failure is shown from login.error; the rejection itself is not rethrown
+          void guard(() => login.mutateAsync({ email, password })).catch(() => undefined);
         }}
       >
         <Field label={t.emailLabel} required>
@@ -70,11 +71,18 @@ export default function LoginPage() {
         <Button type="submit" variant="primary" loading={login.isPending} loadingLabel={t.signingIn} className="w-full">
           {t.signIn}
         </Button>
-        {login.isError && (
-          <Notice tone="negative" title={t.failedTitle}>
-            {t.failedHint}
-          </Notice>
-        )}
+        {/* Only rejected credentials are blamed on the input; any other failure
+            (network, server) says so without its raw detail. */}
+        {login.isError &&
+          (login.error.data?.code === "UNAUTHORIZED" ? (
+            <Notice tone="negative" title={t.failedTitle}>
+              {t.failedHint}
+            </Notice>
+          ) : (
+            <Notice tone="negative" title={t.errorTitle}>
+              {t.errorHint}
+            </Notice>
+          ))}
       </form>
     </main>
   );

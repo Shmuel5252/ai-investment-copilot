@@ -158,7 +158,10 @@ export const loginPage = {
   signIn: "כניסה",
   signingIn: "נכנס...",
   failedTitle: "הכניסה לא הצליחה",
-  failedHint: "בדוק את האימייל והסיסמה ונסה שוב.",
+  failedHint: "בדוק את האימייל והסיסמה.",
+  // any failure other than rejected credentials (network, server): never blamed on the investor's input
+  errorTitle: "לא הצלחנו להשלים את הכניסה",
+  errorHint: "נסה שוב בעוד רגע.",
 };
 
 // Evidence Strength tiers as PRODUCT STATES, not errors. The tier is
@@ -1032,6 +1035,82 @@ export const questionProvenanceLabel: Record<string, string> = {
   guided_legacy: "שאלה שנוצרה לפני כלל הזמן־אמת ועשויה להזכיר מידע מאוחר.",
   tell_me_why_pit: "שאלת \"ספר לי למה\" הקבועה, על הכניסה.",
   tell_me_why_legacy: "שאלת \"ספר לי למה\" קבועה, מלפני שעובדות הזמן־אמת נשמרו עם התשובה.",
+};
+
+// --- Learning (src/app/learning, src/components/learning, Frontend V1 unit 8).
+// A Learning insight is an AI-written CANDIDATE pattern over the investor's
+// reviewed decisions in one sector: descriptive and evidence-bearing, never
+// advice, a ranking, a verdict on the investor or a DNA claim by itself. The
+// statement and the evidence descriptions stay English as generated (AGENTS.md
+// "Backend Intelligence V1 — Frozen"); only this chrome is Hebrew. ---
+
+export const learningPage = {
+  title: "תובנות למידה",
+  description: "דפוסים שהמערכת מזהה בהחלטות שכבר נבדקו. כל תובנה היא הצעה לבדיקה, לא מסקנה על איכות ההחלטות ולא המלצה לפעולה.",
+  // generate
+  generateTitle: "חיפוש דפוסים",
+  generateHint:
+    "המערכת מקבצת את ההחלטות שנבדקו לפי הסקטור שתועד בהן. רק סקטור שיש בו לפחות שתי החלטות שנבדקו ושיש להן סקטור מתועד נשקל, ורק אז AI מנסח דפוס אפשרי ומצטט את בדיקות ההחלטות שעליהן הוא נשען.",
+  generateButton: "חפש דפוסים",
+  generatingButton: "מנתח...",
+  resultConsidered: "סקטורים נשקלו",
+  resultCreated: "תובנות חדשות",
+  resultVersioned: "גרסאות חדשות",
+  resultUnchanged: "ללא שינוי",
+  resultDropped: "נפסלו בלי ראיות תקפות",
+  resultNothingNew: "לא נוצרה תובנה חדשה ולא גרסה חדשה.",
+  // list
+  listTitle: "התובנות הנוכחיות",
+  listLabel: "תובנות למידה",
+  sectorLabel: "סקטור:",
+  versionPrefix: "גרסה",
+  aiAuthored: "נוסחה על ידי AI",
+  statementNote: "הניסוח נוצר על ידי AI ונשמר באנגלית, כפי שנוצר. זה דפוס אפשרי לבדיקה, לא קביעה.",
+  strengthTitle: "Evidence Strength של התובנה",
+  // evidence
+  evidenceSummary: "המקורות שהתובנה מצטטת",
+  evidenceNote: "כל מקור הוא בדיקה של אחת מההחלטות שלך. התיאור נוסח על ידי AI בזמן הסינתזה ונשמר באנגלית.",
+  evidenceLegacy:
+    "לתובנה הזו אין תיעוד גרסה שמאפשר להפריד בוודאות בין המקורות של הנוסח הנוכחי לגרסאות קודמות. לכן מוצגים כאן כל המקורות השמורים לתובנה.",
+  evidenceNone: "אין מקורות שמורים לגרסה הנוכחית.",
+  evidenceSavedOn: "נשמר ב-",
+  // sector-wide tallies
+  talliesSummary: "תמונה רחבה של ההחלטות שנבדקו בסקטור",
+  talliesNote: "הספירות כוללות את כל ההחלטות שנבדקו בסקטור הזה בזמן הסינתזה, לא רק את אלה שהתובנה מצטטת. הן אינן ראיה לתובנה.",
+  qualityLabel: "איכות ההחלטה",
+  accuracyLabel: "דיוק התזה",
+  // respond
+  respondButton: "הגב לתובנה",
+  respondCancel: "סגור",
+  noteLabel: "ההערה שלך",
+  noteHelp: "חובה לכתוב הערה. היא נשמרת כפי שכתבת אותה.",
+  agreeExplain:
+    "הסכמה מנסה ליצור השערת DNA חדשה מהתובנה. השערה נוצרת רק אם ההצהרות שכתבת בזמן ההחלטות שהתובנה מצטטת מבססות את הנוסח שלה, לפי אותם כללים שחלים על כל ראיה ב-DNA. ההסכמה עצמה אינה ראיה. אם לא נוצרת השערה, שום דבר לא נשמר.",
+  disagreeExplain:
+    "אי־הסכמה שומרת את ההערה שלך כתיקון לתובנה. התובנה לא נמחקת ולא משתנה, ושום דבר ב-DNA, באסטרטגיה או בהחלטות שלך לא משתנה.",
+  agreeButton: "הסכם ונסה ליצור השערה",
+  agreeing: "בודק...",
+  disagreeButton: "לא מסכים",
+  disagreeing: "שומר...",
+  // results (this visit only: the read contract does not say what was answered before)
+  carriedTitle: "נוצרה השערת DNA חדשה",
+  carriedBodyPrefix: "ההשערה נושאת",
+  carriedBodyCases: "החלטות שהתובנה מצטטת, ונשענת על",
+  carriedBodyStatements: "הצהרות שכתבת בזמן ההחלטות. היא מופיעה בעמוד ה-DNA כהשערה, עם Evidence Strength שחושב לה בנפרד.",
+  toDna: "ל-DNA משקיע",
+  replayedTitle: "ההסכמה הזו כבר טופלה בעבר",
+  replayedBody: "השערת ה-DNA שנוצרה אז נשארה כפי שהיא, ולא נוצרה השערה נוספת.",
+  refusedTitle: "לא נוצרה השערת DNA",
+  refusedBody:
+    "ההצהרות שכתבת בזמן ההחלטות שהתובנה מצטטת לא מבססות את הנוסח שלה, ולכן אין מה להעביר ל-DNA. ההסכמה וההערה לא נשמרו, וההערה נשארת כאן.",
+  disagreedTitle: "ההערה נשמרה",
+  disagreedBody: "התיקון נרשם לתובנה. שום דבר אחר לא השתנה.",
+  failedTitle: "הפעולה לא הושלמה",
+  failedBody: "לא התקבל אישור מהשרת. ההערה נשארת כאן.",
+  // states
+  emptyTitle: "עדיין אין תובנות למידה",
+  emptyBody: "תובנות נוצרות רק כשיש באותו סקטור לפחות שתי החלטות שנבדקו ושיש להן סקטור מתועד. כרגע אין קבוצה כזו שאפשר לנתח.",
+  emptyLink: "להחלטות",
 };
 
 // --- Investor DNA (src/components/dna + src/components/claims, Frontend V1
