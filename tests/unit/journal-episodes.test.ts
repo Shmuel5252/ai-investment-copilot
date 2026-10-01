@@ -163,9 +163,14 @@ describe("B. rationale coverage", () => {
     const mp = journal.episodes.find((e) => e.key === "MP#1")!;
     expect(mp.rationale.status).toBe("unanswered");
     expect(mp.actionAnswers.map((a) => a.id)).toEqual(["a1"]);
-    // the hindsight-safe projection withholds action answers like later facts
-    expect(toHindsightSafeView(mp).actionAnswers).toBeNull();
-    expect(toHindsightSafeView(mp).later).toBeNull();
+    // Owner decision (7C-F delta): the action answer is returned even without an
+    // entry rationale; later results stay withheld; coverage is unchanged
+    const view = toHindsightSafeView(mp);
+    expect(view.rationale).toMatchObject({ status: "unanswered", answers: [] });
+    expect(view.later).toBeNull();
+    expect(view.actionAnswers).toEqual([
+      { answerId: "a1", action: { transactionId: "mp-s1", ticker: "MP", side: "sell", date: new Date("2026-08-24"), role: null }, answerText: "answer a1", answeredAt: new Date("2026-09-01T00:00:00.000Z"), questionProvenance: null, questionText: "q", factsLine: null },
+    ]);
   });
 
   it("different episodes count separately, including two lifecycles of one ticker", () => {

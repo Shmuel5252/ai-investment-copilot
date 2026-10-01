@@ -277,6 +277,6 @@ describe("D/B/E. the journal, hindsight protection, append-only answers, superse
     // anchored to the sell is an action answer, shown once the entry is answered.
     const mp = journal.episodes.find((e) => e.key === "MP#1")!;
     expect(mp.rationale.answers.map((a) => a.id)).toEqual([mpAnswer.id]);
-    expect(mp.actionAnswers!.map((a) => a.id)).toEqual([sellAnswer.id]);
+    expect(mp.actionAnswers.map((a) => a.answerId)).toEqual([sellAnswer.id]);
   });
 });

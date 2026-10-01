@@ -9,8 +9,10 @@ import { buildAnchorContext, type AnchorContextV1, type AnchorHistory, type Hist
 // Eligibility: a buy or sell with a ticker whose point-in-time context can be
 // built (src/lib/interview/anchor-context.ts) — so a sell is backed by known
 // holdings, the ticker's history before it is trusted, and its same-day
-// order is authoritative. An initial buy that already has an effective
-// answer anchored to it is skipped: that entry is already recorded.
+// order is authoritative. Any action that already has an EFFECTIVE answer
+// anchored to that exact transaction is skipped, whatever its role (Unit 7C-F
+// backend delta): it is already recorded, and each slot moves on to its next
+// candidate. Identity is the transaction id, never ticker, episode or date.
 //
 // Slots, filled in this fixed order, each taking the most recent eligible
 // action not already taken (recency is a fact of the calendar, not of the
@@ -46,7 +48,7 @@ export function selectStructuralAnchors(
     if (t.ticker === null || (t.transactionType !== "buy" && t.transactionType !== "sell")) continue;
     const built = buildAnchorContext(history, t.id);
     if (!built.ok) continue;
-    if (built.context.anchor.role === "initial_buy" && options.answeredTransactionIds.has(t.id)) continue;
+    if (options.answeredTransactionIds.has(t.id)) continue;
     eligible.push({ transaction: t, context: built.context });
   }
 

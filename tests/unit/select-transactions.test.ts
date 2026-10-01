@@ -80,6 +80,56 @@ describe("selectStructuralAnchors", () => {
     expect(picked.some((p) => p.transaction.id === "c-b1" && p.slot === "initial_buy")).toBe(false);
   });
 
+  describe("Unit 7C-F delta: every already-answered action is skipped, by exact transaction", () => {
+    // Two candidates for every role, on one ticker, so a slot can pass to its next candidate.
+    const TWO: Spec[] = [
+      { id: "i1", type: "buy", date: "2026-01-02", qty: 10, price: 5 },
+      { id: "a1", type: "buy", date: "2026-01-10", qty: 10, price: 5 },
+      { id: "a2", type: "buy", date: "2026-01-20", qty: 10, price: 5 },
+      { id: "p1", type: "sell", date: "2026-02-01", qty: 5, price: 6 },
+      { id: "p2", type: "sell", date: "2026-02-10", qty: 5, price: 6 },
+      { id: "f1", type: "sell", date: "2026-02-20", qty: 20, price: 6 },
+      { id: "i2", type: "buy", date: "2026-03-01", qty: 10, price: 5 },
+      { id: "f2", type: "sell", date: "2026-03-10", qty: 10, price: 6 },
+    ];
+    const slotOf = (answered: string[], slot: string) => selectStructuralAnchors(history(TWO), { answeredTransactionIds: new Set(answered) }).find((p) => p.slot === slot)?.transaction.id;
+
+    it.each([
+      ["initial_buy", "i2", "i1"],
+      ["add_buy", "a2", "a1"],
+      ["partial_sell", "p2", "p1"],
+      ["full_sell", "f2", "f1"],
+    ])("an answered %s is excluded and the slot takes its next candidate", (slot, newest, next) => {
+      expect(slotOf([], slot)).toBe(newest);
+      expect(slotOf([newest], slot)).toBe(next);
+      expect(selectStructuralAnchors(history(TWO), { answeredTransactionIds: new Set([newest]) }).some((p) => p.transaction.id === newest)).toBe(false);
+    });
+
+    it("identity is the exact transaction: other actions on the same ticker, date and episode stay eligible", () => {
+      const picked = selectStructuralAnchors(history(TWO), { answeredTransactionIds: new Set(["p2"]) }).map((p) => p.transaction.id);
+      expect(picked).not.toContain("p2");
+      expect(picked).toEqual(expect.arrayContaining(["p1", "f2", "a2"]));
+    });
+
+    it("no selected anchor is ever an answered one, and nothing is repeated to fill slots", () => {
+      const answered = ["i2", "a2", "p2", "f2", "f1", "a1"];
+      const picked = selectStructuralAnchors(history(TWO), { answeredTransactionIds: new Set(answered) });
+      for (const p of picked) expect(answered).not.toContain(p.transaction.id);
+      expect(new Set(picked.map((p) => p.transaction.id)).size).toBe(picked.length);
+      expect(picked.map((p) => p.transaction.id).sort()).toEqual(["i1", "p1"]);
+      const all = selectStructuralAnchors(history(TWO), { answeredTransactionIds: new Set(TWO.map((s) => s.id)) });
+      expect(all).toEqual([]);
+    });
+
+    it("stays outcome-independent and chronological after filtering", () => {
+      const swapped = TWO.map((s) => (s.type === "sell" ? { ...s, price: s.price === 6 ? 2 : 6 } : s));
+      const ids = (specs: Spec[]) => selectStructuralAnchors(history(specs), { answeredTransactionIds: new Set(["f2"]) }).map((p) => [p.slot, p.transaction.id]);
+      expect(ids(swapped)).toEqual(ids(TWO));
+      const dates = selectStructuralAnchors(history(TWO), { answeredTransactionIds: new Set(["f2"]) }).map((p) => p.transaction.transactionDate.getTime());
+      expect(dates).toEqual([...dates].sort((a, b) => a - b));
+    });
+  });
+
   it("excludes actions whose same-day order is not established, and sells not backed by holdings", () => {
     const specs: Spec[] = [
       { id: "x-b", ticker: "XXX", type: "buy", date: "2026-03-01", qty: 4, price: 2 },

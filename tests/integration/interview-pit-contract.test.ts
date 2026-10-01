@@ -288,14 +288,50 @@ describe("Journal entry coverage", () => {
     await interview(investorId).answer({ sessionId: r.sessionId, transactionId: sell, questionText: q.questionText, answerText: "sold part", anchorContextHash: q.anchorContextHash });
     let journal = await interview(investorId).journal();
     expect(journal.coverage).toEqual({ covered: 0, total: 1 });
-    expect(journal.episodes[0]).toMatchObject({ rationale: { status: "unanswered" }, actionAnswers: null, later: null });
+    // the action answer is visible before any entry rationale, yet never covers the entry
+    expect(journal.episodes[0]).toMatchObject({ rationale: { status: "unanswered", answers: [] }, later: null });
+    expect(journal.episodes[0]!.actionAnswers).toHaveLength(1);
+    expect(journal.episodes[0]!.actionAnswers[0]).toMatchObject({ action: { transactionId: sell, ticker: "QRST", side: "sell", role: "partial_sell" }, answerText: "sold part", questionProvenance: "guided_pit_ai", questionText: q.questionText, factsLine: q.factsLine });
 
     const tmw = await interview(investorId).startTellMeWhy({ transactionId: buy });
     await interview(investorId).answer({ sessionId: tmw.sessionId, transactionId: buy, questionText: tmw.questionText, answerText: "entered because", anchorContextHash: tmw.anchorContextHash });
     journal = await interview(investorId).journal();
     expect(journal.coverage).toEqual({ covered: 1, total: 1 });
     expect(journal.episodes[0]!.rationale.answers.map((a) => a.answerText)).toEqual(["entered because"]);
-    expect(journal.episodes[0]!.actionAnswers!.map((a) => a.answerText)).toEqual(["sold part"]);
+    expect(journal.episodes[0]!.actionAnswers.map((a) => a.answerText)).toEqual(["sold part"]);
+  });
+
+  it("a legacy action answer is returned with its provenance and stored wording, and no fabricated facts line or role", async () => {
+    const investorId = await mkInvestor(db, "pit-legacy-action");
+    await trade(investorId, "buy", "2026-03-03", "10", "10");
+    const sell = await trade(investorId, "sell", "2026-04-04", "10", "12");
+    const session = await insertInterviewSession(db, { investorId, origin: "guided_interview" });
+    await insertInterviewAnswer(db, { interviewSessionId: session.id, transactionId: sell, questionText: "Sample legacy: after that 20% gain?", answerText: "legacy answer", questionProvenance: "guided_legacy" });
+    const journal = await interview(investorId).journal();
+    expect(journal.coverage).toEqual({ covered: 0, total: 1 });
+    expect(journal.episodes[0]!.actionAnswers).toEqual([
+      expect.objectContaining({ action: expect.objectContaining({ transactionId: sell, ticker: "QRST", side: "sell", role: null }), answerText: "legacy answer", questionProvenance: "guided_legacy", factsLine: null }),
+    ]);
+    expect(Object.keys(journal.episodes[0]!.actionAnswers[0]!).sort()).toEqual(["action", "answerId", "answerText", "answeredAt", "factsLine", "questionProvenance", "questionText"]);
+    // the AI policy is unchanged: the legacy wording still never reaches the DNA proposer
+    await dnaRouter.createCaller(ctx(investorId)).generate();
+    expect(JSON.stringify(ai.dnaInputs)).not.toContain("20% gain");
+    expect(JSON.stringify(ai.dnaInputs)).toContain("legacy answer");
+  });
+
+  it("start skips every already-answered action, whatever its role, by exact transaction", async () => {
+    const investorId = await mkInvestor(db, "pit-skip-answered");
+    const b1 = await trade(investorId, "buy", "2026-01-05", "10", "10");
+    const b2 = await trade(investorId, "buy", "2026-02-05", "10", "11");
+    const s1 = await trade(investorId, "sell", "2026-03-05", "5", "12");
+    const s2 = await trade(investorId, "sell", "2026-04-05", "15", "13");
+    ai.generate.mockImplementation(async () => SAFE_AI);
+    const first = await interview(investorId).start();
+    expect(first.questions.map((q) => q.anchor.transactionId).sort()).toEqual([b1, b2, s1, s2].sort());
+    for (const q of first.questions) {
+      await interview(investorId).answer({ sessionId: first.sessionId, transactionId: q.anchor.transactionId, questionText: q.questionText, answerText: "x", anchorContextHash: q.anchorContextHash });
+    }
+    await expect(interview(investorId).start()).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });
 
