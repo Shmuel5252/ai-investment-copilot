@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, within, waitFor } from "@testing-librar
 import { JournalView, partitionEpisodes } from "@/components/journal/journal-view";
 import type { RationaleActions, TellMeWhySession } from "@/components/journal/rationale-writer";
 import { journalPreviewData, JOURNAL_PREVIEW_SESSION, type JournalPreviewState } from "@/app/styleguide/journal-preview-data";
-import { journalPage as t } from "@/lib/i18n/strings";
+import { actionRoleLabel, journalPage as t, questionProvenanceLabel } from "@/lib/i18n/strings";
 
 // Frontend V1 unit 7A — the Journal, rendered with the production component
 // on the same synthetic data the /styleguide preview uses. No procedure, no
@@ -170,7 +170,7 @@ describe("an answered episode", () => {
   it("keeps later facts closed by default, labelled as later, with no success/failure coloring", () => {
     renderJournal();
     const row = rowOf("answered", "WXYZ");
-    const details = row.querySelector("details") as HTMLDetailsElement;
+    const details = Array.from(row.querySelectorAll("details")).find((d) => d.querySelector("summary")?.textContent?.includes(t.laterSummary)) as HTMLDetailsElement;
     expect(details.open).toBe(false);
     expect(details.querySelector("summary")?.textContent).toContain(t.laterSummary);
     expect(details.textContent).toContain(t.laterNote);
@@ -208,6 +208,73 @@ describe("updating a rationale", () => {
     fireEvent.click(within(row()).getByRole("button", { name: t.updateSaveButton }));
     await waitFor(() => expect(a.save).toHaveBeenCalledWith({ session: JOURNAL_PREVIEW_SESSION, answerText: "ניסוח מתוקן", supersedesAnswerId: "ans-d1b" }));
     expect(row().querySelectorAll("blockquote")[1]?.textContent).toBe("טקסט דוגמה: תשובה נוכחית שנייה לאותה פוזיציה.");
+  });
+});
+
+describe("answers about other actions (unit 7C-F)", () => {
+  const actionBlock = (ticker: string, list: "answered" | "unanswered") =>
+    Array.from(rowOf(list, ticker).querySelectorAll("details")).find((d) => d.querySelector("summary")?.textContent?.includes(t.actionAnswersTitle)) as HTMLDetailsElement;
+
+  it("shows them on an episode with no entry rationale, without counting them as coverage", () => {
+    renderJournal();
+    const block = actionBlock("MNOP", "unanswered");
+    expect(block).toBeTruthy();
+    expect(block.open).toBe(false);
+    expect(block.textContent).toContain(t.actionAnswersNote);
+    // MNOP stays in the unanswered list, and coverage is the entry rationale count only
+    expect(rowOf("answered", "MNOP")).toBeUndefined();
+    expect(within(rowOf("unanswered", "MNOP")).getByRole("button", { name: t.writeButton })).toBeTruthy();
+    expect(region("unanswered").textContent).not.toContain("טקסט דוגמה: נכנסתי");
+  });
+
+  it("a legacy answer: the stored side and date, no facts line, the limitation label, the answer as the only quote", () => {
+    renderJournal();
+    const block = actionBlock("MNOP", "unanswered");
+    expect(block.textContent).toContain(t.sideSell);
+    expect(block.textContent).not.toContain(t.actionFactsTitle);
+    expect(block.textContent).toContain(questionProvenanceLabel.guided_legacy);
+    expect(block.textContent).toContain("Sample legacy question, stored in English as it was asked.");
+    const quotes = block.querySelectorAll("blockquote");
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0]!.textContent).toBe("טקסט דוגמה: מכרתי כי הסיבה שבגללה נכנסתי כבר לא הייתה רלוונטית.");
+    expect(quotes[0]!.textContent).not.toContain("Sample legacy question");
+  });
+
+  it("a point-in-time answer: its role, the frozen facts line and its provenance, apart from the entry rationale", () => {
+    renderJournal();
+    const row = rowOf("answered", "WXYZ");
+    const block = actionBlock("WXYZ", "answered");
+    expect(block.textContent).toContain(actionRoleLabel.partial_sell);
+    expect(block.textContent).toContain(t.actionFactsTitle);
+    expect(block.textContent).toContain("מכירה של 20 מתוך 60 מניות WXYZ");
+    expect(block.textContent).toContain(questionProvenanceLabel.guided_pit_ai);
+    // the entry rationale's quote is outside the action block, and comes first
+    const entryQuote = row.querySelector("blockquote") as HTMLElement;
+    expect(block.contains(entryQuote)).toBe(false);
+    expect(entryQuote.textContent).toContain("טקסט דוגמה: נכנסתי");
+    expect(block.querySelector("blockquote")?.textContent).toBe("טקסט דוגמה: מכרתי חלק כדי להקטין את החשיפה לפני הדוח.");
+  });
+
+  it("never renders snapshot or audit data", () => {
+    renderJournal();
+    expect(document.body.textContent).not.toMatch(/anchor_context|anchorContext|question_provenance|guided_legacy|guided_pit|\{"/);
+  });
+
+  it("leave the screen while the entry rationale is written or updated", async () => {
+    renderJournal();
+    fireEvent.click(within(rowOf("unanswered", "MNOP")).getByRole("button", { name: t.writeButton }));
+    await within(rowOf("unanswered", "MNOP")).findByLabelText(new RegExp(t.answerLabel));
+    expect(rowOf("unanswered", "MNOP").textContent).not.toContain(t.actionAnswersTitle);
+    fireEvent.click(within(rowOf("answered", "WXYZ")).getByRole("button", { name: t.updateButton }));
+    await within(rowOf("answered", "WXYZ")).findByLabelText(new RegExp(t.answerLabel));
+    expect(rowOf("answered", "WXYZ").textContent).not.toContain(t.actionAnswersTitle);
+  });
+
+  it("labels every stored question provenance in Hebrew", () => {
+    for (const p of ["guided_legacy", "tell_me_why_legacy", "guided_pit_ai", "guided_pit_fallback", "tell_me_why_pit"]) expect(questionProvenanceLabel[p], p).toMatch(/[א-ת]/);
+    expect(questionProvenanceLabel.guided_legacy).toBe("שאלה שנוצרה לפני כלל הזמן־אמת ועשויה להזכיר מידע מאוחר.");
+    expect(questionProvenanceLabel.guided_pit_ai).toBe("שאלה שנוסחה מתוך עובדות הזמן־אמת.");
+    expect(questionProvenanceLabel.guided_pit_fallback).toBe("שאלה קבועה של המערכת מתוך עובדות הזמן־אמת.");
   });
 });
 

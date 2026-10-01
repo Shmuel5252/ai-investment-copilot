@@ -13,7 +13,7 @@ import { KeyValues } from "@/components/ui/table";
 import { RegionBody } from "@/components/home/region";
 import { day, type Loadable } from "@/components/home/types";
 import { RationaleWriter, type RationaleActions } from "./rationale-writer";
-import { journalPage as t } from "@/lib/i18n/strings";
+import { actionRoleLabel, journalPage as t, questionProvenanceLabel } from "@/lib/i18n/strings";
 
 // /journal — Frontend V1 unit 7A. The Journal is a projection, not a stored
 // feed: each row is one position lifecycle ("episode") derived from the
@@ -35,6 +35,24 @@ export interface JournalAnswer {
   questionText: string;
   answerText: string;
   createdAt: When;
+  /** interview_answers.question_provenance, when the response carries it. */
+  questionProvenance?: string | null;
+}
+
+/**
+ * Unit 7C-F: an answer about another action of the position (a guided question
+ * about an add-on or a sell), as interview.journal projects it. Only these
+ * display fields are read; no snapshot or audit data is ever rendered.
+ */
+export interface JournalActionAnswer {
+  answerId: string;
+  /** role and factsLine come from the frozen point-in-time snapshot; null for a legacy row. */
+  action: { transactionId: string; ticker: string; side: "buy" | "sell"; date: When; role: string | null };
+  answerText: string;
+  answeredAt: When;
+  questionProvenance: string | null;
+  questionText: string;
+  factsLine: string | null;
 }
 
 export interface JournalEpisodeRow {
@@ -53,6 +71,8 @@ export interface JournalEpisodeRow {
     holdingDays: number | null;
     sells: { transactionId: string; date: When; realizedPnlPercent: number; sufficientHoldings: boolean }[];
   } | null;
+  /** Answers about the position's other actions; returned whether or not the entry has a rationale, never coverage. */
+  actionAnswers?: JournalActionAnswer[];
 }
 
 export interface JournalData {
@@ -170,16 +190,20 @@ function EntryFacts({ episode }: { episode: JournalEpisodeRow }) {
 }
 
 function UnansweredRow({ episode, actions }: { episode: JournalEpisodeRow; actions: RationaleActions }) {
+  // While the entry rationale is being written, answers about later actions
+  // leave the screen: the entry is reconstructed without them in view.
+  const [writing, setWriting] = useState(false);
   return (
     <ListRow>
       <div className="flex flex-col gap-2">
         <EpisodeTitle episode={episode} />
         <EntryFacts episode={episode} />
         {episode.anchorable && episode.entry ? (
-          <RationaleWriter transactionId={episode.entry.transactionId} actions={actions} />
+          <RationaleWriter transactionId={episode.entry.transactionId} actions={actions} onWritingChange={setWriting} />
         ) : (
           <HelpText>{t.notAnchorable}</HelpText>
         )}
+        {!writing && <ActionAnswers answers={episode.actionAnswers ?? []} />}
       </div>
     </ListRow>
   );
@@ -204,6 +228,7 @@ function AnsweredRow({ episode, actions }: { episode: JournalEpisodeRow; actions
             <HelpText>
               {t.inReplyTo} <span className="text-ink-2">{a.questionText}</span>
             </HelpText>
+            {a.questionProvenance && <HelpText>{questionProvenanceLabel[a.questionProvenance] ?? t.provenanceUnknown}</HelpText>}
             <Quote>{a.answerText}</Quote>
             <p className="text-xs text-muted">
               {t.writtenOnPrefix}
@@ -220,9 +245,49 @@ function AnsweredRow({ episode, actions }: { episode: JournalEpisodeRow; actions
             onWritingChange={setUpdating}
           />
         )}
+        {!updating && <ActionAnswers answers={episode.actionAnswers ?? []} />}
         {episode.later && !updating && <LaterFacts episode={episode} later={episode.later} />}
       </div>
     </ListRow>
+  );
+}
+
+// Unit 7C-F: the investor's answers about the position's other actions, kept
+// apart from the entry rationale and never counted as it. Closed by default.
+// Each shows the action (its stored side, the role only when a snapshot holds
+// it), the frozen facts line only when the row has one, the question as
+// plain system text with its provenance, and the answer in the investor's
+// own words. Nothing is reconstructed for a legacy row.
+function ActionAnswers({ answers }: { answers: JournalActionAnswer[] }) {
+  if (answers.length === 0) return null;
+  return (
+    <Disclosure summary={<span>{t.actionAnswersTitle} (<Num>{answers.length}</Num>)</span>} className="border-t border-rule pt-2">
+      <HelpText>{t.actionAnswersNote}</HelpText>
+      {answers.map((a) => (
+        <article key={a.answerId} className="flex flex-col gap-1.5">
+          <p className="flex flex-wrap items-baseline gap-x-2 text-xs font-semibold text-ink-2">
+            <span>{a.action.role ? (actionRoleLabel[a.action.role] ?? a.action.role) : a.action.side === "buy" ? t.sideBuy : t.sideSell}</span>
+            <span aria-hidden="true" className="text-muted">·</span>
+            <Num>{day(a.action.date)}</Num>
+          </p>
+          {a.factsLine !== null && (
+            <div className="rounded-md bg-surface-2 px-3 py-2">
+              <p className="text-xs font-semibold text-ink-2">{t.actionFactsTitle}</p>
+              <p className="text-xs leading-relaxed text-ink">{a.factsLine}</p>
+            </div>
+          )}
+          <HelpText>
+            {t.inReplyTo} <span className="text-ink-2">{a.questionText}</span>
+          </HelpText>
+          <HelpText>{a.questionProvenance ? (questionProvenanceLabel[a.questionProvenance] ?? t.provenanceUnknown) : t.provenanceUnknown}</HelpText>
+          <Quote>{a.answerText}</Quote>
+          <p className="text-xs text-muted">
+            {t.writtenOnPrefix}
+            <Num>{day(a.answeredAt)}</Num>
+          </p>
+        </article>
+      ))}
+    </Disclosure>
   );
 }
 

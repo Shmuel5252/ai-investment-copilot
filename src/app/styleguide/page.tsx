@@ -39,6 +39,9 @@ export default function StyleguidePage() {
           }
           actions={
             <>
+              <ButtonLink href="/styleguide/interview" variant="quiet">
+                ראיון לדוגמה
+              </ButtonLink>
               <ButtonLink href="/styleguide/import" variant="quiet">
                 ייבוא לדוגמה
               </ButtonLink>

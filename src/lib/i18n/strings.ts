@@ -277,7 +277,7 @@ export const homePage = {
   openDna: "DNA",
   openStrategy: "Strategy",
   openJournal: "יומן",
-  openInterview: "לראיון הפתיחה",
+  openInterview: "לראיון המודרך",
   memoryFootnote: "טענה משמשת את המערכת בניתוחים רק כשיש לה מספיק מקרים עצמאיים. עד אז היא מוצגת לך, אבל שום ניתוח לא נשען עליה.",
 };
 
@@ -943,26 +943,95 @@ export const journalPage = {
   insufficientHoldingsNote: "המכירה עלתה על ההחזקה הידועה, כנראה כי חסר מצב פתיחה; המספר לא אמין",
   stillOpenNote: "הפוזיציה עדיין פתוחה, ולכן אין לה יציאה.",
   noSellTrace: "לא נרשמו מכירות עם תשואה ממומשת לפוזיציה הזו.",
+  // Unit 7C-F: answers about other actions of the position (action answers).
+  actionAnswersTitle: "תשובות על פעולות בפוזיציה",
+  actionAnswersNote: "תשובות שנתת על פעולות אחרות בפוזיציה. הן אינן הנימוק לכניסה ואינן נספרות בכיסוי.",
+  sideBuy: "קנייה",
+  sideSell: "מכירה",
+  actionFactsTitle: "מה היה רשום עד הפעולה",
+  provenanceUnknown: "מקור השאלה לא נרשם.",
 };
 
-// --- Onboarding Interview (src/app/interview/page.tsx) ---
+// --- Guided Interview (src/app/interview/page.tsx, src/components/interview,
+// Frontend V1 unit 7C-F). Three layers stay apart on every question: the
+// system's record of what was known at the action, the system's question, and
+// the investor's answer. Nothing here speaks of results, rankings or what
+// happened afterwards. ---
 
 export const interviewPage = {
-  title: "ראיון פתיחה",
-  description:
-    "כמה שאלות על עסקאות ספציפיות מההיסטוריה שלך — תשובות חופשיות, דלג על כל מה שאתה לא רוצה להיכנס אליו. ככה המערכת מתחילה ללמוד איך אתה באמת חושב, לא רק מה סחרת.",
+  title: "ראיון מודרך",
+  description: "כמה שאלות על פעולות מההיסטוריה שלך. לכל פעולה מוצג רק מה שהיה רשום עד אותו רגע, והשאלה היא מה הנחה אותך אז.",
+  howTitle: "איך זה עובד",
+  howSelect: "המערכת בוחרת פעולות לפי מבנה ההיסטוריה המיובאת: קנייה ראשונה, הוספה לפוזיציה, מכירה חלקית, מכירת כל הפוזיציה.",
+  howFacts: "העובדות שמוצגות לכל פעולה הן מהעסקאות שייבאת, כפי שעמדו רגע לפני הפעולה. מה שקרה אחר כך אינו מוצג.",
+  howAnswers: "כל תשובה נשמרת במילים שלך כהצהרה מתוארכת, ועשויה לשמש בהמשך כמקור כאשר המערכת בוחנת דפוסים ועקרונות.",
   startButton: "התחל ראיון",
-  preparingQuestions: "מכין שאלות...",
-  questionLabel: "שאלה",
-  ofLabel: "מתוך",
-  whyAskedThis: "למה אתה נשאל את זה",
-  answerPlaceholder: "התשובה שלך...",
-  nextButton: "הבא",
-  finishButton: "סיום",
-  skipButton: "דלג",
-  completePrefix: "הראיון הושלם — נענו",
-  completeMiddle: "מתוך",
-  completeSuffix: "שאלות. התשובות האלה יזינו את השערות ה-DNA שלך בשלב הבא.",
+  preparing: "מכין את השאלות...",
+  noHistoryTitle: "עדיין אין היסטוריית עסקאות",
+  noHistoryBody: "אחרי ייבוא העסקאות יהיה על מה לשאול.",
+  importLink: "לייבוא היסטוריית מסחר",
+  noEligibleTitle: "אין כרגע פעולה שאפשר לשאול עליה",
+  noEligibleBody:
+    "הראיון שואל רק על פעולות מההיסטוריה המיובאת שהמצב שלפניהן ידוע מספיק. כרגע לא נמצאה פעולה מתאימה לשאלה בטוחה. פעולה שסדר הביצוע שלה באותו יום לא נרשם, או שכבר יש לה תשובה, אינה נשאלת.",
+  startFailed: "לא הצלחנו להכין את השאלות. לא נפתח ראיון ושום דבר לא נשמר. אפשר לנסות שוב.",
+  progressPrefix: "שאלה",
+  progressMiddle: "מתוך",
+  factsTitle: "מה היה רשום עד הפעולה",
+  factsProvenance: "עובדות מהעסקאות שייבאת, כפי שעמדו רגע לפני הפעולה. לא כולל מה שקרה אחר כך.",
+  questionLabel: "השאלה",
+  aboutQuestion: "על השאלה הזו",
+  sourceAi: "נוסחה מתוך העובדות שלמעלה בלבד ונבדקה בקוד לפני שהוצגה.",
+  sourceDeterministic: "ניסוח קבוע של המערכת מתוך העובדות שלמעלה.",
+  answerLabel: "מה הנחה אותך אז",
+  answerHelp: "התשובה תישמר כפי שכתבת אותה, עם תאריך של היום. היא עשויה לשמש בהמשך כמקור כאשר המערכת בוחנת דפוסים ועקרונות.",
+  saveNext: "שמור והמשך",
+  saveFinish: "שמור וסיים",
+  saving: "שומר...",
+  skip: "דלג על השאלה הזו",
+  skipHelp: "שאלה שדילגת עליה לא נשמרת; ייתכן שתופיע שוב בראיון הבא.",
+  announceSaved: "נשמר.",
+  announceSkipped: "דילגת.",
+  restartRequired:
+    "העובדות שמאחורי השאלה הזו השתנו מאז שהראיון נפתח, ולכן התשובה לא נשמרה. הטקסט שלך נשאר כאן. התחל ראיון מחדש כדי לקבל שאלות על העובדות העדכניות.",
+  restartButton: "התחל ראיון מחדש",
+  previousDraft: "הטקסט שכתבת קודם (לא נשמר)",
+  refusedTitle: "התשובה לא נשמרה.",
+  uncertain: "לא התקבל אישור שהתשובה נשמרה. הטקסט שלך נשאר כאן. אם תשלח שוב ייתכן שתיווצר תשובה שנייה.",
+  doneTitle: "הראיון הסתיים",
+  doneSavedPrefix: "נשמרו",
+  doneSavedMiddle: "תשובות מתוך",
+  doneSavedSuffix: "שאלות",
+  doneSkippedSuffix: "דולגו",
+  doneBody: "התשובות נשמרו כהצהרות מתוארכות שלך. הן עשויות לשמש כמקור בפעם הבאה שתיצור או תבחן DNA ואסטרטגיה; שום דבר לא נוצר אוטומטית.",
+  toJournal: "ליומן הפוזיציות",
+  toDna: "ל-DNA משקיע",
+  unconfirmedSavedTitle: "התשובה נשמרה",
+  unconfirmedSavedBody: "התשובה האחרונה נשמרה, אבל לא התקבל אישור שהראיון נסגר. אין צורך לשלוח את התשובה שוב.",
+  unconfirmedSkippedTitle: "לא התקבל אישור שהראיון נסגר",
+  unconfirmedSkippedBody: "דילגת על השאלה האחרונה, ולכן לא נשמרה עליה תשובה. לא התקבל אישור שהראיון נסגר.",
+  unconfirmedCountsPrefix: "בראיון הזה:",
+  unconfirmedCountsSaved: "תשובות נשמרו",
+  unconfirmedNext: "אפשר לחזור לראיון מאוחר יותר או לעבור ליומן.",
+  backToInterview: "חזרה לראיון",
+};
+
+// The structural role of a historical action (anchor_context.anchor.role).
+// Descriptive only: no role is better or worse than another.
+export const actionRoleLabel: Record<string, string> = {
+  initial_buy: "קנייה ראשונה",
+  add_buy: "הוספה לפוזיציה",
+  partial_sell: "מכירה חלקית",
+  full_sell: "מכירת כל הפוזיציה",
+};
+
+// interview_answers.question_provenance, as a calm human label: where the
+// question an answer responded to came from. Never a quality grade.
+export const questionProvenanceLabel: Record<string, string> = {
+  guided_pit_ai: "שאלה שנוסחה מתוך עובדות הזמן־אמת.",
+  guided_pit_fallback: "שאלה קבועה של המערכת מתוך עובדות הזמן־אמת.",
+  guided_legacy: "שאלה שנוצרה לפני כלל הזמן־אמת ועשויה להזכיר מידע מאוחר.",
+  tell_me_why_pit: "שאלת \"ספר לי למה\" הקבועה, על הכניסה.",
+  tell_me_why_legacy: "שאלת \"ספר לי למה\" קבועה, מלפני שעובדות הזמן־אמת נשמרו עם התשובה.",
 };
 
 // --- Investor DNA (src/components/dna + src/components/claims, Frontend V1
@@ -1033,8 +1102,8 @@ export const dnaPage = {
   rejecting: "מסיר...",
   // empty
   emptyTitle: "עוד אין טענות DNA",
-  emptyHint: "טענות מוצעות מתוך תשובות הראיון שלך ומהטקסטים שכתבת בזמן ההחלטות. אחרי ראיון הפתיחה אפשר להריץ עדכון.",
-  openInterview: "לראיון הפתיחה",
+  emptyHint: "טענות מוצעות מתוך תשובות הראיון שלך ומהטקסטים שכתבת בזמן ההחלטות. אחרי הראיון המודרך אפשר להריץ עדכון.",
+  openInterview: "לראיון המודרך",
   // rule footnote
   ruleTitle: "איך נקבע Evidence Strength",
   ruleText:

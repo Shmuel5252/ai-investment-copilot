@@ -26,7 +26,26 @@ const E = (o: Partial<JournalEpisodeRow> & Pick<JournalEpisodeRow, "key" | "tick
 
 const UNANSWERED: JournalEpisodeRow[] = [
   E({ key: "QRST#2", ticker: "QRST", episodeNumber: 2, status: "open", buyCount: 2, sellCount: 0, firstDate: "2026-08-20T00:00:00.000Z", entry: { transactionId: "buy-q2", date: "2026-08-20T00:00:00.000Z", quantity: 12.5, price: 131.4 } }),
-  E({ key: "MNOP#1", ticker: "MNOP", episodeNumber: 1, firstDate: "2026-06-11T00:00:00.000Z", entry: { transactionId: "buy-m1", date: "2026-06-11T00:00:00.000Z", quantity: 200, price: 8.05 } }),
+  // Unit 7C-F: an episode with no entry rationale, holding a LEGACY action
+  // answer (no role, no facts line: nothing is reconstructed for it).
+  E({
+    key: "MNOP#1",
+    ticker: "MNOP",
+    episodeNumber: 1,
+    firstDate: "2026-06-11T00:00:00.000Z",
+    entry: { transactionId: "buy-m1", date: "2026-06-11T00:00:00.000Z", quantity: 200, price: 8.05 },
+    actionAnswers: [
+      {
+        answerId: "act-m1",
+        action: { transactionId: "sell-m1", ticker: "MNOP", side: "sell", date: "2026-08-14T00:00:00.000Z", role: null },
+        answerText: "טקסט דוגמה: מכרתי כי הסיבה שבגללה נכנסתי כבר לא הייתה רלוונטית.",
+        answeredAt: "2026-08-17T09:00:00.000Z",
+        questionProvenance: "guided_legacy",
+        questionText: "Sample legacy question, stored in English as it was asked.",
+        factsLine: null,
+      },
+    ],
+  }),
   E({ key: "HIJK#1", ticker: "HIJK", episodeNumber: 1, buyCount: 0, firstDate: "2026-01-09T00:00:00.000Z", entry: null, anchorable: false }),
 ];
 
@@ -35,6 +54,18 @@ const ANSWERED: JournalEpisodeRow[] = [
     key: "WXYZ#1",
     ticker: "WXYZ",
     episodeNumber: 1,
+    // Unit 7C-F: an answered episode with a separate PIT action answer.
+    actionAnswers: [
+      {
+        answerId: "act-w1",
+        action: { transactionId: "sell-w1a", ticker: "WXYZ", side: "sell", date: "2026-06-01T00:00:00.000Z", role: "partial_sell" },
+        answerText: "טקסט דוגמה: מכרתי חלק כדי להקטין את החשיפה לפני הדוח.",
+        answeredAt: "2026-10-01T09:00:00.000Z",
+        questionProvenance: "guided_pit_ai",
+        questionText: "טקסט דוגמה: מה גרם לך למכור חלק מהפוזיציה דווקא אז?",
+        factsLine: "מכירה של 20 מתוך 60 מניות WXYZ, ב-01/06/2026. לפני הפעולה הוחזקו 60 מניות בעלות ממוצעת של $74.20 למניה, מאז 02/04/2026 (60 ימים).",
+      },
+    ],
     buyCount: 2,
     sellCount: 2,
     firstDate: "2026-04-02T00:00:00.000Z",
