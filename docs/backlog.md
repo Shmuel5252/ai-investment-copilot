@@ -420,7 +420,12 @@ FMP טרי), `portfolioStateJson`/Portfolio Fit, Market Context, גרסאות DN
    (2026-09-27): 5 claims עם contrast עצמאי (`5cee68a2`, `7c3665ca`, `ace307a1`, `173720c6`, `3653aeed`), 3 עם
    contrast שמנסח-מחדש את ההתנהגות (`cd9fcbe6`, `5b64985b`, `646e7663`), 1 scope (`699cdb50`). לכל 38 הציטוטים יש טקסט מקור; לכל תשובת ראיון יש שאלה שמורה. אין לכלול תוצאות
    צפויות בשום בקשת מודל. עד שהריצה תושלם — לא להריץ `dna.generate` / `strategy.generateObserved` (ל-`ace307a1`
-   ול-`3653aeed` S=2, C=0: case תומך אחד נוסף = `moderate`).
+   ול-`3653aeed` S=2, C=0: case תומך אחד נוסף = `moderate`). **עודכן (2026-10-02, אומת קריאה-בלבד): בוצע
+   2026-09-28** (v3-2, AI אמיתי, run `e5e459aa`): 19 זהויות, 38 שיפוטים ב-`grounding_judgments` (23 DNA, 15
+   Strategy); 4 `new_version` (DNA `ace307a1` v2; Strategy `18524a79` v2, `3653aeed` v5, `646e7663` v2), 8
+   `checked_no_change`, 7 `no_op` (כולל `173720c6`). ההגבלה "עד שהריצה תושלם" כבר לא חלה. דוח הריצה הסתיים
+   ב-"C — OWNER REVIEW REQUIRED BEFORE CLOSURE"; ההמשך היה Compound Verdict Enforcement Review → SCS V2 → נדחה
+   (ר' הסעיף שלו) והקפאת Backend Intelligence V1.
 9. **OD-R9 — Grounding Judgment Audit Ledger (OD-V32-8; מומש 2026-09-27 — קוד + מיגרציה 0018 כתובה;
    המיגרציה **לא הוחלה** על ה-DB האמיתי):** `*_evidence_grounding_checks` שומרות `(version, evidence,
    verdict, reason, checked_at)` עם `UNIQUE(version, evidence)` ובלי חוזה; לכן `no_op` לא יכול היה להיכתב,
@@ -432,7 +437,9 @@ FMP טרי), `portfolioStateJson`/Portfolio Fit, Market Context, גרסאות DN
    byte-for-byte, ledger 18 → 19); (3) רק אז ה-revalidation המפוקחת של V3.2 דרך
    `applyDnaGroundingRemediation` / `applyStrategyGroundingRemediation` עם `run_id` אחד לריצה. **חוב שנשאר:**
    אין backfill לשיפוטי v2/v3/v3-1 (בכוונה); אין רשומת כשל ברמת-ריצה (כשל טכני מדווח ע"י ה-runner ולא נכתב);
-   ה-runner המפוקח עצמו לא נבנה.
+   ה-runner המפוקח עצמו לא נבנה. **עודכן (2026-10-02, אומת קריאה-בלבד):** מיגרציה 0018 הוחלה על ה-DB האמיתי
+   (ledger: 20 רשומות, 0000–0019; הטבלה `grounding_judgments` קיימת), וה-revalidation של V3.2 נכתבה דרכה ב-2026-09-28
+   עם `run_id` יחיד (`e5e459aa`). אין בקוד המוצר runner מפוקח.
 **חוב V1 מקובל (נשאר):** גרסאות Learning ישנות בלי provenance מקבלות טביעה משורות ה-identity (re-baseline
 חד-פעמי, append בלבד); ריצת generate שהמודל לא הציע בה דבר לא משאירה עקבה (ה-nudge "צור מחדש" נשאר);
 Learning עדיין מקובץ לפי סקטור; הצהרות החלטה נכנסות ל-DNA/Strategy רק ביצירה מחדש; שתי שורות
@@ -529,6 +536,39 @@ fallback על unique violation). דורש יחידה נפרדת.
 8. **טענות DNA שנדחו לא ניתנות לרשימה או לשחזור** — `dna.reject` חד-כיווני; אין procedure שמחזיר טענות
    `user_rejected` ואין פעולת שחזור. עמוד ה-DNA אומר זאת לפני האישור.
 
+### Strategy — הכרעות Owner וסגירת שרשרת ה-grounding (2026-10-02)
+שחזור קריאה-בלבד (2026-10-02) הוכיח את השרשרת: אבחון (2026-09-16) → החלטת ארכיטקטורה → מימוש (`856e35a` ואילך,
+כלול ב-`1051d8e2`) → מיגרציות 0009 ו-0018 מוחלות → remediation אמיתי (V3, V3.1, V3.2) → הכרעת זוג ה-identities
+(להשאיר נפרדים; אין שינוי נתונים) → אימות (`no_op` / replay) → הקפאת Backend Intelligence V1.
+
+1. **Owner Decision 1 (2026-10-02): A.** בנוסח ההכרעה:
+   > Accept the currently persisted `unsupported` exclusion of evidence `d29a3897` on principle `173720c6` (v2).
+   > Audit trail: on 2026-09-18 the Owner ruled "retain as valid contradicting evidence". On 2026-09-25 the
+   > Owner authorized V3 remediation of `173720c6`, then instructed to preserve v2 as historical truth and
+   > described its unsupported verdict as conservative. V3, V3.1 and V3.2 returned `unsupported` (V3 flagged it
+   > QUESTIONABLE). The exclusion is accepted as the system's conservative persisted state; it is not a finding
+   > that the 2026-09-18 reading was mistaken. No data write and no Owner-override mechanism is required.
+2. **Owner Decision 2 — אישור StrategyVersion חדשה: DEFERRED, עד בדיקת מסלול ה-AI של Decision Review.**
+   גרסאות Strategy מאושרות 1 ו-2 (2026-08-17) מצמידות עדיין את גרסאות ה-v1 המקוריות, מלפני ה-grounding; אף גרסת
+   remediation לא מוצמדת; שלוש ההחלטות האמיתיות הקפיאו את גרסה 2. **תוצאת הבדיקה (2026-10-02, קריאה-בלבד, בלי AI):**
+   הצרכנים היחידים של bundle מוצמד הם `decisions.create` (bundle המאושר האחרון) ו-`reviews.generate` (ה-bundle
+   שהוקפא ב-snapshot, `src/server/routers/reviews.ts:177`). שניהם מסננים ב-`excludeInsufficientEvidence` לפני
+   קריאת ה-AI (`decisions.ts:155`, `reviews.ts:183`) ומעבירים למודל `statementText`, `principleType`,
+   `evidenceStrength`. לשלוש ההחלטות, וגם לסט הגרסאות העדכניות, עוברות אותן 6 גרסאות בדיוק (לפי מזהה: 4
+   validated + 2 declared); כל ה-observed הן `insufficient_evidence`. **כיום ה-bundle הישן לא משנה שום קלט AI
+   באף מסלול.** אישור חדש לא ישנה Review של החלטה קיימת (Review קורא את ה-bundle שהוקפא ב-snapshot); הוא משנה רק
+   את מזהה ה-StrategyVersion שהחלטות חדשות רושמות, את ספירת ה-drift בעמוד ה-Strategy ואת ניסוח "גרסה חדשה
+   יותר אושרה" ברשומות החלטה קיימות. Learning ו-Personal Fit לא קוראים bundles.
+3. **עובדה — Personal Fit קורא גרסאות עדכניות, לא את ה-bundle המאושר** (`cases.generatePersonalFit` →
+   `listStrategyPrinciplesForInvestor`). `excludeInsufficientEvidence` מסנן רק `insufficient_evidence`: `weak`,
+   `moderate`, `strong` ו-`null` (declared / validated) עוברים. עיקרון observed שגרסתו העדכנית מגיעה ל-`weak` ומעלה
+   ייכנס ל-Personal Fit גם אם מעולם לא הוצמד ל-StrategyVersion שה-Owner אישר, וה-UI לא מציג סטטוס אישור. לא פעיל
+   כיום (כל ה-observed הן `insufficient_evidence`). לבחון מחדש לפני שעיקרון observed כלשהו מגיע ל-`weak`.
+4. **עובדה — אין מנגנון Owner-override / הכרעה אנושית ל-verdicts של grounding.** שורות
+   `*_evidence_grounding_checks` שומרות `verdict` (`supported` / `unsupported`), `reason` ו-`checked_at` בלבד, בלי
+   actor ובלי מקור; גרסת remediation נרשמת `system_grounding_revalidation`; `grounding_judgments` דורשת
+   `model` / `contract` / `semantic_rule`; effective evidence נגזר מה-checks בלבד ו-`corrections` לא נקרא בגזירה.
+
 ### יומן וראיון — פערי backend שנמצאו בחקירת Frontend V1 יחידה 7 (נמצא 2026-09-30)
 תיעוד בלבד, **לא תוקן** (Backend Intelligence V1 קפוא). כל פריט דורש יחידה נפרדת. ממצאי Import נדחו
 ליחידה 7B.
@@ -613,7 +653,8 @@ fallback על unique violation). דורש יחידה נפרדת.
   ה-routers האמיתיים ו-remediation על DB (כלום לא נכתב בכשל טכני; גרסאות ישנות זהות byte-for-byte). תוקנה גם
   הערת-כותרת מיושנת בשני ה-planners. הבהרת contrast (`without` / `rather than`) הוקפאה והוטמעה בכלל הקנוני
   עם טסטים דטרמיניסטיים. **לא בוצע:** revalidation V3.2 אמיתית (שער מפוקח נפרד); אין שינוי ספי ביטחון, אין
-  rewrite. provenance ל-`no_op` — ר' OD-R9 מיד למטה.
+  rewrite. provenance ל-`no_op` — ר' OD-R9 מיד למטה. **עודכן (2026-10-02):** ה-revalidation האמיתית של V3.2 בוצעה
+  ב-2026-09-28 (ר' OD-R8).
 - **OD-R9 — Grounding Judgment Audit Ledger** (2026-09-27; `src/db/schema/grounding-judgments.ts`,
   `src/db/repositories/grounding-judgments.ts`, `src/lib/evidence/grounding-run.ts`, מיגרציה
   `0018_grounding_judgments`, `docs/data-model.md` §2): טבלת append-only `grounding_judgments` + enum
@@ -624,6 +665,7 @@ fallback על unique violation). דורש יחידה נפרדת.
   replay ו-conflict, כשל טכני (אפס כתיבות), rollback, stale, ריצה על כמה זהויות, ובידוד קריאה (שורת ביקורת
   עוינת לא משנה שום קריאה סמנטית; טסט ארכיטקטורה על מי רשאי לקרוא לטבלה). מיגרציה: fresh chain 0000 → 0018
   ו-upgrade 0017 → 0018 על clone של ה-DB האמיתי. **לא בוצע:** החלת 0018 על ה-DB האמיתי; ה-runner המפוקח.
+  **עודכן (2026-10-02):** 0018 הוחלה מאז על ה-DB האמיתי (ר' OD-R9).
 - **Grounding Semantics V3.1 — תנאי-קדם מהותיים + strict grounding tool + כשל טכני** (2026-09-25, OD-R7;
   `src/lib/ai/stance-rules.ts`, `src/lib/ai/dna-grounding.ts`, `docs/data-model.md` §2): הכלל הקנוני מרחיב ל-MATERIAL
   PRECONDITIONS (ארבעה שלבים, מקורות פסולים, שתי דוגמאות, citation-local) וסימטריה ל-supporting; ה-proposers לא ממלאים
@@ -631,20 +673,22 @@ fallback על unique violation). דורש יחידה נפרדת.
   מסמן `technicalFailure` (כולל כלי שגוי) ושני ה-remediation planners מחזירים `technical_failure` בלי checks/גרסה;
   שערי היצירה וה-carry מדווחים החרגה טכנית. טסטים: מקרי-תקיפה A–H + קצוות + fixture בצורת d5941418 דרך ה-pipeline
   האמיתי, strict tool, parser, כשל טכני ב-planners ובאינטגרציה (כלום לא נכתב). **לא בוצע:** revalidation V3.1
-  אמיתית (שער מפוקח נפרד); אין מיגרציה, אין שינוי ספי ביטחון, אין rewrite.
+  אמיתית (שער מפוקח נפרד); אין מיגרציה, אין שינוי ספי ביטחון, אין rewrite. **עודכן (2026-10-02):** ה-revalidation
+  האמיתית של V3.1 בוצעה (ר' OD-R7).
 - **Grounding Semantics V3 — סתירה דורשת ראיה חיובית** (2026-09-25, OD-R6; `src/lib/ai/stance-rules.ts`,
   `docs/data-model.md` §2, `docs/architecture.md` §2.11): כלל stance אחד משותף לשני ה-proposers ולשער ה-grounding;
   חוזים `*-v3-statements`; שני ה-remediation planners מעבירים `sourceKind` נכון (הצהרת החלטה לא מתויגת כתשובה);
   מסלולי ה-insert של remediation שומרים `provenance_json` (generator `*.remediateGrounding`, חוזה v3, model או
   `null`, `revalidatedVersionId`, `remediationReason`, `semanticRule`); טסטים: מקרי-תקיפה A–E + קצוות דרך ה-pipeline
   האמיתי עם שער ייחוס דטרמיניסטי, remediation append-only end-to-end ל-DNA ול-Strategy. **לא בוצע:** remediation
-  אמיתית (AI) על הנתונים האמיתיים — שער מפוקח נפרד; אין מיגרציה, אין שינוי ספי ביטחון, אין rewrite.
+  אמיתית (AI) על הנתונים האמיתיים — שער מפוקח נפרד; אין מיגרציה, אין שינוי ספי ביטחון, אין rewrite. **עודכן
+  (2026-10-02):** ה-remediation האמיתית של V3 בוצעה ב-2026-09-25 (ר' OD-R6).
 - **Evidence Reach V1 — הצהרות מזמן החלטה כראיה, עצמאות החלטה (OD-2), Learning→DNA (OD-3), provenance,
   שקיפות ראיות ו"מה הצעד הבא"** (2026-09-25, autonomous run; `docs/architecture.md` §2.11, `docs/data-model.md`
   §2/§3/§8): נמצא בריצה חיה (קריאה בלבד) — DNA reach = 0 (10/10 השערות ו-6/6 עקרונות נצפים insufficient; ה-AI
   ראה 2 מוצהרים + 4 מאומתים בלבד), 9 הצהרות החלטה (~2,300 תווים) שמעולם לא הוזנו, הסכמה ל-Learning יצרה השערה
   S=1 שמיד הוחרגה, `learning.generate` חוזר ייצר כפילויות. **נבנה:** Statement IDs + `evidence.decision_id/
-  decision_statement_kind` + `provenance_json` (מיגרציה `0017`, **scratch בלבד — לא הוחלה על ה-DB האמיתי**);
+  decision_statement_kind` + `provenance_json` (מיגרציה `0017`, **scratch בלבד — לא הוחלה על ה-DB האמיתי**; עודכן 2026-10-02: הוחלה מאז, אומת קריאה-בלבד);
   `decision-cases.ts` (OD-2) + `independence-policy-v2` (`unresolvedDecisionIds` review-only); prompts/tool-schemas
   של DNA/Strategy נצפית מצטטים Statement ID עם תוויות מקור וכללי OD-1; grounding מול הטקסט של המשקיע; `learning.agree`
   נושא החלטות-מקור (replay, advisory lock) ו-`learning.generate` מזהה לפי (investor, family); `evidence.reach` +
@@ -940,6 +984,11 @@ fallback על unique violation). דורש יחידה נפרדת.
   ה-observed הקיימים (כולל אי-ההסכמה שנמצאה על `d29a3897`); הרצת
   migration 0009; קריאות AI אמיתיות; שינוי ל-`dna.generate` הרגיל;
   Strategy UI; Decision Review; Behavioral/Decision Independence.
+
+  **עודכן (2026-10-02, אומת קריאה-בלבד):** ה-remediation האמיתי על עקרונות ה-observed רץ מאז בשלושה שערים
+  מפוקחים: V3 (2026-09-25, `173720c6` v2), V3.1 (`3653aeed` v4) ו-V3.2 (2026-09-28, run `e5e459aa`). לכל 8
+  עקרונות ה-observed של המשקיע האמיתי יש היום שורות grounding-check. `d29a3897` מוחרג כ-`unsupported`
+  ב-`173720c6` v2 — ר' "Strategy — הכרעות Owner וסגירת שרשרת ה-grounding (2026-10-02)".
 - **DNA Grounding Remediation — תשתית (2026-09-16); המיגרציה מוחלת וה-remediation
   האמיתי רץ בפועל על שתי ההשערות (תוקן במסמך 2026-09-22, אומת קריאה-בלבד)**
   (2026-09-16, Autonomous Unit 3, בהמשך ל-Autonomous Unit 1 [Evidence Grounding
