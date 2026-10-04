@@ -38,13 +38,17 @@ A personal AI copilot that learns how you invest — not what to buy. See
    ```
    npm run dev
    ```
-   Visit http://localhost:3000 and sign in.
+   Visit http://127.0.0.1:3000 and sign in. The server listens on
+   `127.0.0.1` only (`-H 127.0.0.1` in the `dev` and `start` scripts), so it
+   is not reachable from other devices on the network. If you previously
+   used http://localhost:3000, sign in again: the browser keeps cookies per
+   hostname.
 
 ## Scripts
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Start the dev server |
+| `npm run dev` | Start the dev server (bound to `127.0.0.1:3000`) |
 | `npm run build` | Production build |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |

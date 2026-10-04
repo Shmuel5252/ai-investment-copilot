@@ -632,6 +632,35 @@ fallback על unique violation). דורש יחידה נפרדת.
    on this date is already recorded."), לא לשגיאה גולמית. העמוד מציג אותה כסירוב שלא שמר דבר; ההודעה עצמה
    נשארת באנגלית.
 
+### Production Readiness Unit 2C — פגיעויות Next.js שנדחו ע"י upstream, וחוב תלויות dev (נמצא 2026-10-04)
+- **פגיעויות שלא תוקנו ב-16.3.8:** בגרסת האבטחה של 2026-09-30 Next.js דחה שתי
+  פגיעויות (אחת critical, אחת high) לתיאום upstream; הן **אינן** מתוקנות ב-`16.3.8`
+  ואינן מופיעות עדיין ב-`npm audit`. **הקלה כרגע:** `dev` ו-`start` נקשרים ל-`127.0.0.1`
+  בלבד (`-H 127.0.0.1` ב-`package.json`), כך שהשרת אינו נגיש מהרשת.
+- **פעולה:** לשדרג `next` ו-`eslint-config-next` ברגע שמשתחררת גרסת האבטחה הבאה של
+  Next.js עם התיקונים, ואז להריץ מחדש את אימות Unit 2C (typecheck, lint, build, חבילת
+  הטסטים המלאה מול DB טסטים מורשה, הוכחת הקשירה ל-loopback ובדיקת עשן).
+- **חוב נפרד — ממצאי `npm audit` ב-dev בלבד (14 ממצאים, 0 critical):** `undici`,
+  `js-yaml`, `vitest`/`@vitest/mocker` (יש תיקון שאינו שובר), ושרשראות
+  `eslint-config-next` (`brace-expansion`/`braces`/`micromatch`/`fast-glob`) ו-`drizzle-kit`
+  (`esbuild`) שאין להן תיקון שמיש (npm מציע downgrade). נדרשת יחידת hygiene
+  נפרדת לתלויות; לא נעשה ב-Unit 2C.
+
+### בדיקות — `getGroundingChecksForDnaHypothesisVersion` ללא ORDER BY; טסט משווה סדר (נמצא 2026-10-04)
+- **מה:** `src/db/repositories/evidence.ts:70-77` מחזיר שורות `dna_evidence_grounding_checks` בלי `ORDER BY`, ושתי שורות שנכתבו יחד חולקות `checked_at` (transaction time) ו-`id` אקראי. `tests/integration/grounding-context-v3-2.test.ts:181,207` משווים את התוצאה ב-`toEqual` על מערך, כלומר דורשים סדר. נצפה פעם אחת בריצה סדרתית מלאה (1668/1669), עבר 10/10 בבידוד.
+- **סיווג:** תלות סדר קיימת מראש, לא קשורה ל-Unit 2C (הקוד והטסט קודמים ל-`79cdaea`).
+- **כיוון תיקון (יחידה נפרדת, לא בוצע):** מיון דטרמיניסטי בטסט (למשל לפי `id`) או `ORDER BY checked_at, id` ב-repository. אם הצרכנים בקוד הייצור תלויים בסדר — לבדוק לפני שינוי ה-repository.
+
+### חבילת האינטגרציה אינה בטוחה להרצה מקבילית מול DB טסטים אחד (נמצא 2026-10-04)
+- **מה:** `vitest run` מריץ קבצים במקביל (אין `fileParallelism`/`pool` ב-`vitest.config.ts`), וכל קבצי `tests/integration/**` חולקים DB טסטים אחד בלי בידוד לכל קובץ. בהרצה מקבילית מלאה: 6 כשלים ו-20 דילוגים (timeouts של hook/טסט, והשוואות ספירת טבלה שלמה, למשל `decision-monitoring.test.ts:253`, `decision-follow-through-adversarial.test.ts:247`). בהרצה סדרתית (`--no-file-parallelism`): 1668/1669.
+- **למה חשוב:** הרצה "רגילה" של `npm test` עלולה להיכשל בלי באג בקוד.
+- **כיוון (יחידה נפרדת, לא בוצע):** לקבע סדרתיות לקבצי האינטגרציה (project נפרד בהגדרות Vitest או דגל ב-script), או בידוד DB/סכמה לכל קובץ; ולתעד ב-README באיזו צורה רצה ה-baseline.
+
+### בקשת Owner — השלמה אוטומטית לטיקר בפתיחת תיק/רעיון (נמצא 2026-10-04)
+- **מה:** בשדה "טיקר" (תיק חדש / רעיון) להציע טיקרים ושם חברה תוך כדי הקלדה.
+- **לפני בנייה להחליט:** מקור הנתונים (חיפוש סמלים של FMP עם debounce ו-cache, מול רשימת סמלים מקומית שמתעדכנת מדי פעם), מגבלות קצב של FMP, ומה מוצג כשאין התאמה.
+- **לא נבנה:** מחוץ ל-Production Readiness; יחידת פיצ'ר נפרדת אחרי סגירת Target A.
+
 ## נבנה
 - **Frontend V1, יחידה 1 — Design system + App shell + RTL foundation** (2026-09-30): `dir="rtl"`/`lang="he"` פעם
   אחת ב-`src/app/layout.tsx`, והעמודים לא עוטפים את עצמם יותר; shell משותף (`src/components/shell/`: סרגל צד בקצה
