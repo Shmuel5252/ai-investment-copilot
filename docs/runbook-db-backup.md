@@ -108,10 +108,11 @@ work tree, or appears to be **cloud-synchronised**. Evidence checked: the
 segments, and cloud placeholder file attributes. `-AllowCloudSyncedDestination`
 overrides that refusal and must only be used by an explicit Owner decision.
 
-**Nothing that existed before a run is ever deleted from the backup root.**
-There is no retention or pruning mode; old backups (including the two
-historical dumps in `C:\dev-private\ai-investment-copilot-backups\`) are never
-touched. The only deletions are a failed run's own unpublished files (above).
+**`db-backup.ps1` itself never deletes anything that existed before a run.**
+It has no retention or pruning mode; the only deletions are a failed run's own
+unpublished files (above). Retention exists only in the scheduled orchestrator
+(`scripts/backup-scheduled.ps1`, next section), which never touches the two
+historical dumps in `C:\dev-private\ai-investment-copilot-backups\`.
 
 ## Verify
 
@@ -185,6 +186,171 @@ structural facts.
 
 If cleanup fails the script says so prominently and does nothing broader; drop
 the leftover throwaway database by hand only after checking its name.
+
+## Scheduled backup with an encrypted off-machine copy (Unit 5)
+
+Production Readiness Unit 5 puts a schedule, an **encrypted** copy outside this
+machine, and local retention around the commands above. Two scripts:
+
+- [`scripts/backup-scheduled.ps1`](../scripts/backup-scheduled.ps1) — the
+  orchestrator. It calls `db-backup.ps1` **unchanged** (Backup, Verify,
+  RestoreTest) and never weakens its guards.
+- [`scripts/register-backup-task.ps1`](../scripts/register-backup-task.ps1) —
+  registers the Windows scheduled task (run once, by the Owner).
+
+### What happens, and when
+
+The task "AI Investment Copilot backup" runs **daily at 03:00** as the current
+user, **only while the user is logged on** (the database lives in the user's
+Docker). If the machine was off or asleep at 03:00 the run starts as soon as it
+is available again ("start when available"). One run:
+
+1. `db-backup.ps1 -Mode Backup`, then `-Mode Verify` on the new set. Any FAIL
+   (including the active-session gate when the app or any client is open) ends
+   the run: nothing else happens that day.
+2. **Sundays** (or `-WithRestoreTest`): `-Mode RestoreTest` on the new set. A
+   failed RestoreTest makes the run FAIL but the new backup is still copied
+   off-machine.
+3. The set (dump + `.sha256` + `.meta.json`) is bundled with `tar` in a
+   **non-cloud** temp folder (`C:\dev-private\backup-tmp\run-<guid>`), encrypted
+   with GnuPG symmetric **AES256**, and written to the OneDrive backups folder
+   (`%OneDrive%\ai-investment-copilot-backups`) as `<set name>.tar.gpg.partial`,
+   renamed to `<set name>.tar.gpg` last.
+4. The archive is **verified from the OneDrive file**: decrypted in the temp
+   folder, untarred, and all three files must be byte-identical to the local set
+   (and the dump's SHA256 must equal its sidecar).
+5. **Local retention:** keep the newest **30 complete sets** in
+   `C:\dev-private\backups`; delete older ones. Only when step 4 passed. A set is
+   complete when the dump and both sidecars exist with a valid UTC timestamp;
+   incomplete sets, `.partial` files, logs and any name that does not match the
+   exact managed pattern
+   `ai_investment_copilot_<yyyymmddThhmmssZ>_pg<N>.dump[.sha256|.meta.json]` are
+   never deleted. **OneDrive archives are never pruned automatically**, and
+   `C:\dev-private\ai-investment-copilot-backups` (the historical dumps) is never
+   touched.
+6. The temp plaintext folder is deleted in a `finally` path; failure to delete it
+   makes the run FAIL and the log names the folder.
+
+Exit code `0` only if every step passed.
+
+**No plaintext real data ever enters a cloud-synced folder.** Only the `.tar.gpg`
+is written there. The temp folder is checked on every run: outside the
+repository, outside any Git work tree, not cloud-synced. In production the
+archive folder is **required** to be cloud-synced (so a misconfigured local
+folder cannot silently stand in for the off-machine copy).
+
+**The passphrase** is never on a command line, in output, in a log, or in any
+file other than the DPAPI store. GnuPG reads it from stdin
+(`--passphrase-fd 0 --pinentry-mode loopback --no-symkey-cache`). The
+orchestrator's SelfTest includes a static check (with negative tests) that the
+passphrase variable never reaches a command line, an interpolated string, a
+logger or a process argument string.
+
+### One-time setup (the Owner, in his own terminal)
+
+Run from the repository root.
+
+1. **Choose the passphrase and save it in the password manager first.** At least
+   20 printable ASCII characters (a password-manager generated one is ideal).
+   Without it the archives cannot be opened by anyone, ever.
+2. Store it for the scheduled task (DPAPI, current Windows user; you type it
+   twice, nothing is echoed):
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup-scheduled.ps1 -Mode SetupPassphrase
+   ```
+   It prints only `stored`. The file is `C:\dev-private\backup-secrets\passphrase.dpapi`
+   (outside the repo, not cloud-synced, readable only by this Windows user on this
+   machine).
+3. Register the task:
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1
+   ```
+   It prints the definition and starts nothing. (`-PrintOnly` shows it without
+   registering.)
+4. Copy `.env` into the password manager yourself (it is **not** in any backup).
+5. Optional first run (the app must be closed):
+   `Start-ScheduledTask -TaskName 'AI Investment Copilot backup'`, then read the
+   newest log (below) and check the `.tar.gpg` appeared in OneDrive.
+
+Re-run step 2 with `-ReplaceExisting` to change the passphrase. Archives written
+earlier still need the **old** passphrase; keep it in the password manager until
+those archives are gone or re-encrypted by hand.
+
+### Restore from OneDrive on a NEW machine (plain GnuPG, no script)
+
+Recovery does not depend on `backup-scheduled.ps1`. You need: the `.tar.gpg` file
+(from the OneDrive folder, any machine signed in to it), the passphrase from the
+password manager, and any GnuPG (Git for Windows bundles one at
+`C:\Program Files\Git\usr\bin\gpg.exe`; Gpg4win; `apt install gnupg`;
+`brew install gnupg`).
+
+```powershell
+# 1. decrypt (gpg asks for the passphrase; type or paste it from the password manager)
+gpg --decrypt --output set.tar ai_investment_copilot_<yyyymmddThhmmssZ>_pg16.tar.gpg
+# 2. unpack: the dump, its .sha256 and its .meta.json
+tar -xf set.tar
+# 3. check the dump against its sidecar (must equal the hash in the .sha256 file)
+Get-FileHash -Algorithm SHA256 ai_investment_copilot_<...>_pg16.dump
+#    (Linux/macOS: sha256sum -c ai_investment_copilot_<...>_pg16.dump.sha256)
+```
+
+Then follow "Real disaster restore" below from step 6 with that `.dump`, into a
+PostgreSQL **16** container (the metadata names the version). The application
+also needs `.env` (`DATABASE_URL`, `POSTGRES_PASSWORD`, `SESSION_SECRET`,
+`ANTHROPIC_API_KEY`, `FMP_API_KEY`) from the password manager, and the code from
+GitHub. (On Git for Windows' MSYS `gpg`, a Windows path given to `--homedir` is
+misread; this plain use does not need `--homedir` at all.)
+
+### Where things are
+
+| What | Where |
+|---|---|
+| Local backup sets | `C:\dev-private\backups` (newest 30) |
+| Encrypted off-machine copies | `%OneDrive%\ai-investment-copilot-backups\<set>.tar.gpg` (all, never pruned) |
+| Run logs | `C:\dev-private\backups\logs\backup-<yyyyMMdd-HHmmss>.log` |
+| Passphrase store (DPAPI) | `C:\dev-private\backup-secrets\passphrase.dpapi` |
+| Plaintext scratch (deleted every run) | `C:\dev-private\backup-tmp\run-<guid>` |
+| Task | Task Scheduler, "AI Investment Copilot backup" (`Get-ScheduledTaskInfo` shows the last result) |
+
+Logs hold only step names, PASS/FAIL, counts, sizes, hashes and paths — never the
+passphrase or row data. **Raw `db-backup.ps1` output is deliberately not
+logged** (a failure can quote data); on a FAILED step re-run that step by hand to
+see its output. Logs are not pruned automatically (a few KB each). The last line
+of a run is `RUN end (<seconds>s): PASS` or `FAIL`; a failed run says which step
+failed.
+
+### Manual runs
+
+```powershell
+# pure checks, no Docker/DB/writes (must be all PASS)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup-scheduled.ps1 -Mode SelfTest
+# a real run now, with the restore test, listing (not performing) retention deletions
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup-scheduled.ps1 -Mode Run -WithRestoreTest -DryRun
+# a real run now
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup-scheduled.ps1 -Mode Run
+```
+
+### What this does NOT cover
+
+- **`.env` and any secret** — not backed up by anything here (the Owner keeps `.env`
+  in the password manager). The code is on GitHub.
+- **Passphrase loss** — archives are unrecoverable without it. There is no escrow.
+- **Loss of the Windows profile / a new machine** — the DPAPI store is bound to
+  this Windows user on this machine, so a new machine needs `SetupPassphrase`
+  again (with the same passphrase from the password manager).
+- **OneDrive-side failures** — OneDrive can sync a deletion or a corrupted file;
+  its version history / recycle bin are the only protection (no immutable copy).
+  The run verifies the file it wrote at write time, not later.
+- **Failure alerts** — nothing notifies anyone. A failed run is visible only in the
+  log and in Task Scheduler's "Last Run Result". Check the newest log now and then.
+- **Runs while the app is open** — the active-session gate refuses to back up while
+  any client is connected, so a 03:00 run with the dev server up produces no
+  backup that day. The task runs only while the user is logged on.
+- **Local dumps are plaintext on disk** (`C:\dev-private\backups`, and the two
+  historical dumps). Only the off-machine copy is encrypted. Whether the disk is
+  encrypted (BitLocker) was not checked.
+- **RPO** is up to 24 hours (longer if runs are skipped as above); **RTO** is not
+  defined or rehearsed on a second machine.
 
 ## Real disaster restore (documented only — not automated, never run by the script)
 
@@ -271,11 +437,12 @@ Every SQL statement below runs through the maintenance database `postgres`
 Data written after the chosen backup is lost; the backup's `createdAtUtc` is the
 recovery point.
 
-## Not solved by this unit (Owner decisions)
+## Still open after Unit 5 (Owner decisions)
 
-- automated schedule (nothing runs unless started by hand);
-- off-machine copy (backups live on the same disk as `pgdata/`);
-- encryption at rest of the dump files;
-- retention policy (no pruning exists);
+Solved since Unit 2A: the automated schedule, the off-machine copy, encryption of
+that copy and local retention (section above). Still open:
+
+- failure notification (nothing alerts on a failed run);
+- encryption at rest of the local dump files;
 - RPO (acceptable data loss);
-- RTO (acceptable recovery time).
+- RTO (acceptable recovery time) and a rehearsed restore on a second machine.
