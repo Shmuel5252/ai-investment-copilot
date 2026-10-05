@@ -18,6 +18,21 @@ import {
 const authorized = inject("testDatabase");
 const url = process.env.DATABASE_URL!;
 const client = postgres(url, { max: 2 });
+
+// Every probe database a test here creates is recorded BEFORE it is created.
+// A test's own `finally` does not run when the test times out and the worker
+// ends first (a loaded machine once left two probe databases behind), so
+// afterAll drops whatever was recorded — by exact name, nothing else.
+const probeDatabases: string[] = [];
+afterAll(async () => {
+  if (probeDatabases.length === 0) return;
+  const maintenance = postgres(sibling("postgres"), { max: 1, connect_timeout: 5 });
+  try {
+    for (const name of probeDatabases) await maintenance.unsafe(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`).catch(() => {});
+  } finally {
+    await maintenance.end({ timeout: 2 });
+  }
+}, 30_000);
 function runDropTool(name: string): Promise<{ code: number | null; out: string }> {
   const env = { ...process.env, DATABASE_URL: url } as NodeJS.ProcessEnv; // the pinned test URL: same server, never the application database
   return new Promise((resolve, reject) => {
@@ -79,6 +94,7 @@ describe("the authorized test database", () => {
 
   it("E. a database whose NAME says test/scratch but that carries no marker is refused end to end (created here, dropped in finally)", async (ctx) => {
     const name = `aic_test_scratch_unmarked_${Date.now()}`;
+    probeDatabases.push(name);
     const maintenance = postgres(sibling("postgres"), { max: 1, connect_timeout: 5 });
     try {
       try {
@@ -103,6 +119,7 @@ describe("the authorized test database", () => {
 
   it("db:test:drop refuses a database without the marker (it still exists afterwards) and drops one that has it", async (ctx) => {
     const name = `aic_test_drop_probe_${Date.now()}`;
+    probeDatabases.push(name);
     const maintenance = postgres(sibling("postgres"), { max: 1, connect_timeout: 5 });
     const exists = async () => (await maintenance`select 1 from pg_database where datname = ${name}`).length === 1;
     try {

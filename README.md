@@ -79,6 +79,15 @@ database. They run only against a database created for tests:
 3. `npm test` — pending migrations are applied to the test database
    automatically; the application `DATABASE_URL` is never used.
 
+How the suite runs (`vitest.config.ts`, two Vitest projects, no flags needed):
+**unit** tests (`tests/unit/**`) run in parallel and touch no database;
+**integration** tests (`tests/integration/**`) run **one file at a time**,
+because they all share one test database and some assert on whole-table counts.
+`npm run test:unit` runs only the unit project and needs no database. Do not
+add `--no-file-parallelism` to make a run pass — the integration project is
+already serial; a failure there is a real failure or a timeout from machine
+load (rerun the file alone to tell them apart).
+
 Without `TEST_DATABASE_URL`, unit tests still run and DB-backed tests **fail
 before writing anything**. A `TEST_DATABASE_URL` that points at the same
 database as `DATABASE_URL`, or at a database without the marker, aborts the

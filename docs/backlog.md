@@ -649,7 +649,7 @@ fallback על unique violation). דורש יחידה נפרדת.
 - **סיווג:** תלות סדר קיימת מראש, לא קשורה ל-Unit 2C (הקוד והטסט קודמים ל-`79cdaea`).
 - **כיוון תיקון (יחידה נפרדת, לא בוצע):** מיון דטרמיניסטי בטסט (למשל לפי `id`) או `ORDER BY checked_at, id` ב-repository. אם הצרכנים בקוד הייצור תלויים בסדר — לבדוק לפני שינוי ה-repository.
 
-### חבילת האינטגרציה אינה בטוחה להרצה מקבילית מול DB טסטים אחד (נמצא 2026-10-04)
+### ~~חבילת האינטגרציה אינה בטוחה להרצה מקבילית מול DB טסטים אחד (נמצא 2026-10-04)~~ — נבנה (Unit 4/D, 2026-10-05; ר' "נבנה")
 - **מה:** `vitest run` מריץ קבצים במקביל (אין `fileParallelism`/`pool` ב-`vitest.config.ts`), וכל קבצי `tests/integration/**` חולקים DB טסטים אחד בלי בידוד לכל קובץ. בהרצה מקבילית מלאה: 6 כשלים ו-20 דילוגים (timeouts של hook/טסט, והשוואות ספירת טבלה שלמה, למשל `decision-monitoring.test.ts:253`, `decision-follow-through-adversarial.test.ts:247`). בהרצה סדרתית (`--no-file-parallelism`): 1668/1669.
 - **למה חשוב:** הרצה "רגילה" של `npm test` עלולה להיכשל בלי באג בקוד.
 - **כיוון (יחידה נפרדת, לא בוצע):** לקבע סדרתיות לקבצי האינטגרציה (project נפרד בהגדרות Vitest או דגל ב-script), או בידוד DB/סכמה לכל קובץ; ולתעד ב-README באיזו צורה רצה ה-baseline.
@@ -693,7 +693,7 @@ fallback על unique violation). דורש יחידה נפרדת.
 5. **`interview.start` מציג הודעה כללית** — `interview-view.tsx` מציג `t.startFailed` ולא את הודעת השרת, כך
    שהודעת ה-timeout של Unit 3B לא מגיעה למשתמש בעמוד הזה (בשאר העמודים היא מוצגת דרך `ActionError`).
 
-### בדיקות — ניקוי DBs בטסט השומר אינו עמיד ל-timeout (נמצא 2026-10-05)
+### ~~בדיקות — ניקוי DBs בטסט השומר אינו עמיד ל-timeout (נמצא 2026-10-05)~~ — נבנה (Unit 4/D, 2026-10-05; ר' "נבנה")
 - **מה:** `tests/integration/test-database-guard.test.ts` יוצר DBs זמניים (`aic_test_scratch_unmarked_*`, `aic_test_drop_probe_*`) ומוחק אותם ב-`finally`. כשהטסט נקטע ב-timeout (ריצה עמוסה), הניקוי לא רץ וה-DBs נשארים. קרה פעמיים: 2026-10-04 (2C) ו-2026-10-05 (3B); בכל פעם נמחקו ידנית באישור Owner.
 - **כיוון (לא בוצע):** ניקוי עמיד, למשל `afterAll` או global teardown שמוחק DBs עם הקידומות האלה שנוצרו בריצה הנוכחית.
 
@@ -706,6 +706,7 @@ fallback על unique violation). דורש יחידה נפרדת.
 - **כיוון:** פשרה מכוונת לשימוש אינטראקטיבי. לשקול מחדש אם כשלי עומס יהפכו לבעיה בפועל.
 
 ## נבנה
+- **Unit 4/D — תשתית בדיקות: ברירת מחדל סדרתית לאינטגרציה וניקוי עמיד** (Unit 4/D, 2026-10-05): (1) `vitest.config.ts` מוגדר כשני projects — `unit` (מקבילי, בלי DB) ו-`integration` (`fileParallelism: false`) — ו-`npm test` ללא דגלים עובר במלואו (1685/1685). ה-`globalSetup` נשאר בשורש בלבד: projects עם `extends` היו מריצים אותו פעם לכל project, וההרצה השנייה הייתה דוחה את ה-URL שהוצמד כ"בסיס הנתונים של האפליקציה"; לכן ה-projects חוזרים על שאר האפשרויות. README, סעיף Testing, מתאר איך החבילה רצה. (2) `tests/integration/test-database-guard.test.ts` רושם כל DB זמני שהוא יוצר לפני היצירה ו-`afterAll` מוחק אותם לפי שם מדויק, כך שנקיטה ב-timeout כבר לא משאירה DBs. נסגרו גם הפריטים "ניקוי DBs בטסט השומר אינו עמיד ל-timeout" ו"חבילת האינטגרציה אינה בטוחה להרצה מקבילית".
 - **Unit 4/C — טסט אישורי Strategy דטרמיניסטי** (Unit 4/C, 2026-10-05): `tests/integration/strategy-repository.test.ts` מפוצל לשניים. (1) טסט דטרמיניסטי שמכניס את אותו `version_number` פעמיים ומוודא שהשגיאה האמיתית של Postgres מסווגת ע"י `isUniqueViolation` כאילוץ `strategy_versions_investor_id_version_number_unique` — לא תלוי בחפיפה בין שתי קריאות. (2) טסט האישורים ה"מקבילים" מוודא את האינווריאנט שמתקיים בכל תזמון: לפחות קריאה אחת מצליחה, כל כשל הוא בדיוק הפרת האילוץ, מספרי הגרסאות שהוחזרו שונים, ואין מספר גרסה כפול ב-DB. ההגנה שהטסט נתן (סיווג שגיאה אמיתי + אין כפילות) נשמרה. אומת: 3 הרצות רצופות.
 - **Unit 4/B — טסט grounding דטרמיניסטי** (Unit 4/B, 2026-10-05): `tests/integration/grounding-context-v3-2.test.ts` משווה עכשיו שורות `dna_evidence_grounding_checks` אחרי מיון לפי `id` (`checksOf`), במקום להסתמך על סדר שה-repository לא מבטיח. ה-repository לא שונה: הצרכנים בקוד הייצור (`confidence-recalculation.ts`, `independence-recalculation.ts`, `partitionEvidenceForCounting`) בונים קבוצה (`Set`) מהשורות ולכן אינם תלויים בסדר. אומת: 3 הרצות רצופות של הקובץ.
 - **Production Readiness Unit 3B — timeout מפורש ו-retry חסום לקריאות AI** (Unit 3B, 2026-10-05; חריגה צרה
