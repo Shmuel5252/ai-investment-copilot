@@ -710,7 +710,7 @@ fallback על unique violation). דורש יחידה נפרדת.
   מהקפאת Backend Intelligence V1 באישור Owner): לא הוגדר timeout/retry באף קריאה, ולכן חלו ברירות המחדל של
   ה-SDK (10 דקות לניסיון, 2 retries, ~30 דקות במקרה הגרוע; `dna.generate` אמיתי נתקע פעם ~37 דקות). ב-
   `src/lib/ai/client.ts`: `AI_TIMEOUT_MS = 300_000` ו-`AI_MAX_RETRIES = 1` על ה-client היחיד (~10 דקות במקרה
-  הגרוע). timeout מגיע למשתמש כ-"AI call timed out after 5 minutes; …" עם מה שכבר נשמר לכל procedure
+  הגרוע). timeout מגיע למשתמש כ-"AI call timed out (limit: 5 minutes per attempt, 1 retry); …" עם מה שכבר נשמר לכל procedure
   (`aiTimeoutMessage`, דרך `errorFormatter` ב-`src/server/trpc.ts`). טסט: `tests/unit/ai-timeout.test.ts`.
   **לא שונה:** prompts, מודל, סכמות פלט, persistence, מיגרציות. לא היה פריט פתוח קודם ל-timeout ב-backlog.
   פתוח: ר' "קריאות AI — מה שנשאר פתוח אחרי Unit 3B" למעלה.
