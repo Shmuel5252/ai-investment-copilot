@@ -159,7 +159,9 @@ describe("V3.2 remediation of an identity checked under an earlier contract", ()
     const sellRow = raw.find((r) => r.interviewAnswerId === w.sell.id)!;
     // the earlier contract confirmed BOTH citations against v1
     await insertGroundingChecksForVersion(db, v1.id, [{ evidenceId: holdRow.id, verdict: "supported", reason: "earlier contract" }, { evidenceId: sellRow.id, verdict: "supported", reason: "earlier contract" }]);
-    const checksV1 = await getGroundingChecksForDnaHypothesisVersion(db, v1.id);
+    // The repository read has no ORDER BY (no consumer depends on order), so compare sorted by id.
+    const checksOf = async (versionId: string) => (await getGroundingChecksForDnaHypothesisVersion(db, versionId)).sort((a, b) => a.id.localeCompare(b.id));
+    const checksV1 = await checksOf(v1.id);
     expect(checksV1).toHaveLength(2);
 
     // production-shaped inputs: texts and questions from the persisted rows
@@ -178,7 +180,7 @@ describe("V3.2 remediation of an identity checked under an earlier contract", ()
     expect(failed.action).toBe("technical_failure");
     expect("checks" in failed).toBe(false);
     expect(await versionRows()).toEqual(versionsBefore);
-    expect(await getGroundingChecksForDnaHypothesisVersion(db, v1.id)).toEqual(checksV1);
+    expect(await checksOf(v1.id)).toEqual(checksV1);
 
     // (b) V3.2 verdicts: the hold answer establishes every component; the sale answer never establishes the belief
     const seen: GroundInput[] = [];
@@ -204,13 +206,13 @@ describe("V3.2 remediation of an identity checked under an earlier contract", ()
     expect(v2.provenanceJson).toMatchObject({ generator: "dna.remediateGrounding", model: "claude-sonnet-5", promptContracts: ["evidence-grounding-v3-2-statements"], semanticRule: "grounding-semantics-v3-2", revalidatedVersionId: v1.id });
     // append only: v1, its checks and every raw row are byte-identical; no evidence row was added
     expect(await db.query.dnaHypothesisVersions.findFirst({ where: (v, { eq: e }) => e(v.id, v1.id) })).toEqual(v1);
-    expect(await getGroundingChecksForDnaHypothesisVersion(db, v1.id)).toEqual(checksV1);
+    expect(await checksOf(v1.id)).toEqual(checksV1);
     expect(await getEvidenceForDnaHypothesis(db, hypothesis.id)).toEqual(raw);
     expect(await evidenceRowsOf(w.investorId)).toBe(evidenceCount);
     // the new version's effective evidence is the complete match only; stances were never flipped
     const effective = await getEffectiveEvidenceForDnaHypothesisVersion(db, hypothesis.id, v2.id);
     expect(effective.map((e) => [e.id, e.stance])).toEqual([[holdRow.id, "supporting"]]);
-    const checksV2 = await getGroundingChecksForDnaHypothesisVersion(db, v2.id);
+    const checksV2 = await checksOf(v2.id);
     expect(checksV2.map((c) => [c.evidenceId, c.verdict]).sort()).toEqual([[holdRow.id, "supported"], [sellRow.id, "unsupported"]].sort());
     expect(JSON.stringify({ v2, checksV2 })).not.toContain(Q_SELL); // the question is in no version and no check row
 
