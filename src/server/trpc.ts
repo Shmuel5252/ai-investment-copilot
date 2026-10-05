@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { getSession } from "./auth/session";
-import { aiTimeoutMessage } from "@/lib/ai/client";
+import { aiTimeoutMessage } from "@/lib/ai/timeout";
 
 export async function createTRPCContext() {
   const session = await getSession();
