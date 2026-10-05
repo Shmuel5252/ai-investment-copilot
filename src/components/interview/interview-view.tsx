@@ -68,6 +68,9 @@ export function InterviewView({ history, actions }: { history: Loadable<{ transa
   const [phase, setPhase] = useState<"orientation" | "active" | "done" | "unconfirmed">("orientation");
   const [lastStep, setLastStep] = useState<"saved" | "skipped">("skipped");
   const [startState, setStartState] = useState<{ pending: boolean; error: null | "no_eligible" | "failed" }>({ pending: false, error: null });
+  // The server's own message for a failed start (e.g. the AI timeout text); the
+  // Hebrew generic line stays the title and the fallback when there is none.
+  const [startMessage, setStartMessage] = useState<string | null>(null);
   const [session, setSession] = useState<InterviewSession | null>(null);
   const [index, setIndex] = useState(0);
   const [draft, setDraft] = useState("");
@@ -80,6 +83,7 @@ export function InterviewView({ history, actions }: { history: Loadable<{ transa
   async function begin() {
     await guard(async () => {
       setStartState({ pending: true, error: null });
+      setStartMessage(null);
       try {
         const next = await actions.start();
         setSession(next);
@@ -90,6 +94,7 @@ export function InterviewView({ history, actions }: { history: Loadable<{ transa
         setStartState({ pending: false, error: null });
       } catch (e) {
         setStartState({ pending: false, error: codeOf(e) === "BAD_REQUEST" ? "no_eligible" : "failed" });
+        setStartMessage(messageOf(e).trim() || null);
       }
     }, "start");
   }
@@ -126,6 +131,7 @@ export function InterviewView({ history, actions }: { history: Loadable<{ transa
     setSession(null);
     setPreviousDraft(null);
     setStartState({ pending: false, error: null });
+    setStartMessage(null);
     setPhase("orientation");
   }
 
@@ -170,7 +176,7 @@ export function InterviewView({ history, actions }: { history: Loadable<{ transa
   return (
     <PageShell width="narrow">
       <PageHeader title={t.title} description={t.description} />
-      {phase === "orientation" && <Orientation history={history} startState={startState} onStart={() => void begin()} previousDraft={previousDraft} />}
+      {phase === "orientation" && <Orientation history={history} startState={startState} startMessage={startMessage} onStart={() => void begin()} previousDraft={previousDraft} />}
       {phase === "active" && session && (
         <QuestionScreen
           key={`${session.sessionId}:${index}`}
@@ -200,11 +206,13 @@ export function InterviewView({ history, actions }: { history: Loadable<{ transa
 function Orientation({
   history,
   startState,
+  startMessage,
   onStart,
   previousDraft,
 }: {
   history: Loadable<{ transactionCount: number }>;
   startState: { pending: boolean; error: null | "no_eligible" | "failed" };
+  startMessage: string | null;
   onStart: () => void;
   previousDraft: string | null;
 }) {
@@ -234,7 +242,8 @@ function Orientation({
                 {t.startButton}
               </Button>
             </div>
-            {startState.error === "failed" && <Notice tone="negative">{t.startFailed}</Notice>}
+            {startState.error === "failed" &&
+              (startMessage ? <ActionError title={t.startFailed} message={startMessage} /> : <Notice tone="negative">{t.startFailed}</Notice>)}
           </Card>
         )
       }

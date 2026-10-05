@@ -690,7 +690,7 @@ fallback על unique violation). דורש יחידה נפרדת.
    שגיאה (fail closed): grounding שנכשל מסומן `technicalFailure` ולא נספר; identity שנכשל נופל ל**זהות חדשה**,
    כך ש-timeout יכול לייצר השערה/עיקרון כפולים. ב-`learning.agree`, אם כל בדיקות ה-grounding נכשלו טכנית, המשתמש
    מקבל "None of the cited decisions' own statements ground this insight" — לא הודעת timeout.
-5. **`interview.start` מציג הודעה כללית** — `interview-view.tsx` מציג `t.startFailed` ולא את הודעת השרת, כך
+5. ~~**`interview.start` מציג הודעה כללית**~~ — נבנה (Unit 4/F, 2026-10-05; ר' "נבנה"). המקור: — `interview-view.tsx` מציג `t.startFailed` ולא את הודעת השרת, כך
    שהודעת ה-timeout של Unit 3B לא מגיעה למשתמש בעמוד הזה (בשאר העמודים היא מוצגת דרך `ActionError`).
 
 ### ~~בדיקות — ניקוי DBs בטסט השומר אינו עמיד ל-timeout (נמצא 2026-10-05)~~ — נבנה (Unit 4/D, 2026-10-05; ר' "נבנה")
@@ -706,6 +706,7 @@ fallback על unique violation). דורש יחידה נפרדת.
 - **כיוון:** פשרה מכוונת לשימוש אינטראקטיבי. לשקול מחדש אם כשלי עומס יהפכו לבעיה בפועל.
 
 ## נבנה
+- **Unit 4/F — הודעת השרת בכשל התחלת ראיון** (Unit 4/F, 2026-10-05; תיקון באג באישור Owner): כשל ב-`interview.start` הציג רק את הטקסט הכללי `t.startFailed`, ולכן הודעת ה-timeout של Unit 3B לא הגיעה למשתמש. `interview-view.tsx` שומר עכשיו את הודעת השרת ומציג אותה דרך `ActionError` (הטקסט העברי נשאר ככותרת), ובלי הודעה חוזר ל-`Notice` עם הטקסט העברי בלבד. טסטים ב-`tests/unit/interview-view.test.tsx`. ההודעה מוצגת כפי שהיא (אנגלית, LTR) כמו בשאר העמודים.
 - **Unit 4/E — `trpc.ts` לא תלוי יותר בלקוח ה-AI** (Unit 4/E, 2026-10-05): `aiTimeoutMessage`, מפת "מה נשמר" והקבועים `AI_TIMEOUT_MS`/`AI_MAX_RETRIES` עברו ל-`src/lib/ai/timeout.ts` (בלי תופעות לוואי בייבוא: בלי בדיקת מפתח ובלי בניית לקוח). `src/server/trpc.ts` מייבא משם; `src/lib/ai/client.ts` מייבא את הקבועים וממשיך לייצא אותם. ההתנהגות ללא שינוי; `tests/unit/ai-timeout.test.ts` עובר כמות שהוא.
 - **Unit 4/D — תשתית בדיקות: ברירת מחדל סדרתית לאינטגרציה וניקוי עמיד** (Unit 4/D, 2026-10-05): (1) `vitest.config.ts` מוגדר כשני projects — `unit` (מקבילי, בלי DB) ו-`integration` (`fileParallelism: false`) — ו-`npm test` ללא דגלים עובר במלואו (1685/1685). ה-`globalSetup` נשאר בשורש בלבד: projects עם `extends` היו מריצים אותו פעם לכל project, וההרצה השנייה הייתה דוחה את ה-URL שהוצמד כ"בסיס הנתונים של האפליקציה"; לכן ה-projects חוזרים על שאר האפשרויות. README, סעיף Testing, מתאר איך החבילה רצה. (2) `tests/integration/test-database-guard.test.ts` רושם כל DB זמני שהוא יוצר לפני היצירה ו-`afterAll` מוחק אותם לפי שם מדויק, כך שנקיטה ב-timeout כבר לא משאירה DBs. נסגרו גם הפריטים "ניקוי DBs בטסט השומר אינו עמיד ל-timeout" ו"חבילת האינטגרציה אינה בטוחה להרצה מקבילית".
 - **Unit 4/C — טסט אישורי Strategy דטרמיניסטי** (Unit 4/C, 2026-10-05): `tests/integration/strategy-repository.test.ts` מפוצל לשניים. (1) טסט דטרמיניסטי שמכניס את אותו `version_number` פעמיים ומוודא שהשגיאה האמיתית של Postgres מסווגת ע"י `isUniqueViolation` כאילוץ `strategy_versions_investor_id_version_number_unique` — לא תלוי בחפיפה בין שתי קריאות. (2) טסט האישורים ה"מקבילים" מוודא את האינווריאנט שמתקיים בכל תזמון: לפחות קריאה אחת מצליחה, כל כשל הוא בדיוק הפרת האילוץ, מספרי הגרסאות שהוחזרו שונים, ואין מספר גרסה כפול ב-DB. ההגנה שהטסט נתן (סיווג שגיאה אמיתי + אין כפילות) נשמרה. אומת: 3 הרצות רצופות.

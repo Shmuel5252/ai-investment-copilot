@@ -87,6 +87,23 @@ describe("orientation", () => {
   });
 });
 
+describe("start failure message", () => {
+  it("shows the server's message (the AI timeout text) under the Hebrew title", async () => {
+    const message = "AI call timed out (limit: 5 minutes per attempt, 1 retry); nothing was saved by this step.";
+    renderInterview(actions({ start: vi.fn(async () => Promise.reject(trpcError(message, "INTERNAL_SERVER_ERROR"))) }));
+    fireEvent.click(screen.getByRole("button", { name: t.startButton }));
+    expect(await screen.findByText(t.startFailed)).toBeTruthy();
+    expect(screen.getByText(message)).toBeTruthy();
+  });
+
+  it("falls back to the Hebrew line alone when the error carries no message", async () => {
+    renderInterview(actions({ start: vi.fn(async () => Promise.reject(trpcError("", "INTERNAL_SERVER_ERROR"))) }));
+    fireEvent.click(screen.getByRole("button", { name: t.startButton }));
+    expect(await screen.findByText(t.startFailed)).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toBe(t.startFailed);
+  });
+});
+
 describe("an active question", () => {
   it("shows progress, the action line with a role label, the facts verbatim, then the question, in that DOM order", async () => {
     await open();
