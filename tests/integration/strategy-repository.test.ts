@@ -9,10 +9,11 @@
 // not just sequential idempotency, which the old buggy code already
 // handled fine and would not have caught this.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "@/db/schema";
-import { ensureDefaultRiskPrinciples, approveStrategyVersion } from "@/db/repositories/strategy";
+import { ensureDefaultRiskPrinciples, approveStrategyVersion, insertStrategyVersion } from "@/db/repositories/strategy";
 import { DEFAULT_RISK_PRINCIPLES } from "@/lib/strategy/default-risk-principles";
 import { isUniqueViolation } from "@/db/errors";
 
@@ -72,19 +73,41 @@ describe("ensureDefaultRiskPrinciples", () => {
 // src/db/errors.ts's isUniqueViolation() (and therefore
 // src/server/routers/strategy.ts's approveVersion) expects, not a
 // mocked approximation of it.
-describe("approveStrategyVersion — genuine concurrent race", () => {
-  it("one call succeeds and the other's real Postgres error is classified as this exact constraint", async () => {
+describe("approveStrategyVersion — version-number race", () => {
+  // Deterministic: the collision is forced (the same version number inserted
+  // twice), so the real Postgres error shape is always exercised — it does
+  // not depend on two calls happening to overlap.
+  it("a duplicate version number is rejected with the real error classified as this exact constraint", async () => {
+    const first = await approveStrategyVersion(db, investorId, "deterministic approval");
+    const err = await insertStrategyVersion(db, { investorId, versionNumber: first.versionNumber, changeSummary: "duplicate" }, []).then(
+      () => null,
+      (e: unknown) => e
+    );
+    expect(err).not.toBeNull();
+    expect(isUniqueViolation(err, "strategy_versions_investor_id_version_number_unique")).toBe(true);
+  });
+
+  // Overlap is NOT guaranteed (two calls may run back to back), so this
+  // asserts the invariant that holds either way: no duplicate version
+  // number is ever stored, every call that succeeds got a distinct number,
+  // and every call that fails fails with exactly the unique violation.
+  it("two concurrent approvals never store a duplicate version number", async () => {
     const results = await Promise.allSettled([
       approveStrategyVersion(db, investorId, "concurrent approval A"),
       approveStrategyVersion(db, investorId, "concurrent approval B"),
     ]);
 
-    const fulfilled = results.filter((r) => r.status === "fulfilled");
-    const rejected = results.filter((r) => r.status === "rejected");
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
+    const fulfilled = results.filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof approveStrategyVersion>>> => r.status === "fulfilled");
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
+    for (const r of rejected) {
+      expect(isUniqueViolation(r.reason, "strategy_versions_investor_id_version_number_unique")).toBe(true);
+    }
+    const returned = fulfilled.map((r) => r.value.versionNumber);
+    expect(new Set(returned).size).toBe(returned.length);
 
-    const err = (rejected[0] as PromiseRejectedResult).reason;
-    expect(isUniqueViolation(err, "strategy_versions_investor_id_version_number_unique")).toBe(true);
+    const stored = await db.select({ versionNumber: schema.strategyVersions.versionNumber }).from(schema.strategyVersions).where(eq(schema.strategyVersions.investorId, investorId));
+    const numbers = stored.map((s) => s.versionNumber);
+    expect(new Set(numbers).size).toBe(numbers.length);
   });
 });
