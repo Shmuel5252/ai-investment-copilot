@@ -10,7 +10,7 @@ import { RegionBody } from "@/components/home/region";
 import type { Loadable } from "@/components/home/types";
 import { Provenance, Quote } from "@/components/ui/quote";
 import { ActionError } from "@/components/ui/action-error";
-import { dateTime, day, usd } from "./parts";
+import { compactUsd, dateTime, day, usd, yieldPercent } from "./parts";
 import type { CaseAction, CaseData, IdeaData, OriginData } from "./types";
 
 // B, C and G: the idea in the investor's words, the fetched market facts,
@@ -97,7 +97,7 @@ export function MarketRegion({ intelligence, fetch, readOnly }: { intelligence: 
             items={[
               { label: t.priceLabel, value: <Num>{usd(m.price)}</Num> },
               { label: t.dayChangeLabel, value: <Num>{`${m.changePercentage >= 0 ? "+" : ""}${m.changePercentage.toFixed(2)}%`}</Num> },
-              { label: t.marketCapLabel, value: <Num>{"$" + m.marketCap.toLocaleString("en-US")}</Num> },
+              { label: t.marketCapLabel, value: <span title={"$" + m.marketCap.toLocaleString("en-US")}><Num>{compactUsd(m.marketCap)}</Num></span> },
               { label: t.betaLabel, value: m.beta === null ? t.naLabel : <Num>{m.beta}</Num> },
               { label: t.weekRangeLabel, value: m.fiftyTwoWeekRange ? <Num>{m.fiftyTwoWeekRange}</Num> : t.naLabel },
               { label: t.sectorLabel, value: m.sector ? <bdi>{m.sector}</bdi> : t.unknownSector },
@@ -109,7 +109,7 @@ export function MarketRegion({ intelligence, fetch, readOnly }: { intelligence: 
                     <span>P/E {ratio(m.peRatioTtm)}</span>
                     <span>P/B {ratio(m.priceToBookRatioTtm)}</span>
                     <span>P/S {ratio(m.priceToSalesRatioTtm)}</span>
-                    <span>Div yield {m.dividendYieldTtm === null ? t.naLabel : <Num>{m.dividendYieldTtm}</Num>}</span>
+                    <span>Div yield {m.dividendYieldTtm === null ? t.naLabel : <Num>{yieldPercent(m.dividendYieldTtm)}</Num>}</span>
                   </span>
                 ) : (
                   <span className="text-muted">{t.valuationRatiosUnavailable}</span>
