@@ -644,7 +644,7 @@ fallback על unique violation). דורש יחידה נפרדת.
   (`esbuild`) שאין להן תיקון שמיש (npm מציע downgrade). נדרשת יחידת hygiene
   נפרדת לתלויות; לא נעשה ב-Unit 2C.
 
-### בדיקות — `getGroundingChecksForDnaHypothesisVersion` ללא ORDER BY; טסט משווה סדר (נמצא 2026-10-04)
+### ~~בדיקות — `getGroundingChecksForDnaHypothesisVersion` ללא ORDER BY; טסט משווה סדר (נמצא 2026-10-04)~~ — נבנה (Unit 4/B, 2026-10-05; ר' "נבנה")
 - **מה:** `src/db/repositories/evidence.ts:70-77` מחזיר שורות `dna_evidence_grounding_checks` בלי `ORDER BY`, ושתי שורות שנכתבו יחד חולקות `checked_at` (transaction time) ו-`id` אקראי. `tests/integration/grounding-context-v3-2.test.ts:181,207` משווים את התוצאה ב-`toEqual` על מערך, כלומר דורשים סדר. נצפה פעם אחת בריצה סדרתית מלאה (1668/1669), עבר 10/10 בבידוד.
 - **סיווג:** תלות סדר קיימת מראש, לא קשורה ל-Unit 2C (הקוד והטסט קודמים ל-`79cdaea`).
 - **כיוון תיקון (יחידה נפרדת, לא בוצע):** מיון דטרמיניסטי בטסט (למשל לפי `id`) או `ORDER BY checked_at, id` ב-repository. אם הצרכנים בקוד הייצור תלויים בסדר — לבדוק לפני שינוי ה-repository.
@@ -706,6 +706,7 @@ fallback על unique violation). דורש יחידה נפרדת.
 - **כיוון:** פשרה מכוונת לשימוש אינטראקטיבי. לשקול מחדש אם כשלי עומס יהפכו לבעיה בפועל.
 
 ## נבנה
+- **Unit 4/B — טסט grounding דטרמיניסטי** (Unit 4/B, 2026-10-05): `tests/integration/grounding-context-v3-2.test.ts` משווה עכשיו שורות `dna_evidence_grounding_checks` אחרי מיון לפי `id` (`checksOf`), במקום להסתמך על סדר שה-repository לא מבטיח. ה-repository לא שונה: הצרכנים בקוד הייצור (`confidence-recalculation.ts`, `independence-recalculation.ts`, `partitionEvidenceForCounting`) בונים קבוצה (`Set`) מהשורות ולכן אינם תלויים בסדר. אומת: 3 הרצות רצופות של הקובץ.
 - **Production Readiness Unit 3B — timeout מפורש ו-retry חסום לקריאות AI** (Unit 3B, 2026-10-05; חריגה צרה
   מהקפאת Backend Intelligence V1 באישור Owner): לא הוגדר timeout/retry באף קריאה, ולכן חלו ברירות המחדל של
   ה-SDK (10 דקות לניסיון, 2 retries, ~30 דקות במקרה הגרוע; `dna.generate` אמיתי נתקע פעם ~37 דקות). ב-
