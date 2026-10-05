@@ -28,7 +28,8 @@ vi.mock("@anthropic-ai/sdk", () => {
       },
     };
   }
-  return { default: BlockedAnthropic, Anthropic: BlockedAnthropic };
+  class APIConnectionTimeoutError extends Error {}
+  return { default: BlockedAnthropic, Anthropic: BlockedAnthropic, APIConnectionTimeoutError };
 });
 
 beforeAll(() => {

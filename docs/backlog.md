@@ -672,8 +672,49 @@ fallback על unique violation). דורש יחידה נפרדת.
 - **מה:** באותו סקשן, שווי שוק מוצג כ-`$4,901,023,823,640`. נכון, אבל קשה לקריאה.
 - **כיוון (לא בוצע):** תצוגה מקוצרת (למשל `$4.90T`) עם הערך המלא ב-tooltip, באותו תיקון כמו Div yield.
 
+### קריאות AI — מה שנשאר פתוח אחרי Unit 3B (נמצא 2026-10-05)
+תיעוד בלבד, **לא תוקן**. כל פריט דורש יחידה נפרדת.
+1. **אין ביטול של קריאת AI כשהמשתמש סוגר את העמוד** — אף קריאה לא מעבירה `signal`, וה-procedure לא מקבל
+   את ה-abort של הבקשה. קריאה שהתחילה רצה עד סופה או עד ה-timeout (עד ~10 דקות עם retry אחד) וממשיכה
+   לכתוב גם אם אף אחד כבר לא מחכה לתשובה. גם ב-`interview.start` (עד 6 קריאות במקביל ב-`Promise.all`)
+   כשל אחת לא מבטל את השאר.
+2. **אין מגבלת קצב או תקציב לקריאות AI** — אין מונה קריאות/טוקנים, אין חסימה של לחיצה חוזרת בצד השרת ואין
+   תקרת עלות. `dna.generate` ו-`strategy.generateObserved` מריצים קריאת grounding לכל ציטוט וקריאת identity
+   לכל השערה, ברצף, כך שמספר הקריאות גדל עם כמות הראיות.
+3. **כתיבות חלקיות ב-procedures מרובי-קריאות** — `learning.generate` קורא ל-AI וכותב לכל משפחת סקטור
+   בתורה; כשל באמצע משאיר את המשפחות הקודמות שמורות. `decisions.create` שומר cache של נתוני שוק ו-market
+   context לפני קריאת ה-AI (ההחלטה עצמה נשמרת רק בטרנזקציה אחרי הקריאה); `cases.generateSynthesis`,
+   `cases.generatePersonalFit` ו-`reviews.generate` עשויים לשמור cache של נתוני שוק לפני הקריאה. הודעת ה-timeout
+   של Unit 3B אומרת זאת לכל procedure.
+4. **timeout בבדיקות grounding/identity שקט** — `checkEvidenceGrounding` ו-`classifyHypothesisMatch` בולעים כל
+   שגיאה (fail closed): grounding שנכשל מסומן `technicalFailure` ולא נספר; identity שנכשל נופל ל**זהות חדשה**,
+   כך ש-timeout יכול לייצר השערה/עיקרון כפולים. ב-`learning.agree`, אם כל בדיקות ה-grounding נכשלו טכנית, המשתמש
+   מקבל "None of the cited decisions' own statements ground this insight" — לא הודעת timeout.
+5. **`interview.start` מציג הודעה כללית** — `interview-view.tsx` מציג `t.startFailed` ולא את הודעת השרת, כך
+   שהודעת ה-timeout של Unit 3B לא מגיעה למשתמש בעמוד הזה (בשאר העמודים היא מוצגת דרך `ActionError`).
+
+### בדיקות — ניקוי DBs בטסט השומר אינו עמיד ל-timeout (נמצא 2026-10-05)
+- **מה:** `tests/integration/test-database-guard.test.ts` יוצר DBs זמניים (`aic_test_scratch_unmarked_*`, `aic_test_drop_probe_*`) ומוחק אותם ב-`finally`. כשהטסט נקטע ב-timeout (ריצה עמוסה), הניקוי לא רץ וה-DBs נשארים. קרה פעמיים: 2026-10-04 (2C) ו-2026-10-05 (3B); בכל פעם נמחקו ידנית באישור Owner.
+- **כיוון (לא בוצע):** ניקוי עמיד, למשל `afterAll` או global teardown שמוחק DBs עם הקידומות האלה שנוצרו בריצה הנוכחית.
+
+### ארכיטקטורה — `trpc.ts` מייבא את `src/lib/ai/client.ts` (נמצא 2026-10-05)
+- **מה:** כדי לקבל את `aiTimeoutMessage`, `src/server/trpc.ts` מייבא את `client.ts`, שבזמן הייבוא בודק `ANTHROPIC_API_KEY` ובונה את הלקוח. היום אין השפעה (ה-routers ממילא טוענים את מודולי ה-AI), אבל שכבת ה-tRPC הבסיסית תלויה עכשיו בתופעות לוואי של מודול AI.
+- **כיוון (לא בוצע):** להעביר את `aiTimeoutMessage`, המפה והקבועים למודול בלי תופעות לוואי, ש-`client.ts` ו-`trpc.ts` שניהם מייבאים.
+
+### AI — `maxRetries: 1` מקצר גם ניסיונות חוזרים לעומס (נמצא 2026-10-05)
+- **מה:** ה-SDK מנסה שוב גם על 429/529 ושגיאות 5xx. עם `maxRetries: 1` (Unit 3B) יש ניסיון חוזר אחד במקום שניים, כך שבזמן עומס בצד Anthropic יהיו מעט יותר כשלים שמגיעים למשתמש.
+- **כיוון:** פשרה מכוונת לשימוש אינטראקטיבי. לשקול מחדש אם כשלי עומס יהפכו לבעיה בפועל.
+
 ## נבנה
-- **Production Readiness Unit 3A — בדיקת בעלות בחמישה procedures** (2026-10-05, commit `Unit 3A, 2026-10-05`;
+- **Production Readiness Unit 3B — timeout מפורש ו-retry חסום לקריאות AI** (Unit 3B, 2026-10-05; חריגה צרה
+  מהקפאת Backend Intelligence V1 באישור Owner): לא הוגדר timeout/retry באף קריאה, ולכן חלו ברירות המחדל של
+  ה-SDK (10 דקות לניסיון, 2 retries, ~30 דקות במקרה הגרוע; `dna.generate` אמיתי נתקע פעם ~37 דקות). ב-
+  `src/lib/ai/client.ts`: `AI_TIMEOUT_MS = 300_000` ו-`AI_MAX_RETRIES = 1` על ה-client היחיד (~10 דקות במקרה
+  הגרוע). timeout מגיע למשתמש כ-"AI call timed out after 5 minutes; …" עם מה שכבר נשמר לכל procedure
+  (`aiTimeoutMessage`, דרך `errorFormatter` ב-`src/server/trpc.ts`). טסט: `tests/unit/ai-timeout.test.ts`.
+  **לא שונה:** prompts, מודל, סכמות פלט, persistence, מיגרציות. לא היה פריט פתוח קודם ל-timeout ב-backlog.
+  פתוח: ר' "קריאות AI — מה שנשאר פתוח אחרי Unit 3B" למעלה.
+- **Production Readiness Unit 3A — בדיקת בעלות בחמישה procedures** (2026-10-05, commit `22ede15`;
   חריגה צרה מהקפאת Backend Intelligence V1 באישור Owner): `decisions.getForCase`, `dna.evidence`, `dna.reject`,
   `strategy.evidence` ו-`learning.evidence` קראו או כתבו לפי מזהה בלי לבדוק שהשורה שייכת למשקיע המחובר (נמצא
   ב-Unit 1; שלושה מהם תועדו קודם ברשימת DNA/Strategy למעלה). כל אחד בודק עכשיו בעלות לפני קריאה/כתיבה, באותו

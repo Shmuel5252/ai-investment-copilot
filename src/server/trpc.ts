@@ -1,5 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { getSession } from "./auth/session";
+import { aiTimeoutMessage } from "@/lib/ai/client";
 
 export async function createTRPCContext() {
   const session = await getSession();
@@ -8,7 +9,14 @@ export async function createTRPCContext() {
 
 type Context = Awaited<ReturnType<typeof createTRPCContext>>;
 
-const t = initTRPC.context<Context>().create();
+// An AI timeout reaches the user as a clear message naming what was saved,
+// not the SDK's generic "Request timed out.".
+const t = initTRPC.context<Context>().create({
+  errorFormatter({ shape, error, path }) {
+    const message = aiTimeoutMessage(error.cause, path);
+    return message ? { ...shape, message } : shape;
+  },
+});
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
