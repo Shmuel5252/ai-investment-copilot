@@ -12,8 +12,11 @@ A personal AI copilot that learns how you invest — not what to buy. See
    ```
 
 2. **Environment variables** — copy `.env.example` to `.env` and fill in:
-   - `DATABASE_URL` — defaults to the local Docker Postgres below; swap for
-     a Neon connection string for anything beyond local dev.
+   - `DATABASE_URL` — the local Docker Postgres below, with a password you
+     choose; swap for a Neon connection string for anything beyond local dev.
+   - `POSTGRES_PASSWORD` — the same password; `docker compose` refuses to
+     start without it. It only takes effect when a new (empty `pgdata/`)
+     cluster is initialized; change an existing cluster with `ALTER ROLE`.
    - `ANTHROPIC_API_KEY` — get one at https://console.anthropic.com
    - `FMP_API_KEY` — get one at https://financialmodelingprep.com (free tier)
    - `SESSION_SECRET` — generate with

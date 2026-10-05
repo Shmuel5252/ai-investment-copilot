@@ -114,6 +114,7 @@ Data) + Vercel (deploy) + session-cookie auth (single-user). מודל היסטו
 ```
 ANTHROPIC_API_KEY=       # קריאות AI
 DATABASE_URL=            # Postgres connection string (כיום: Docker מקומי)
+POSTGRES_PASSWORD=       # docker-compose.yml; אותה סיסמה כמו ב-DATABASE_URL (חל רק באתחול cluster חדש; קיים → ALTER ROLE)
 FMP_API_KEY=             # Financial Modeling Prep
 SESSION_SECRET=          # חתימת cookie session
 ```
