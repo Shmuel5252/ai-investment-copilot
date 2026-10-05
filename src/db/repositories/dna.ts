@@ -51,6 +51,10 @@ export async function getLatestDnaHypothesisVersion(db: DbOrTx, dnaHypothesisId:
   return row;
 }
 
+export async function getDnaHypothesis(db: typeof Db, id: string) {
+  return db.query.dnaHypotheses.findFirst({ where: (h, { eq }) => eq(h.id, id) });
+}
+
 export async function listActiveDnaHypothesesForInvestor(db: typeof Db, investorId: string) {
   return db.query.dnaHypotheses.findMany({
     where: (h, { and, eq }) => and(eq(h.investorId, investorId), eq(h.status, "active")),
@@ -603,11 +607,17 @@ export async function recalculateDnaHypothesisIndependence(
 // The identity row's status (active|user_rejected) is a simple lifecycle
 // flag, not a versioned judgment — mutable by design (docs/data-model.md
 // §2: the DNAHypothesis identity row itself isn't in the immutable list,
-// only DNAHypothesisVersion is).
+// only DNAHypothesisVersion is). Scoped by investor in the WHERE itself, so
+// a caller that skipped its ownership check still cannot touch another
+// investor's row.
 export async function setDnaHypothesisStatus(
   db: typeof Db,
+  investorId: string,
   dnaHypothesisId: string,
   status: "active" | "user_rejected"
 ) {
-  await db.update(dnaHypotheses).set({ status }).where(eq(dnaHypotheses.id, dnaHypothesisId));
+  await db
+    .update(dnaHypotheses)
+    .set({ status })
+    .where(and(eq(dnaHypotheses.id, dnaHypothesisId), eq(dnaHypotheses.investorId, investorId)));
 }

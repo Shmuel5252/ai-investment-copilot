@@ -515,11 +515,9 @@ fallback על unique violation). דורש יחידה נפרדת.
 
 ### DNA ו-Strategy — פערי backend שנמצאו בחקירת Frontend V1 יחידה 6 (נמצא 2026-09-30)
 תיעוד בלבד, **לא תוקן** (Backend Intelligence V1 קפוא). כל פריט דורש יחידה נפרדת:
-1. **`dna.evidence` בלי scoping לבעלות** — מקבל `dnaHypothesisId` ומחזיר את הציטוטים בלי לבדוק שהטענה שייכת
-   למשקיע המחובר. כל שאר ה-routers (cases, decisions, reviews) בודקים בעלות.
-2. **`dna.reject` בלי scoping לבעלות** — אותו פער, על פעולת כתיבה: מזהה ידוע מספיק כדי לסמן טענה של משקיע
-   אחר כ-`user_rejected`.
-3. **`strategy.evidence` בלי scoping לבעלות** — אותו פער כמו (1).
+1. ~~**`dna.evidence` בלי scoping לבעלות**~~ — נבנה (Production Readiness Unit 3A, 2026-10-05; ר' "נבנה").
+2. ~~**`dna.reject` בלי scoping לבעלות**~~ — נבנה (Production Readiness Unit 3A, 2026-10-05; ר' "נבנה").
+3. ~~**`strategy.evidence` בלי scoping לבעלות**~~ — נבנה (Production Readiness Unit 3A, 2026-10-05; ר' "נבנה").
 4. **אין read path לגרסאות Strategy היסטוריות** — `getStrategyVersionPrinciples` קיים ב-repository בלבד; אין
    procedure שמחזיר bundles קודמים או את העקרונות שבהם. עמוד ה-Strategy יכול לומר שגרסאות קודמות נשמרות,
    לא להציג אותן.
@@ -675,6 +673,14 @@ fallback על unique violation). דורש יחידה נפרדת.
 - **כיוון (לא בוצע):** תצוגה מקוצרת (למשל `$4.90T`) עם הערך המלא ב-tooltip, באותו תיקון כמו Div yield.
 
 ## נבנה
+- **Production Readiness Unit 3A — בדיקת בעלות בחמישה procedures** (2026-10-05, commit `Unit 3A, 2026-10-05`;
+  חריגה צרה מהקפאת Backend Intelligence V1 באישור Owner): `decisions.getForCase`, `dna.evidence`, `dna.reject`,
+  `strategy.evidence` ו-`learning.evidence` קראו או כתבו לפי מזהה בלי לבדוק שהשורה שייכת למשקיע המחובר (נמצא
+  ב-Unit 1; שלושה מהם תועדו קודם ברשימת DNA/Strategy למעלה). כל אחד בודק עכשיו בעלות לפני קריאה/כתיבה, באותו
+  דפוס ובאותה שגיאה (`NOT_FOUND`, לא חושפת אם המזהה קיים); `setDnaHypothesisStatus` מקבל `investorId` ומגביל
+  את ה-`WHERE` עצמו. נוספו `getDnaHypothesis` ו-`getStrategyPrinciple` (קריאה לפי מזהה, כמו `getLearningInsight`).
+  טסט: `tests/integration/procedure-ownership.test.ts` (שני משקיעים לכל procedure). **לא שונה:** סכמה,
+  מיגרציות, AI, ה-DB האמיתי.
 - **Frontend V1, יחידה 1 — Design system + App shell + RTL foundation** (2026-09-30): `dir="rtl"`/`lang="he"` פעם
   אחת ב-`src/app/layout.tsx`, והעמודים לא עוטפים את עצמם יותר; shell משותף (`src/components/shell/`: סרגל צד בקצה
   ההתחלה בדסקטופ, drawer ב-`<dialog>` במובייל, מצב פעיל מ-`nav-config.ts`, שם משתמש והתנתקות); טוקנים ב-`globals.css`

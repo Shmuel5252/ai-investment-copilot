@@ -10,6 +10,7 @@ import {
   insertDnaHypothesisVersionWithEvidence,
   setDnaHypothesisStatus,
   getLatestDnaHypothesisVersion,
+  getDnaHypothesis,
 } from "@/db/repositories/dna";
 import { getCountingEvidenceForDnaVersion, getEffectiveEvidenceForDnaHypothesisVersion } from "@/db/repositories/evidence";
 import { proposeDnaHypotheses } from "@/lib/ai/dna";
@@ -27,6 +28,14 @@ import { buildInvestorStatements, buildStatementContextById } from "@/lib/ai/inv
 import { AI_CONTRACTS } from "@/lib/ai/contracts";
 import { CLAUDE_MODEL } from "@/lib/ai/client";
 import { buildProvenance } from "@/lib/evidence/provenance";
+
+async function requireOwnedHypothesis(investorId: string, dnaHypothesisId: string) {
+  const hypothesis = await getDnaHypothesis(db, dnaHypothesisId);
+  if (!hypothesis || hypothesis.investorId !== investorId) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "DNA hypothesis not found." });
+  }
+  return hypothesis;
+}
 
 export const dnaRouter = router({
   // AI proposes hypotheses + evidence citations from the investor's OWN
@@ -224,7 +233,8 @@ export const dnaRouter = router({
   // about the underlying data becomes unreachable.
   evidence: protectedProcedure
     .input(z.object({ dnaHypothesisId: z.string().uuid() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      await requireOwnedHypothesis(ctx.investorId, input.dnaHypothesisId);
       const latestVersion = await getLatestDnaHypothesisVersion(db, input.dnaHypothesisId);
       if (!latestVersion) return [];
       return getEffectiveEvidenceForDnaHypothesisVersion(db, input.dnaHypothesisId, latestVersion.id);
@@ -238,8 +248,9 @@ export const dnaRouter = router({
   // version history either) — just no longer shown as an active belief.
   reject: protectedProcedure
     .input(z.object({ dnaHypothesisId: z.string().uuid() }))
-    .mutation(async ({ input }) => {
-      await setDnaHypothesisStatus(db, input.dnaHypothesisId, "user_rejected");
+    .mutation(async ({ ctx, input }) => {
+      await requireOwnedHypothesis(ctx.investorId, input.dnaHypothesisId);
+      await setDnaHypothesisStatus(db, ctx.investorId, input.dnaHypothesisId, "user_rejected");
       return { ok: true };
     }),
 });

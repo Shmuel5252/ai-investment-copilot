@@ -12,6 +12,7 @@ import {
   approveStrategyVersion,
   getLatestStrategyVersion,
   getLatestStrategyPrincipleVersion,
+  getStrategyPrinciple,
 } from "@/db/repositories/strategy";
 import {
   getCountingEvidenceForStrategyPrincipleVersion,
@@ -284,7 +285,11 @@ export const strategyRouter = router({
   // remediation).
   evidence: protectedProcedure
     .input(z.object({ strategyPrincipleId: z.string().uuid() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      const principle = await getStrategyPrinciple(db, input.strategyPrincipleId);
+      if (!principle || principle.investorId !== ctx.investorId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Strategy principle not found." });
+      }
       const latestVersion = await getLatestStrategyPrincipleVersion(db, input.strategyPrincipleId);
       if (!latestVersion) return [];
       return getEffectiveEvidenceForStrategyPrincipleVersion(db, input.strategyPrincipleId, latestVersion.id);

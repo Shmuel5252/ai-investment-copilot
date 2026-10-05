@@ -373,7 +373,13 @@ export const decisionsRouter = router({
 
   getForCase: protectedProcedure
     .input(z.object({ caseId: z.string().uuid() }))
-    .query(({ input }) => getDecisionByCaseId(db, input.caseId)),
+    .query(async ({ ctx, input }) => {
+      const investmentCase = await getInvestmentCase(db, input.caseId);
+      if (!investmentCase || investmentCase.investorId !== ctx.investorId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Investment case not found." });
+      }
+      return getDecisionByCaseId(db, investmentCase.id);
+    }),
 
   // "אפשר להוסיף הקשר, לא לשנות היסטוריה" — the sanctioned way to
   // correct or clarify an already-immutable Decision Snapshot without

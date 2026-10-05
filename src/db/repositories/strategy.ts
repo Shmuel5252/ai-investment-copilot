@@ -86,6 +86,10 @@ export async function getLatestStrategyVersion(db: typeof Db, investorId: string
   return row;
 }
 
+export async function getStrategyPrinciple(db: typeof Db, id: string) {
+  return db.query.strategyPrinciples.findFirst({ where: (p, { eq }) => eq(p.id, id) });
+}
+
 // DbOrTx (not typeof Db) so the version-writing functions below can
 // read-then-insert inside one outer transaction — same reasoning as
 // getLatestDnaHypothesisVersion (src/db/repositories/dna.ts).

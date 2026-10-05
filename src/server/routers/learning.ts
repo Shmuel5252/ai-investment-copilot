@@ -170,7 +170,13 @@ export const learningRouter = router({
 
   evidence: protectedProcedure
     .input(z.object({ learningInsightId: z.string().uuid() }))
-    .query(({ input }) => getEvidenceForLearningInsight(db, input.learningInsightId)),
+    .query(async ({ ctx, input }) => {
+      const insight = await getLearningInsight(db, input.learningInsightId);
+      if (!insight || insight.investorId !== ctx.investorId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Learning insight not found." });
+      }
+      return getEvidenceForLearningInsight(db, insight.id);
+    }),
 
   // "סגירת הלולאה ל-DNA" (docs/data-model.md §8) under Evidence Reach V1 /
   // OD-3: agreeing creates a new DNA hypothesis that CARRIES the insight's
