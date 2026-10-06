@@ -738,6 +738,10 @@ fallback על unique violation). דורש יחידה נפרדת.
 - **מה:** `thesis_accuracy_pattern_json` של תובנת ה-Technology הראשונה סופר את `partially_confirmed` של AVGO — תווית שלפי הכלל של Unit 7/A הייתה צריכה להיות `insufficient_evidence` (אף resolution לא נשא ראיה).
 - **מצב:** היסטורי. ה-Review והתובנה immutable ולא נכתבים מחדש; Reviews חדשים כבר מקבלים את הרצפה (Unit 7/A). Review חדש ל-AVGO ואז הרצת Learning מחדש יפיקו ספירה מתוקנת כגרסה חדשה, בלי לגעת בקיימות.
 
+### Review — הנרטיב עלול לסתור את תווית דיוק התזה המתוקנת (נמצא 2026-10-06)
+- **מה:** כלל Unit 7/A קובע `insufficient_evidence` אחרי קריאת ה-AI, כשאין הכרעה נושאת-ראיה. הנרטיב שה-AI כתב לפני כן עלול עדיין לנסח "אושרה חלקית", כך שבאותו Review יופיעו תווית ונרטיב סותרים.
+- **כיוון (לא בוצע):** לחשב את הכלל לפני קריאת ה-AI ולמסור לו את התווית שתיקבע, כדי שהנרטיב יתאים לה; או להציג ליד התווית שהיא נקבעה בכלל קוד.
+
 ## נבנה
 - **Unit 7/D — כמויות מניות מוצגות מעוגלות** (Unit 7/D, 2026-10-06; תיקון תצוגה באישור Owner): הדשבורד ועמוד ההחלטה של SNDK הציגו `0.38589999999999997`. כל מקום שמציג כמות מניות עובר עכשיו דרך `shares()` ב-`src/components/num.tsx` (עד 4 ספרות אחרי הנקודה, בלי אפסים מיותרים, `?` כשלא ידוע), בתוך `<Num>`: דשבורד (תשומת לב, מעקב), עמוד ההחלטה (תיק קפוא, היום, ביצוע בפועל), Case (Portfolio Fit), Prior Record, יומן, ייבוא (פוזיציות, הזנה ידנית, התאמה). הפורמטים המקומיים של היומן ו-Prior Record הוחלפו בו. תצוגה בלבד; הערכים השמורים וההקשר ל-AI לא השתנו. טסט: `tests/unit/share-quantity-display.test.tsx`.
 - **Unit 7/C — "לא נבדק" ≠ "לא מבוסס" ב-`learning.agree`** (Unit 7/C, 2026-10-06; תיקון באג באישור Owner): כשאף הצהרה לא מבססת ולפחות בדיקת grounding אחת נכשלה טכנית, `learning.agree` נכשל עכשיו ב-`SERVICE_UNAVAILABLE` עם "The grounding check could not run (… failed technically) — nothing was saved. Try again later." במקום "None of the cited decisions' own statements ground this insight", ועמוד הלמידה מציג הודעה עברית נפרדת (`uncheckableTitle`/`uncheckableBody`). כלום לא נכתב, כמו בכל סירוב. טסטים: `tests/integration/evidence-reach.test.ts` (grounding מדומה, שני המקרים), `tests/unit/learning-view.test.tsx`.
