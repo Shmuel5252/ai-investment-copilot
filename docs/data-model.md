@@ -631,7 +631,9 @@ Append-only.
 **DecisionReview** — `id, decision_id, review_date, narrative_summary_text
 (שכבה 1, AI), decision_quality_overall (ר' טבלת Rollup למטה),
 thesis_accuracy(confirmed|partially_confirmed|refuted|inconclusive|
-insufficient_evidence, AI נתמך ע"י Prediction resolutions), outcome_json
+insufficient_evidence, AI נתמך ע"י Prediction resolutions, תחת רצפת ראיה
+דטרמיניסטית — אין resolution נושא-ראיה → insufficient_evidence, ר'
+`architecture.md` §2.7), outcome_json
 (P/L, %-תשואה — קוד טהור), idempotency_key?, request_fingerprint?,
 input_state_fingerprint?, created_at`. Immutable; review חוזר = שורה
 חדשה. **Decision Review Integrity V1 (2026-09-24):** `idempotency_key` = UUID

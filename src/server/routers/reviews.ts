@@ -21,6 +21,7 @@ import { computePositionsForInvestor } from "@/lib/portfolio/compute-for-investo
 import { computeDecisionOutcome } from "@/lib/review/decision-outcome";
 import { calculateDecisionQualityOverall } from "@/lib/review/decision-quality";
 import { validateReviewDimensions } from "@/lib/review/validate-review-dimensions";
+import { applyThesisAccuracyEvidenceRule } from "@/lib/review/thesis-accuracy";
 import { synthesizeDecisionReview } from "@/lib/ai/review";
 import { excludeInsufficientEvidence } from "@/lib/dna/evidence-strength";
 import type { MarketIntelligence } from "@/lib/market/fmp";
@@ -82,7 +83,8 @@ export const reviewsRouter = router({
   // dimensions would be a half-written judgment (insertDecisionReview
   // already bundles them atomically). decision_quality_overall is always
   // the deterministic rollup of the validated verdicts, never taken from
-  // the AI directly.
+  // the AI directly; thesis_accuracy is the AI label under a deterministic
+  // evidence floor (src/lib/review/thesis-accuracy.ts).
   generate: protectedProcedure
     .input(
       z.object({
@@ -291,7 +293,7 @@ export const reviewsRouter = router({
           review: {
             narrativeSummaryText: proposed.narrativeSummaryText,
             decisionQualityOverall,
-            thesisAccuracy: proposed.thesisAccuracy,
+            thesisAccuracy: applyThesisAccuracyEvidenceRule(proposed.thesisAccuracy, predictionsWithResolutions),
             outcomeJson: outcome,
           },
           dimensions: validatedDimensions.map((d) => ({

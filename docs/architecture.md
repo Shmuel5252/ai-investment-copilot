@@ -268,7 +268,15 @@ Architecture). `CLAUDE.md` מצביע לכאן לפרטים; המקור הרעי
   הרצת ה-Review; ה-AI **לא** קובע בעצמו אם טענה התממשה — הוא רק מסנתז
   את `thesis_accuracy` הכולל **מתוך** ה-resolutions שכבר נקבעו. אם אין
   Predictions או אף אחד לא נפתר — `thesis_accuracy=insufficient_evidence`,
-  תוצאה תקינה. Outcome עצמו מחושב תמיד (קוד, לא Push כשלעצמו); ה-UI הוא
+  תוצאה תקינה. **רצפת ראיה דטרמיניסטית (Unit 7/A, 2026-10-06):** אחרי
+  ה-AI, בקוד (`src/lib/review/thesis-accuracy.ts`): resolution נושא-ראיה =
+  forecast (או Prediction ישן עם kind=NULL) שנפתר confirmed/refuted, או
+  reentry_condition שנפתר confirmed (התנאי קרה). אין אף אחד →
+  `insufficient_evidence`, לא משנה מה ה-AI החזיר; אחרת תווית ה-AI נשארת.
+  תנאי כניסה-מחדש שלא קרה הוא בדיקה שהמשקיע הגדיר, לא ראיה על התזה (נמצא
+  ב-Review האמיתי של AVGO: `partially_confirmed` בלי אף ראיה). הכלל לא נרשם
+  בשורת ה-Review (אין שדה מתאים בלי שינוי סכמה) — ניתן לשחזור מה-resolutions
+  השמורים. חל על Reviews חדשים בלבד; קיימים לא נוגעים בהם. Outcome עצמו מחושב תמיד (קוד, לא Push כשלעצמו); ה-UI הוא
   שמסתיר אותו מאחורי לחיצה מפורשת ("הצג מה קרה מאז") ספציפית עבור
   PASS — כי שם המספר הזה *הוא* בדיוק ה-Counterfactual; לשאר סוגי
   ההחלטה (BUY/ADD/HOLD/REDUCE/SELL) זו תוצאה עובדתית ישירה של פעולה
