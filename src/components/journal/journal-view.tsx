@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { PageShell, PageHeader } from "@/components/ui/page-header";
 import { Section } from "@/components/ui/section";
 import { List, ListRow } from "@/components/ui/list";
@@ -88,7 +88,6 @@ export function partitionEpisodes<E extends Pick<JournalEpisodeRow, "rationale">
   };
 }
 
-const quantity = (q: number) => (Number.isInteger(q) ? String(q) : q.toFixed(4).replace(/\.?0+$/, ""));
 
 export function JournalView({ journal, actions }: { journal: Loadable<JournalData>; actions: RationaleActions }) {
   return (
@@ -182,7 +181,7 @@ function EntryFacts({ episode }: { episode: JournalEpisodeRow }) {
       {entry.quantity !== null && entry.price !== null && (
         <>
           {" · "}
-          <Num>{quantity(entry.quantity)}</Num> {t.sharesAt} <Num>${entry.price.toFixed(2)}</Num>
+          <Num>{shares(entry.quantity)}</Num> {t.sharesAt} <Num>${entry.price.toFixed(2)}</Num>
         </>
       )}
     </p>

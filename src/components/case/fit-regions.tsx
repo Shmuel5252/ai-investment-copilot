@@ -1,4 +1,4 @@
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge, EvidenceTierBadge } from "@/components/ui/badge";
@@ -95,7 +95,7 @@ function PortfolioFitResult({ fit, sizeDollars }: { fit: PortfolioFit; sizeDolla
               label: t.existingHoldingLabel,
               value: (
                 <>
-                  <Num>{fit.existingHoldingQuantity}</Num> {t.sharesLabel} · <Num>{usd(fit.existingPositionValueUsd)}</Num>
+                  <Num>{shares(fit.existingHoldingQuantity)}</Num> {t.sharesLabel} · <Num>{usd(fit.existingPositionValueUsd)}</Num>
                 </>
               ),
             },

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { Table, THead, TBody, Tr, Th, Td } from "@/components/ui/table";
 import { List, ListRow } from "@/components/ui/list";
 import { Status } from "@/components/ui/status";
@@ -49,7 +49,7 @@ function Held({ item }: { item: MonitoringItem }) {
   if (!item.position.held) return <>{t.heldNo}</>;
   return (
     <>
-      {t.heldYes} · <Num>{item.position.quantity}</Num>
+      {t.heldYes} · <Num>{shares(item.position.quantity)}</Num>
     </>
   );
 }

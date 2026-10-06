@@ -1,4 +1,4 @@
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { Section } from "@/components/ui/section";
 import { List, ListRow } from "@/components/ui/list";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +27,7 @@ function Fact({ f }: { f: ExecutionFact }) {
     <>
       {da.txnType[f.transactionType] ?? f.transactionType}{" "}
       <Num>
-        {f.quantity ?? "?"} @ {f.price !== null ? "$" + Number(f.price).toFixed(2) : "?"}
+        {shares(f.quantity)} @ {f.price !== null ? "$" + Number(f.price).toFixed(2) : "?"}
       </Num>{" "}
       (<Num>{day(f.transactionDate)}</Num>)
     </>
@@ -144,7 +144,7 @@ function AttentionRow({ item, joined }: { item: MonitoringItem; joined: NextActi
           {item.position.status === "ok" ? (
             item.position.held ? (
               <>
-                {da.heldPrefix} <Num>{item.position.quantity} @ {item.position.costBasisPerShare !== null ? "$" + item.position.costBasisPerShare.toFixed(2) : "?"}</Num>
+                {da.heldPrefix} <Num>{shares(item.position.quantity)} @ {item.position.costBasisPerShare !== null ? "$" + item.position.costBasisPerShare.toFixed(2) : "?"}</Num>
               </>
             ) : (
               da.flat
@@ -155,7 +155,7 @@ function AttentionRow({ item, joined }: { item: MonitoringItem; joined: NextActi
           {item.position.frozenHoldingQuantity !== null && (
             <>
               {" · "}
-              {da.frozenHoldingPrefix} <Num>{item.position.frozenHoldingQuantity}</Num>
+              {da.frozenHoldingPrefix} <Num>{shares(item.position.frozenHoldingQuantity)}</Num>
             </>
           )}
         </p>

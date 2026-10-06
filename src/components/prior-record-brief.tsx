@@ -14,7 +14,7 @@
 // neutral badges: a historical record label, never a success color.
 import Link from "next/link";
 import type { PriorRecordBrief } from "@/lib/prior-record/prior-record";
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { List, ListRow } from "@/components/ui/list";
 import { Badge } from "@/components/ui/badge";
 import { Notice } from "@/components/ui/status";
@@ -24,7 +24,6 @@ import { priorRecord as t, decisionTypeLabel, predictionStatusLabel, predictionK
 const day = (iso: string) => new Date(iso).toLocaleDateString("he-IL");
 const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 // Quantities are computed sums (float): show at most 6 decimals, never an artifact like 0.38589999999999997.
-const qty = (n: number) => String(Number(n.toFixed(6)));
 
 export function PriorRecordBriefView({ brief, frozen = false }: { brief: PriorRecordBrief; frozen?: boolean }) {
   const s = brief.summary;
@@ -51,7 +50,7 @@ export function PriorRecordBriefView({ brief, frozen = false }: { brief: PriorRe
             <>
               {frozen ? t.heldAtDecisionPrefix : t.heldPrefix}{" "}
               <Num>
-                {qty(brief.position.quantity)} @ {brief.position.costBasisPerShare !== null ? "$" + brief.position.costBasisPerShare.toFixed(2) : "?"}
+                {shares(brief.position.quantity)} @ {brief.position.costBasisPerShare !== null ? "$" + brief.position.costBasisPerShare.toFixed(2) : "?"}
               </Num>
             </>
           ) : brief.position.status === "not_held" ? (

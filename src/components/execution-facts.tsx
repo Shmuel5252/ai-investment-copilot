@@ -1,6 +1,6 @@
 "use client";
 
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { List, ListRow } from "@/components/ui/list";
@@ -38,7 +38,7 @@ function TradeLine({ transactionType, quantity, price, transactionDate }: { tran
     <span>
       {da.txnType[transactionType] ?? transactionType}{" "}
       <Num>
-        {quantity ?? "?"} @ {price !== null ? "$" + Number(price).toFixed(2) : "?"}
+        {shares(quantity)} @ {price !== null ? "$" + Number(price).toFixed(2) : "?"}
       </Num>{" "}
       (<Num>{day(transactionDate)}</Num>)
     </span>

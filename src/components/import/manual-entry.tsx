@@ -1,6 +1,6 @@
 "use client";
 
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { Section } from "@/components/ui/section";
 import { Card } from "@/components/ui/card";
 import { List, ListRow } from "@/components/ui/list";
@@ -158,7 +158,7 @@ export function ManualEntryDone({ result, onMore }: { result: ManualResultView; 
             <ListRow key={txn.id}>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm text-ink">
-                  <Num>{txn.ticker}</Num> · {txn.transactionType === "buy" ? m.buyOption : m.sellOption} · <Num>{`${txn.quantity} @ $${Number(txn.price).toFixed(2)}`}</Num> ·{" "}
+                  <Num>{txn.ticker}</Num> · {txn.transactionType === "buy" ? m.buyOption : m.sellOption} · <Num>{`${shares(txn.quantity)} @ $${Number(txn.price).toFixed(2)}`}</Num> ·{" "}
                   <Num>{day(txn.transactionDate)}</Num>
                 </p>
                 <Badge>{m.provenance}</Badge>

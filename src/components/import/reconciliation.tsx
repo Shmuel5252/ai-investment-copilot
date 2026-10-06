@@ -1,6 +1,6 @@
 "use client";
 
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { Section } from "@/components/ui/section";
 import { List, ListRow } from "@/components/ui/list";
 import { KeyValues } from "@/components/ui/table";
@@ -18,7 +18,7 @@ import type { CollisionGroup, Reconciliation, ReconciliationRow, ResolutionDraft
 const typeLabel = (type: string) => (type === "buy" ? m.buyOption : type === "sell" ? m.sellOption : type);
 
 export function rowFacts(f: ReconciliationRow["incoming"] | ReconciliationRow["candidates"][number]) {
-  const trade = f.quantity !== null && f.price !== null ? `${f.quantity} @ $${Number(f.price).toFixed(2)}` : `$${Number(f.amount).toFixed(2)}`;
+  const trade = f.quantity !== null && f.price !== null ? `${shares(f.quantity)} @ $${Number(f.price).toFixed(2)}` : `$${Number(f.amount).toFixed(2)}`;
   return `${f.ticker ?? "—"} · ${typeLabel(f.transactionType)} · ${day(f.transactionDate)} · ${trade}`;
 }
 

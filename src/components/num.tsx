@@ -29,3 +29,8 @@
 export function Num({ children }: { children: React.ReactNode }) {
   return <bdi dir="ltr">{children}</bdi>;
 }
+
+// A share quantity for display: up to 4 decimals, trailing zeros trimmed
+// (0.38589999999999997 → "0.3859"). Display only — stored values unchanged.
+// Unknown (null) shows "?". Render it inside <Num>.
+export const shares = (q: number | string | null) => (q === null ? "?" : String(Number(Number(q).toFixed(4))));

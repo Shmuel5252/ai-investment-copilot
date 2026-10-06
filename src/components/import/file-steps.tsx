@@ -1,6 +1,6 @@
 "use client";
 
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { Section } from "@/components/ui/section";
 import { Card } from "@/components/ui/card";
 import { List, ListRow } from "@/components/ui/list";
@@ -362,7 +362,7 @@ export function Positions({ positions }: { positions: PositionsView }) {
           {positions.positions.map((p) => (
             <ListRow key={p.ticker}>
               <p className="text-sm text-ink">
-                <Num>{p.ticker}</Num> · <Num>{p.quantity}</Num>
+                <Num>{p.ticker}</Num> · <Num>{shares(p.quantity)}</Num>
               </p>
               <p className="text-xs text-ink-2">
                 {t.positionsAvgCost} <Num>{p.costBasisPerShare === null ? "—" : `$${p.costBasisPerShare.toFixed(2)}`}</Num> · {costBasisConfidenceLabel[p.costBasisConfidence] ?? p.costBasisConfidence}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge, EvidenceTierBadge } from "@/components/ui/badge";
@@ -215,7 +215,7 @@ function FrozenContext({
                     <Num>{p.ticker}</Num>
                   </Td>
                   <Td numeric>
-                    <Num>{p.quantity}</Num>
+                    <Num>{shares(p.quantity)}</Num>
                   </Td>
                   <Td numeric muted={p.costBasisPerShare === null}>
                     {p.costBasisPerShare !== null ? <Num>{usd(p.costBasisPerShare)}</Num> : t.costUnknown}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Num } from "@/components/num";
+import { Num, shares } from "@/components/num";
 import { List, ListRow } from "@/components/ui/list";
 import { Button } from "@/components/ui/button";
 import { Status } from "@/components/ui/status";
@@ -34,7 +34,7 @@ export function TodayLine({ today }: { today: TodayData }) {
       <>
         {t.heldPrefix}{" "}
         <Num>
-          {item.position.quantity} @ {item.position.costBasisPerShare !== null ? "$" + item.position.costBasisPerShare.toFixed(2) : "?"}
+          {shares(item.position.quantity)} @ {item.position.costBasisPerShare !== null ? "$" + item.position.costBasisPerShare.toFixed(2) : "?"}
         </Num>
       </>
     ) : (
