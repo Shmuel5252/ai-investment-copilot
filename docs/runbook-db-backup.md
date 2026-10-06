@@ -230,6 +230,16 @@ is available again ("start when available"). One run:
    touched.
 6. The temp plaintext folder is deleted in a `finally` path; failure to delete it
    makes the run FAIL and the log names the folder.
+7. **Failure alert:** every run, including one that fails before any backup is
+   made (a refused folder, an exception), ends with `RUN end (<s>s): PASS|FAIL`
+   in the log. On FAIL a Windows popup ("AI Investment Copilot - backup
+   FAILED") shows the **first step that failed** and the **log file name** —
+   no data, no paths. It closes itself after `-AlertTimeoutSeconds` (default
+   3600 = one hour; `0` is refused because the popup would then wait forever),
+   so a run is never blocked for longer. The task runs only while the user is
+   logged on, so the popup appears on the Owner's desktop. One more log line
+   follows `RUN end`: `failure alert shown; closed itself after N s` or
+   `closed by the user` (or `could not be shown`).
 
 Exit code `0` only if every step passed.
 
@@ -315,9 +325,9 @@ misread; this plain use does not need `--homedir` at all.)
 Logs hold only step names, PASS/FAIL, counts, sizes, hashes and paths — never the
 passphrase or row data. **Raw `db-backup.ps1` output is deliberately not
 logged** (a failure can quote data); on a FAILED step re-run that step by hand to
-see its output. Logs are not pruned automatically (a few KB each). The last line
-of a run is `RUN end (<seconds>s): PASS` or `FAIL`; a failed run says which step
-failed.
+see its output. Logs are not pruned automatically (a few KB each). Every run
+writes `RUN end (<seconds>s): PASS` or `FAIL`, even after an early failure; a
+failed run says which step failed, and the failure-alert line follows it.
 
 ### Manual runs
 
@@ -328,6 +338,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup-scheduled.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup-scheduled.ps1 -Mode Run -WithRestoreTest -DryRun
 # a real run now
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup-scheduled.ps1 -Mode Run
+# see the failure popup without making a backup: a temp folder that overlaps the
+# backup root fails at setup; the popup closes itself after 5 s
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup-scheduled.ps1 -Mode Run -TempRoot C:\dev-private\alert-probe\tmp -BackupRoot C:\dev-private\alert-probe\tmp\bk -LogDir C:\dev-private\alert-probe\logs -AlertTimeoutSeconds 5
 ```
 
 ### What this does NOT cover
@@ -341,8 +354,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup-scheduled.ps1
 - **OneDrive-side failures** — OneDrive can sync a deletion or a corrupted file;
   its version history / recycle bin are the only protection (no immutable copy).
   The run verifies the file it wrote at write time, not later.
-- **Failure alerts** — nothing notifies anyone. A failed run is visible only in the
-  log and in Task Scheduler's "Last Run Result". Check the newest log now and then.
+- **Failure alerts beyond the popup** — a failed run shows a local popup for up
+  to an hour (step 7), and nothing else: no mail, no phone notification. A popup
+  missed while away from the machine leaves only the log and Task Scheduler's
+  "Last Run Result". A run that never starts (machine off for days, task
+  disabled) shows nothing at all. Check the newest log now and then.
 - **Runs while the app is open** — the active-session gate refuses to back up while
   any client is connected, so a 03:00 run with the dev server up produces no
   backup that day. The task runs only while the user is logged on.

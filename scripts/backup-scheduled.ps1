@@ -25,6 +25,10 @@
                           (default 30); delete only exact managed names.
                           -DryRun lists instead of deleting. The archive folder
                           and the historical backup folder are never pruned.
+                       Every run ends with "RUN end (<s>s): PASS|FAIL" in the log,
+                       even after an early failure. A FAIL then shows a popup
+                       (failed step + log file name) that closes itself after
+                       -AlertTimeoutSeconds (default 3600).
     SelfTest         Pure checks: no Docker, no database, no file writes.
 
   Passphrase rules: never on a command line, in output, in a log, or in any file
@@ -77,7 +81,12 @@ param(
   [ValidateRange(1, 3650)]
   [int]$KeepSets = 30,
 
-  [string]$GpgPath
+  [string]$GpgPath,
+
+  # Run: a failed run shows a popup that closes itself after this many seconds.
+  # 0 would mean "wait forever" to the popup, so it is not allowed.
+  [ValidateRange(1, 86400)]
+  [int]$AlertTimeoutSeconds = 3600
 )
 
 Set-StrictMode -Version 2.0
@@ -107,7 +116,11 @@ foreach ($fnName in @('Get-CloudSyncRoots', 'Test-PathUnder')) {
 
 # ------------------------------------------------------------------ logging --
 $script:LogFile = $null
+# The step a Run is in, and the step of its first ERROR line: the failure alert names it.
+$script:RunStep = $null
+$script:FirstErrorStep = $null
 function Write-Log([string]$Text, [string]$Level = 'INFO') {
+  if ($Level -eq 'ERROR' -and -not $script:FirstErrorStep) { $script:FirstErrorStep = $script:RunStep }
   $line = '[{0}] {1,-5} {2}' -f (Get-Date).ToString('yyyy-MM-dd HH:mm:ss'), $Level, $Text
   Write-Host $line
   if ($script:LogFile) {
@@ -423,9 +436,11 @@ function Invoke-SetupPassphrase {
   return $true
 }
 
+# The steps of a Run. Called only through Invoke-RunWithAlert, which writes the final
+# "RUN end" line and shows the failure alert on every path out of here.
 function Invoke-Run {
   $ok = $true
-  $started = Get-Date
+  $started = $script:RunStarted
   $runDir = $null
   $Plain = $null
   $setBase = $null
@@ -449,6 +464,7 @@ function Invoke-Run {
     [void](New-Item -ItemType Directory -Path $runDir)
 
     # ---- 1. backup + verify (any FAIL ends the run) ----
+    $script:RunStep = '1. Backup and Verify'
     Write-Log '== 1. Backup and Verify'
     $b = Invoke-DbBackup 'Backup' $null
     if (-not $b.Pass) { Write-Log 'Backup failed; nothing else was done.' 'ERROR'; return $false }
@@ -463,6 +479,7 @@ function Invoke-Run {
 
     # ---- 2. weekly restore test ----
     $weekly = ($WithRestoreTest.IsPresent -or (Test-IsWeeklyDay (Get-Date)))
+    $script:RunStep = '2. RestoreTest'
     Write-Log ('== 2. RestoreTest ({0})' -f $(if ($weekly) { 'weekly run' } else { 'not today; weekly on Sunday or -WithRestoreTest' }))
     if ($weekly) {
       $rt = Invoke-DbBackup 'RestoreTest' $dumpPath
@@ -470,6 +487,7 @@ function Invoke-Run {
     }
 
     # ---- 3. bundle, encrypt, write the off-machine copy ----
+    $script:RunStep = '3. Encrypt and write the off-machine copy'
     Write-Log '== 3. Encrypt and write the off-machine copy'
     $offsiteOk = $false
     $final = $null
@@ -512,10 +530,11 @@ function Invoke-Run {
         if (Test-Path -LiteralPath $tarPath) { Remove-Item -LiteralPath $tarPath }
       }
     }
-    if (-not $offsiteOk) { $ok = $false }
+    if (-not $offsiteOk) { $ok = $false; Write-Log 'no off-machine copy was written by this run' 'ERROR' }
 
     # ---- 4. verify the off-machine copy ----
     $verifiedOffsite = $false
+    $script:RunStep = '4. Verify the off-machine copy'
     Write-Log '== 4. Verify the off-machine copy (decrypt, untar, compare)'
     if ($offsiteOk) {
       $dec = Join-Path $runDir 'verify.tar'
@@ -551,6 +570,7 @@ function Invoke-Run {
     } else { Write-Log 'skipped (no archive was written)' 'WARN' }
 
     # ---- 5. local retention (only when the off-machine copy is proven) ----
+    $script:RunStep = '5. Local retention'
     Write-Log "== 5. Local retention (keep the newest $KeepSets complete sets)"
     if (-not $verifiedOffsite) {
       Write-Log 'skipped: nothing is pruned unless this run''s off-machine copy was verified' 'WARN'
@@ -580,13 +600,50 @@ function Invoke-Run {
   } finally {
     $Plain = $null
     if ($runDir) {
+      $script:RunStep = 'temp plaintext cleanup'
       $gone = $false
       try { $gone = Remove-RunDir $runDir } catch { Write-Log "temp cleanup error: $($_.Exception.Message)" 'ERROR' }
-      Write-Log ("temp plaintext folder removed: {0}" -f $(if ($gone) { 'yes' } else { 'NO - REAL DATA MAY REMAIN IN ' + $runDir }))
+      Write-Log ("temp plaintext folder removed: {0}" -f $(if ($gone) { 'yes' } else { 'NO - REAL DATA MAY REMAIN IN ' + $runDir })) $(if ($gone) { 'INFO' } else { 'ERROR' })
       if (-not $gone) { $ok = $false }
     }
   }
-  Write-Log ("RUN end ({0:N0}s): {1}" -f ((Get-Date) - $started).TotalSeconds, $(if ($ok) { 'PASS' } else { 'FAIL' }))
+  return $ok
+}
+
+# ------------------------------------------------------------ failure alert --
+# Fixed text: the step name and the log file NAME only - no data, no paths.
+function Get-FailureAlertText([string]$Step, [string]$LogPath) {
+  $log = if ($LogPath) { Split-Path $LogPath -Leaf } else { 'none (the log folder could not be used)' }
+  return ("The AI Investment Copilot database backup FAILED.`n`nStep: {0}`nLog file: {1} (in the backup logs folder)`n`nThe newest backup may be missing or not copied off-machine. See docs\runbook-db-backup.md." -f $Step, $log)
+}
+
+# A visible popup that never blocks for long: it closes itself after $AlertTimeoutSeconds
+# (at least 1; the parameter refuses 0, which the popup reads as "wait forever").
+function Show-FailureAlert([string]$Text) {
+  try {
+    $answer = (New-Object -ComObject WScript.Shell).Popup($Text, $AlertTimeoutSeconds, 'AI Investment Copilot - backup FAILED', 0x10 -bor 0x1000)
+    Write-Log ('failure alert shown; {0}' -f $(if ($answer -eq -1) { "closed itself after $AlertTimeoutSeconds s" } else { 'closed by the user' }))
+  } catch { Write-Log "failure alert could not be shown: $($_.Exception.Message)" 'WARN' }
+}
+
+# Every path out of a Run - success, an early return, an exception - writes the final
+# "RUN end (...): PASS|FAIL" line; a FAIL then shows the alert. $Body and $Alert are
+# parameters only so SelfTest can drive this without a real run or a real popup.
+function Invoke-RunWithAlert([scriptblock]$Body = { Invoke-Run }, [scriptblock]$Alert = { param($Text) Show-FailureAlert $Text }) {
+  $script:RunStarted = Get-Date
+  $script:RunStep = 'setup (log, temp folder and path checks)'
+  $script:FirstErrorStep = $null
+  $script:LogFile = $null
+  $ok = $false
+  try { $ok = ((@(& $Body) | Select-Object -Last 1) -eq $true) }
+  catch { Write-Log "ERROR: $($_.Exception.Message)" 'ERROR' }
+  finally {
+    Write-Log ("RUN end ({0:N0}s): {1}" -f ((Get-Date) - $script:RunStarted).TotalSeconds, $(if ($ok) { 'PASS' } else { 'FAIL' }))
+    if (-not $ok) {
+      $step = if ($script:FirstErrorStep) { $script:FirstErrorStep } else { $script:RunStep }
+      & $Alert (Get-FailureAlertText $step $script:LogFile)
+    }
+  }
   return $ok
 }
 
@@ -694,6 +751,34 @@ function Invoke-SelfTest {
   $rows += New-Row 'archive name: a non-managed dump name is refused' 'True' ([string]$threw)
   $rows += New-Row 'temp folder pattern: only run-<32 hex>' '1 of 4' ('{0} of 4' -f @('run-0123456789abcdef0123456789abcdef', 'run-xyz', 'RUN-0123456789abcdef0123456789abcdef', 'run-0123456789abcdef0123456789abcdef.old' | Where-Object { $_ -cmatch $RunDirRegex }).Count)
 
+  # --- end line and failure alert (no real run, no real popup: Body and Alert are stand-ins) ---
+  $runProbe = {
+    param([scriptblock]$Body)
+    $script:alertTexts = @()
+    $records = @(Invoke-RunWithAlert -Body $Body -Alert { param($Text) $script:alertTexts += $Text } 6>&1)
+    $lines = @($records | Where-Object { $_ -is [System.Management.Automation.InformationRecord] } | ForEach-Object { [string]$_.MessageData })
+    [pscustomobject]@{
+      Result = [string](@($records | Where-Object { $_ -is [bool] }) -join ',')
+      EndLine = [string](@($lines | Where-Object { $_ -match 'RUN end \(\d+s\): (PASS|FAIL)$' } | ForEach-Object { $Matches[1] }) -join ',')
+      Alerts = $script:alertTexts.Count
+      AlertText = [string]($script:alertTexts -join '')
+    }
+  }
+  $r = & $runProbe { return $false }
+  $rows += New-Row 'end line: an early return (before any backup) still ends with RUN end ... FAIL' 'False / FAIL' ('{0} / {1}' -f $r.Result, $r.EndLine)
+  $rows += New-Row 'alert: an early return shows exactly one alert naming the setup step' '1 / True' ('{0} / {1}' -f $r.Alerts, ($r.AlertText -match 'Step: setup'))
+  $r = & $runProbe { throw 'boom' }
+  $rows += New-Row 'end line: an exception still ends with RUN end ... FAIL and one alert' 'False / FAIL / 1' ('{0} / {1} / {2}' -f $r.Result, $r.EndLine, $r.Alerts)
+  $r = & $runProbe { $script:RunStep = '3. Encrypt and write the off-machine copy'; Write-Log 'x' 'ERROR'; $script:RunStep = '5. Local retention'; return $false }
+  $rows += New-Row 'alert: names the FIRST failed step, not the last one reached' 'True' ([string]($r.AlertText -match 'Step: 3\. Encrypt'))
+  $r = & $runProbe { return $true }
+  $rows += New-Row 'end line: a passing run ends with RUN end ... PASS and shows no alert' 'True / PASS / 0' ('{0} / {1} / {2}' -f $r.Result, $r.EndLine, $r.Alerts)
+  $r = & $runProbe { 'stray output'; return $true }
+  $rows += New-Row 'end line: only a final $true counts as PASS (stray output before it is ignored)' 'PASS' $r.EndLine
+  $at = Get-FailureAlertText '1. Backup and Verify' 'C:\dev-private\backups\logs\backup-20261006-030000.log'
+  $rows += New-Row 'alert text: has the step and the log file name, and no folder path' 'True' ([string]($at -match 'Step: 1\. Backup and Verify' -and $at -match 'Log file: backup-20261006-030000\.log' -and $at -notmatch '[A-Za-z]:\\'))
+  $rows += New-Row 'alert text: says so when there is no log file' 'True' ([string]((Get-FailureAlertText 'setup' $null) -match 'Log file: none'))
+
   # --- static checks on this very file ---
   $tk = $null; $er = $null
   $ast = [System.Management.Automation.Language.Parser]::ParseFile($PSCommandPath, [ref]$tk, [ref]$er)
@@ -714,6 +799,13 @@ function Invoke-SelfTest {
   $gpgDef = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-Gpg' }, $true)
   $rows += New-Row 'static: gpg is told to read the passphrase from stdin (--passphrase-fd 0)' 'True' ([string]($gpgDef.Extent.Text -match '--passphrase-fd 0'))
   $rows += New-Row 'static: gpg is run in batch/loopback mode and does not cache the passphrase' 'True' ([string]($gpgDef.Extent.Text -match '--batch' -and $gpgDef.Extent.Text -match '--pinentry-mode loopback' -and $gpgDef.Extent.Text -match '--no-symkey-cache'))
+  $alertDef = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Show-FailureAlert' }, $true)
+  $rows += New-Row 'static: the alert popup is given the -AlertTimeoutSeconds timeout' 'True' ([string]($alertDef.Extent.Text -match '\.Popup\(\$Text, \$AlertTimeoutSeconds,'))
+  $timeoutParam = $ast.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'AlertTimeoutSeconds' }
+  $range = $timeoutParam.Attributes | Where-Object { $_.TypeName.Name -eq 'ValidateRange' }
+  $rows += New-Row 'static: -AlertTimeoutSeconds refuses 0 (the popup would wait forever)' 'True' ([string]($range -and [int]$range.PositionalArguments[0].Value -ge 1))
+  $runCalls = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Invoke-Run' }, $true) | ForEach-Object { & $enclosing $_ })
+  $rows += New-Row 'static: Invoke-Run is reached only through Invoke-RunWithAlert' 'True' ([string](@($runCalls | Where-Object { $_ -ne 'Invoke-RunWithAlert' }).Count -eq 0 -and [System.IO.File]::ReadAllText($PSCommandPath) -match "'Run' \{ \`$result = Invoke-RunWithAlert \}"))
   $selfText = [System.IO.File]::ReadAllText($PSCommandPath)
   $rows += New-Row 'static: no transcript and no passphrase-as-argument option anywhere' 'True' ([string]($selfText -notmatch ('Start-' + 'Transcript') -and $selfText -notmatch ('--pass' + 'phrase ') -and $selfText -notmatch ('--pass' + 'phrase=')))
   $dbCalls = @($ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.CommandAst] -and $n.GetCommandName() -eq 'Invoke-DbBackup' }, $true) | ForEach-Object { $_.Extent.Text })
@@ -734,7 +826,7 @@ try {
   switch ($Mode) {
     'SelfTest' { $result = Invoke-SelfTest }
     'SetupPassphrase' { $result = Invoke-SetupPassphrase }
-    'Run' { $result = Invoke-Run }
+    'Run' { $result = Invoke-RunWithAlert }
   }
 } catch {
   Write-Host ''
