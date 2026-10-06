@@ -237,6 +237,17 @@ describe("agree", () => {
     expect(rowOf("Sample Sector A").textContent).not.toContain(t.carriedTitle);
   });
 
+  it("a grounding check that could not run (SERVICE_UNAVAILABLE) says so — not 'not grounded' — and keeps the note", async () => {
+    renderLearning(loaded(PREVIEW_INSIGHTS), actions({ agree: vi.fn(async () => Promise.reject(trpcError("The grounding check could not run (3 of 3 statement checks failed technically) — nothing was saved. Try again later.", "SERVICE_UNAVAILABLE"))) }));
+    const box = openRespond(rowOf("Sample Sector A"), "my note");
+    fireEvent.click(within(rowOf("Sample Sector A")).getByRole("button", { name: t.agreeButton }));
+    expect(await within(rowOf("Sample Sector A")).findByText(t.uncheckableTitle)).toBeTruthy();
+    expect(rowOf("Sample Sector A").textContent).toContain(t.uncheckableBody);
+    expect(rowOf("Sample Sector A").textContent).not.toContain(t.refusedBody);
+    expect(rowOf("Sample Sector A").textContent).not.toContain(t.failedTitle);
+    expect(box.value).toBe("my note");
+  });
+
   it("any other failure shows a general error and keeps the note", async () => {
     renderLearning(loaded(PREVIEW_INSIGHTS), actions({ agree: vi.fn(async () => Promise.reject(trpcError("network", "INTERNAL_SERVER_ERROR"))) }));
     const box = openRespond(rowOf("Sample Sector A"), "my note");

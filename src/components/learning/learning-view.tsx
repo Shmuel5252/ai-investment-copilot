@@ -318,6 +318,7 @@ type Outcome =
   | { kind: "replayed" }
   | { kind: "disagreed" }
   | { kind: "refused"; message: string }
+  | { kind: "uncheckable"; message: string }
   | { kind: "failed"; message: string };
 
 function Respond({ insightId, actions }: { insightId: string; actions: LearningActions }) {
@@ -345,7 +346,14 @@ function Respond({ insightId, actions }: { insightId: string; actions: LearningA
         setOpen(false);
       } catch (e) {
         // the typed note stays; the form stays open
-        setOutcome(kind === "agree" && codeOf(e) === "BAD_REQUEST" ? { kind: "refused", message: messageOf(e) } : { kind: "failed", message: messageOf(e) });
+        const code = kind === "agree" ? codeOf(e) : undefined;
+        setOutcome(
+          code === "BAD_REQUEST"
+            ? { kind: "refused", message: messageOf(e) }
+            : code === "SERVICE_UNAVAILABLE"
+              ? { kind: "uncheckable", message: messageOf(e) }
+              : { kind: "failed", message: messageOf(e) }
+        );
       } finally {
         setPending(null);
       }
@@ -416,6 +424,17 @@ function OutcomeNotice({ outcome }: { outcome: Outcome }) {
         <Notice tone="caution" title={t.refusedTitle}>
           <span className="flex flex-col gap-1">
             <span>{t.refusedBody}</span>
+            <bdi dir="ltr" className="text-xs">
+              {outcome.message}
+            </bdi>
+          </span>
+        </Notice>
+      );
+    case "uncheckable":
+      return (
+        <Notice tone="caution" title={t.uncheckableTitle}>
+          <span className="flex flex-col gap-1">
+            <span>{t.uncheckableBody}</span>
             <bdi dir="ltr" className="text-xs">
               {outcome.message}
             </bdi>

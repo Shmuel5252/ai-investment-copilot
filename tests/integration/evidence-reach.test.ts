@@ -579,6 +579,31 @@ describe("Learning: dedupe (Unit 5) and the OD-3 carry", () => {
     expect((await getEvidenceForDnaHypothesis(db, agreed.hypothesis.id)).map((r) => r.decisionStatementKind).sort()).toEqual(["exit_conditions", "reasoning", "risks"]);
   });
 
+  it("Unit 7/C: when grounding checks fail technically (none ground), agree says the check could not run — SERVICE_UNAVAILABLE, not 'not grounded' — and writes nothing", async () => {
+    const w = await seedWorld("er-agree-technical");
+    const r1 = await reviewed(w, 0);
+    const r2 = await reviewed(w, 1);
+    ai.learning.mockResolvedValue({ statementText: "You tend to ignore exit discipline.", evidence: [{ decisionReviewId: r1, stance: "supporting", description: "d" }, { decisionReviewId: r2, stance: "supporting", description: "d" }] });
+    const gen = await learning(w.investorId).generate();
+    const insightId = gen.insights[0]!.insight.id;
+    // every check failed: a fail-closed technical verdict (e.g. timeout) and a throw
+    ai.ground.mockImplementation(async (input: { sourceAnswerText: string }) => {
+      if (input.sourceAnswerText.startsWith("LLY")) throw new Error("timeout");
+      return { verdict: "unsupported", reason: "Grounding call failed — failing closed.", technicalFailure: true };
+    });
+    const technical = await learning(w.investorId).agree({ learningInsightId: insightId, note: "x" }).catch((e) => e);
+    expect(codeOf(technical)).toBe("SERVICE_UNAVAILABLE");
+    expect((technical as Error).message).toMatch(/could not run .* nothing was saved/);
+    expect((technical as Error).message).not.toMatch(/ground this insight/);
+    // the semantic case keeps its own refusal
+    ai.ground.mockImplementation(async () => ({ verdict: "unsupported", reason: "the statement is silent on exit discipline" }));
+    const semantic = await learning(w.investorId).agree({ learningInsightId: insightId, note: "x" }).catch((e) => e);
+    expect(codeOf(semantic)).toBe("BAD_REQUEST");
+    expect((semantic as Error).message).toMatch(/None of the cited decisions' own statements ground this insight/);
+    expect(await db.select().from(schema.dnaHypotheses).where(eq(schema.dnaHypotheses.investorId, w.investorId))).toHaveLength(0);
+    expect(await db.select().from(schema.corrections).where(eq(schema.corrections.learningInsightId, insightId))).toHaveLength(0);
+  });
+
   it("failure atomicity: a carry whose evidence insert fails leaves no hypothesis, no version, no evidence", async () => {
     const w = await seedWorld("er-carry-atomic");
     const before = await db.select().from(schema.dnaHypotheses).where(eq(schema.dnaHypotheses.investorId, w.investorId));

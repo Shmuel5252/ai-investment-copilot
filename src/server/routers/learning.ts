@@ -217,6 +217,15 @@ export const learningRouter = router({
       const statements = (await listDecisionStatementsForInvestor(db, ctx.investorId)).filter((s) => caseDecisionIds.has(s.decisionId));
       const grounding = await groundCarryCitations(latestVersion.statementText, cases, statements, checkEvidenceGrounding);
       if (grounding.citations.length === 0) {
+        // A check that failed technically (timeout, malformed reply) says nothing
+        // about grounding — "not grounded" would be a false claim (Unit 7/C).
+        const failed = grounding.excluded.filter((e) => e.technicalFailure).length;
+        if (failed > 0) {
+          throw new TRPCError({
+            code: "SERVICE_UNAVAILABLE",
+            message: `The grounding check could not run (${failed} of ${grounding.excluded.length} statement checks failed technically) — nothing was saved. Try again later.`,
+          });
+        }
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "None of the cited decisions' own statements ground this insight — nothing can be carried into DNA.",
