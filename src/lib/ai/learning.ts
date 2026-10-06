@@ -50,7 +50,8 @@ Ground rules:
 - Separate Skill From Luck explicitly: a decision with a good outcome but a weak/insufficient-evidence process is NOT supporting evidence for "this investor is good at X" — if anything it's a caution. Ground the pattern in process quality and thesis accuracy, not just P&L.
 - If a decision's "Later Context" says it was a deliberate test, not representative of genuine behavior, an atypical trade, or similar — do NOT cite that decision as evidence (supporting or contradicting) for a real behavioral pattern at all. Treat it as if it weren't in the family; a synthetic test case says nothing real about how this investor actually invests.
 - It is completely fine, and expected with few decisions, to describe a thin or uncertain pattern — that's for the system to label via evidence strength, not for you to oversell.
-- Write the statement the way you'd describe a real tendency to the investor directly ("You tend to...", "Your decisions in this sector..."), grounded only in what's actually in the reviews you were given — never invent numbers or facts not present in the text you were given.`;
+- Write the statement the way you'd describe a real tendency to the investor directly ("You tend to...", "Your decisions in this sector..."), grounded only in what's actually in the reviews you were given — never invent numbers or facts not present in the text you were given.
+- Match the wording to how much evidence there is. When a claim rests on a single decision, or on fewer than three decisions of the relevant kind (e.g. fewer than three BUYs for a claim about buying), describe what happened in those decisions ("In the one BUY reviewed, you...") — do NOT use "tend to", "usually", "always", "typically", "often" or any similar generalization. This overrides the "You tend to..." phrasing above.`;
 
 const TOOL = {
   name: "propose_learning_insight",
