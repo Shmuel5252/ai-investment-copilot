@@ -66,6 +66,10 @@ Strategy (Declared/Observed/Validated) → Idea → Investment Case → Decision
 Snapshot (immutable) → Decision Review (נרטיב + drill-down ל-7 ממדים,
 Counterfactual לפי דרישה בלבד) → Learning Insight.
 
+**מצב (2026-10-06): Slice 1 הוכח מקצה לקצה על נתונים אמיתיים** (Review
+ל-AVGO, Learning Insight ראשון ל-Technology, תגובת ה-Owner נרשמה); הפגמים
+שנמצאו תוקנו ב-Unit 7 באישור Owner — ר' `docs/architecture.md` §1.
+
 **לא בונים עכשיו** (פירוט מלא ב-`docs/architecture.md` §3): Market
 Scanner, חיבור ברוקר, agents כתהליכים נפרדים, כל push/alert, streaming
 נתוני שוק, news/sentiment aggregation אוטומטי, דרישת היסטוריה מלאה,
